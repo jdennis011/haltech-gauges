@@ -260,6 +260,11 @@ void test_nfs_options() {
 
     TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"label","text":"THROTTLE","rotate":60})"), c).ok);
     TEST_ASSERT_EQUAL(60, c.faces[0].widgets[0].rotate);
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"number","channel":"rpm","rotate":-90})"), c).ok);
+    TEST_ASSERT_EQUAL(-90, c.faces[0].widgets[0].rotate);
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"bar","channel":"rpm","min":0,"max":8000,"rotate":45})"), c).ok);
+    TEST_ASSERT_EQUAL(45, c.faces[0].widgets[0].rotate);
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","rotate":200})"), "'rotate' must be between -180 and 180");
 }
 
 void test_theme_presets_exist() {

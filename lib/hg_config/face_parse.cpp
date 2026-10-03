@@ -392,6 +392,7 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.segments = uint8_t(readInt(obj, "segments", 0, 0, 60, ctx));
             w.gap = uint8_t(readInt(obj, "gap", 3, 0, 20, ctx));
             w.cornerRadius = uint8_t(readInt(obj, "cornerRadius", 4, 0, 60, ctx));
+            w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
             readZones(obj, w, ctx);
             break;
 
@@ -404,6 +405,7 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.unitSize = uint8_t(readInt(obj, "unitSize", w.size / 3 < 12 ? 12 : w.size / 3, 8, 80, ctx));
             w.unitPos = UnitPos(readEnum(obj, "unitPos", kUnitPositions, uint8_t(UnitPos::Below), ctx));
             w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
+            w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
             break;
 
         case WidgetType::Label:
@@ -429,6 +431,7 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.warn.threshold = 0.5f;
             readThreshold(obj, "on", w.warn, ctx);
             w.warn.flash = readBool(obj, "flash", w.warn.flash, ctx);
+            w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
             break;
 
         case WidgetType::Rim:

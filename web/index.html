@@ -69,6 +69,9 @@ input[type=range]{width:110px}
 .wrow input[type=number]{width:74px}
 .wrow input[type=text]{width:150px}
 .wrow select.chan{max-width:230px}
+.colorctl{display:inline-flex;gap:4px;align-items:center}
+.wrow input[type=color]{width:36px;height:26px;padding:1px 2px;border-radius:6px}
+.wrow input[type=checkbox]{width:16px;height:16px;margin:0}
 .live-val{font-family:ui-monospace,Consolas,monospace;text-align:right}
 .stale{color:var(--dim)}
 .spacer{flex:1}
@@ -743,18 +746,52 @@ function renderFontList() {
 }
 
 // What the panel offers per widget type: [key, kind, label, options].
+const ALIGNS = ['left', 'center', 'right'];
 const PANEL_FIELDS = {
   dial:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
+           ['start', 'number', 'Start'], ['sweep', 'number', 'Sweep'],
+           ['color', 'color', 'Colour', 'fg'], ['needleColor', 'color', 'Needle', 'accent'],
            ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
            ['labelFont', 'font', 'Labels'], ['labelSize', 'size', 'Size']],
-  ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'], ['segments', 'number', 'Segments']],
-  bar:    [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'], ['segments', 'number', 'Segments']],
-  number: [['channel', 'channel'], ['unit', 'unit'], ['format', 'select', 'Format', ['plain', 'gear']], ['decimals', 'number', 'Decimals'],
-           ['pad', 'number', 'Pad'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
-  label:  [['text', 'text', 'Text'], ['rotate', 'number', 'Rotate'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
-  light:  [['channel', 'channel'], ['text', 'text', 'Text'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
-  rim:    [['channel', 'channel'], ['unit', 'unit'], ['from', 'number', 'From'], ['to', 'number', 'To']],
+  ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
+           ['start', 'number', 'Start'], ['sweep', 'number', 'Sweep'],
+           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'number', 'Segments']],
+  bar:    [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
+           ['style', 'select', 'Style', ['horizontal', 'vertical']], ['rotate', 'number', 'Rotate'],
+           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'number', 'Segments']],
+  number: [['channel', 'channel'], ['unit', 'unit'], ['showUnit', 'bool', 'Show unit', true], ['unitPos', 'select', 'Unit at', ['below', 'right']],
+           ['format', 'select', 'Format', ['plain', 'gear']], ['decimals', 'number', 'Decimals'], ['pad', 'number', 'Pad'],
+           ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+           ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  label:  [['text', 'text', 'Text'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+           ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  light:  [['channel', 'channel'], ['text', 'text', 'Text'], ['shape', 'select', 'Shape', ['dot', 'ring', 'square', 'text']],
+           ['color', 'color', 'Lit', 'alert'], ['offColor', 'color', 'Off', 'dim'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+           ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  rim:    [['channel', 'channel'], ['unit', 'unit'], ['from', 'number', 'From'], ['to', 'number', 'To'], ['color', 'color', 'Colour', 'alert']],
 };
+
+const ROLES = ['fg', 'accent', 'dim', 'warn', 'alert', 'bg'];
+function hex6(c) {
+  if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c || '')) return '#ffffff';
+  return c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c.toLowerCase();
+}
+// A theme role or a custom colour: a dropdown of roles plus a colour picker that
+// shows the current colour either way and is live when "custom" is chosen.
+function colorControl(w, i, key, defaultRole) {
+  const theme = resolveTheme(state.previewCfg ? state.previewCfg.theme : null);
+  const val = w[key] || '';
+  const custom = /^#/.test(val);
+  const pick = el('input', { type: 'color', value: hex6(custom ? val : theme[val || defaultRole]), disabled: custom ? null : '',
+    onchange: ev => setWidgetFields(i, { [key]: ev.target.value.toUpperCase() }) });
+  const sel = el('select', { onchange: ev => {
+    if (ev.target.value === 'custom') { pick.disabled = false; setWidgetFields(i, { [key]: pick.value.toUpperCase() }); }
+    else setWidgetFields(i, { [key]: ev.target.value });
+  } }, el('option', { value: '' }, 'default (' + defaultRole + ')'),
+    ...ROLES.map(r => el('option', { value: r, selected: r === val ? '' : null }, r)),
+    el('option', { value: 'custom', selected: custom ? '' : null }, 'custom'));
+  return el('span', { class: 'colorctl' }, sel, pick);
+}
 
 function channelSelect(w, i) {
   const sel = el('select', { class: 'chan', onchange: ev => { if (ev.target.value) setWidgetFields(i, { channel: ev.target.value, unit: '' }); } });
@@ -791,6 +828,8 @@ function renderWidgetTable() {
       else if (kind === 'font') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) }, ...fontOptions(w[key], true));
       else if (kind === 'size') control = numeric(key, { min: 8, max: 200, placeholder: DEFAULT_SIZES[w.type] });
       else if (kind === 'number') control = numeric(key, { step: 'any' });
+      else if (kind === 'bool') control = el('input', { type: 'checkbox', checked: (w[key] == null ? opts : w[key]) ? '' : null, onchange: ev => setWidgetFields(i, { [key]: ev.target.checked }) });
+      else if (kind === 'color') control = colorControl(w, i, key, opts);
       else if (kind === 'select') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) },
         el('option', { value: '' }, 'default'), ...opts.map(o => el('option', { value: o, selected: o === w[key] ? '' : null }, o)));
       else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) });
@@ -1058,7 +1097,9 @@ function drawRing(ctx, w, th, t) {
 function drawBar(ctx, w, th, t) {
   const horiz = (w.style || 'horizontal') === 'horizontal';
   const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
-  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, x0 = cx - W / 2, y0 = cy - H / 2;
+  let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); cx = 0; cy = 0; }
+  const x0 = cx - W / 2, y0 = cy - H / 2;
   const min = w.min, max = w.max, v = clamp(valueOf(w, t), min, max), frac = (v - min) / (max - min);
   const col = applyWarn(w, v, zoneColor(w, v, th, color(w.color, th, th.fg)), th, t);
   const track = w.track == null || w.track, trackCol = color(w.trackColor, th, th.dim);
@@ -1102,7 +1143,9 @@ function numberText(w, v) {
 }
 
 function drawNumber(ctx, w, th, t) {
-  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, size = w.size || 72, font = fontStack(w.font);
+  let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  const size = w.size || 72, font = fontStack(w.font);
+  if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); cx = 0; cy = 0; }
   const v = valueOf(w, t), col = applyWarn(w, v, color(w.color, th, th.fg), th, t);
   const txt = numberText(w, v), align = w.align || 'center';
   ctx.font = size + 'px ' + font; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = col;
@@ -1130,7 +1173,9 @@ function drawLabel(ctx, w, th) {
 }
 
 function drawLight(ctx, w, th, t) {
-  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 14 : w.r;
+  let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  const r = w.r == null ? 14 : w.r;
+  if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); cx = 0; cy = 0; }
   const v = valueOf(w, t), on = w.on || { above: 0.5 };
   const lit = v != null && (on.above != null ? v > on.above : v < on.below);
   const visible = lit && (!w.flash || Math.floor(t / 250) % 2 === 0);
@@ -1223,7 +1268,8 @@ function widgetBounds(ctx, w, t) {
   if (w.type === 'rim') { const r = w.r == null ? 233 : w.r; return { kind: 'ring', cx, cy, r, inner: r - (w.thickness == null ? 12 : w.thickness) }; }
   if (w.type === 'bar') {
     const horiz = (w.style || 'horizontal') === 'horizontal';
-    return { kind: 'rect', cx, cy, w: w.w == null ? (horiz ? 260 : 28) : w.w, h: w.h == null ? (horiz ? 28 : 260) : w.h };
+    const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
+    return w.rotate ? { kind: 'rect', cx, cy, w: Math.max(W, H), h: Math.max(W, H) } : { kind: 'rect', cx, cy, w: W, h: H };
   }
   if (w.type === 'light' && (w.shape || 'dot') !== 'text') {
     const r = w.r == null ? 14 : w.r, cap = w.text ? (w.size || 18) + 6 : 0;

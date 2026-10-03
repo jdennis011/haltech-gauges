@@ -125,7 +125,7 @@ struct Widget {
     Align align = Align::Center;
     Hold hold = Hold::None;
     std::string text;
-    int16_t rotate = 0;     // label: degrees clockwise
+    int16_t rotate = 0;     // label, number, light, bar: degrees clockwise about x, y
 
     BarStyle barStyle = BarStyle::Horizontal;
     uint8_t cornerRadius = 4;

@@ -20,7 +20,7 @@ address it was given.
 | Tab | What it does |
 |---|---|
 | Gauges | One card per gauge, real or planned, with a live preview of the config it is assigned, drawn at the face it is on. Real gauges show online state, MAC, firmware, supply voltage, and buttons for identify, face change, brightness and reboot. The assignment dropdown is the "desired state": the hub pushes that config whenever the gauge's stored one differs. |
-| Live data | Every Haltech channel with its current value, updated three times a second. Data comes from the ECU bus (C6 hub) or from the simulator. |
+| Live data | Every Haltech channel with its current value, updated three times a second. Data comes from the ECU bus (C6 hub) or from the simulator. The **Simulator** card pauses the values, runs them slower or faster (0.1x to 4x), and holds any channel at a value or sweeps it between limits of your own, which is how a face is laid out against a particular reading. |
 | Configs | The library of stored configs. Start from a template (`docs/templates.md` describes the fifteen built in) or import a file, edit the JSON with a live preview of the selected face, **Validate** (runs the gauge's own parser on the hub), **Save**, **Download**, and **Try on gauge**, which shows a config on a gauge without storing it. Widgets can be dragged on the preview to move them; a click selects one (dashed outline, highlighted in the panel below), arrow keys nudge it by a pixel or ten with shift, and positions snap to the face centre. **Add widget** puts a new dial, ring, bar, number, label, light or rim on the face with sensible defaults, selected and ready to drag; each row has a remove button. Under the preview, **Widget styles** lists the widgets on the selected face, each with pickers for its channel, unit and range, its text, colours (a theme role or a custom colour), rotation, text alignment, whether a number shows its unit, and its font and size, so changing what a face shows needs no JSON editing (one dropdown also sets every font in the config), and **Fonts on the hub** shows each bundled family drawn with the gauge's own font file. |
 | Settings | Hub, access point and home-network details; memory and bus counters. |
 
@@ -42,7 +42,8 @@ step. **Unlink** forgets the name but leaves the assignment in place.
 
 The **simulator** chip at the top right makes the hub generate the full Haltech
 broadcast with moving values, for testing without the car. With a gauge on the
-bus it also sends the frames to the gauge.
+bus it also sends the frames to the gauge. Frames keep going out while it is paused,
+so gauges hold the frozen values. Up to 16 channels can be overridden at once.
 
 ## Development board
 
@@ -77,7 +78,8 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | POST `/api/virtual` `{"label":"x","mac":"…"}` | Add one; `mac` optional, else synthetic. Returns `{"ok":true,"id":n}` |
 | PUT `/api/virtual/{id}` `{"label","face","mac"}` | Change any of the three; `"mac":""` goes back to synthetic |
 | DELETE `/api/virtual/{id}` | Remove; clears a synthetic-MAC assignment |
-| POST `/api/simulator` `{"enabled":true}` | |
+| GET `/api/simulator` | `{enabled, paused, speed, overrides:[{channel, hold} or {channel, min, max}]}` |
+| POST `/api/simulator` | Any of `enabled`, `paused`, `speed` (0.05-10), `clear`, and `overrides` as `{"rpm": {"hold": 3000}, "coolant_temp": {"min": 80, "max": 110}, "gear": null}`; values in the channel's stored unit. Returns the settings |
 | GET / PUT / DELETE `/api/wifi` | Home-network credentials `{"ssid","password"}` |
 
 `/ws` is a WebSocket that pushes `{"t":"status"}` once a second,

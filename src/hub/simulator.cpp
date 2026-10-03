@@ -2,8 +2,6 @@
 
 #include <math.h>
 
-#include "haltech.h"
-
 using namespace hg;
 
 namespace simulator {
@@ -17,12 +15,28 @@ uint32_t nextDueMs[kMaxFrames];
 bool scheduled = false;
 uint32_t generated = 0;
 
+// The values' own clock: it stops while paused and runs at `rate`.
+bool isPaused = false;
+float rate = 1.0f;
+double simClock = 0;
+uint32_t lastRealMs = 0;
+
+struct Override {
+    ChannelId id;
+    bool hold;
+    float value;
+    float min;
+    float max;
+};
+Override overrides[kMaxOverrides];
+size_t overrideTotal = 0;
+
 // 0..1..0 over `periodMs`.
 float wave(uint32_t nowMs, uint32_t periodMs) {
     return 0.5f - 0.5f * cosf(float(nowMs % periodMs) * (2.0f * float(M_PI) / float(periodMs)));
 }
 
-float valueFor(ChannelId id, uint32_t nowMs) {
+float builtInValue(ChannelId id, uint32_t nowMs) {
     const float load = wave(nowMs, 8000);  // one "pull" every 8 seconds
     const float rpm = 800.0f + 6200.0f * load;
     const float speed = rpm / 60.0f;
@@ -79,6 +93,22 @@ float valueFor(ChannelId id, uint32_t nowMs) {
     }
 }
 
+float valueFor(ChannelId id, uint32_t nowMs) {
+    for (size_t i = 0; i < overrideTotal; i++) {
+        if (overrides[i].id != id) continue;
+        if (overrides[i].hold) return overrides[i].value;
+        return overrides[i].min + (overrides[i].max - overrides[i].min) * wave(nowMs, 8000);
+    }
+    return builtInValue(id, nowMs);
+}
+
+int findOverride(ChannelId id) {
+    for (size_t i = 0; i < overrideTotal; i++) {
+        if (overrides[i].id == id) return int(i);
+    }
+    return -1;
+}
+
 }  // namespace
 
 void setEnabled(bool enabled) {
@@ -87,6 +117,49 @@ void setEnabled(bool enabled) {
 }
 
 bool enabled() { return active; }
+
+void setPaused(bool paused) { isPaused = paused; }
+bool paused() { return isPaused; }
+
+void setSpeed(float speed) {
+    if (!(speed > 0)) speed = 1.0f;
+    rate = speed < 0.05f ? 0.05f : (speed > 10.0f ? 10.0f : speed);
+}
+float speed() { return rate; }
+
+bool setOverride(ChannelId id, bool hold, float value, float min, float max) {
+    int i = findOverride(id);
+    if (i < 0) {
+        if (overrideTotal >= kMaxOverrides) return false;
+        i = int(overrideTotal++);
+    }
+    overrides[i] = {id, hold, value, min, max};
+    return true;
+}
+
+bool clearOverride(ChannelId id) {
+    const int i = findOverride(id);
+    if (i < 0) return false;
+    overrides[i] = overrides[--overrideTotal];
+    return true;
+}
+
+void clearOverrides() { overrideTotal = 0; }
+
+size_t overrideCount() { return overrideTotal; }
+
+void overridesJson(JsonArray out) {
+    for (size_t i = 0; i < overrideTotal; i++) {
+        JsonObject o = out.add<JsonObject>();
+        o["channel"] = channelDef(overrides[i].id).name;
+        if (overrides[i].hold) {
+            o["hold"] = overrides[i].value;
+        } else {
+            o["min"] = overrides[i].min;
+            o["max"] = overrides[i].max;
+        }
+    }
+}
 
 uint32_t framesGenerated() { return generated; }
 
@@ -98,7 +171,11 @@ void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port) {
         // Spread the first transmissions out so frames do not all fall due together.
         for (size_t i = 0; i < count; i++) nextDueMs[i] = nowMs + uint32_t(i % 20);
         scheduled = true;
+        lastRealMs = nowMs;
     }
+    if (!isPaused) simClock += double(nowMs - lastRealMs) * rate;
+    lastRealMs = nowMs;
+    const uint32_t simMs = uint32_t(simClock);
 
     for (size_t i = 0; i < count; i++) {
         if (int32_t(nowMs - nextDueMs[i]) < 0) continue;
@@ -108,7 +185,7 @@ void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port) {
         beginFrame(def, frame);
         for (uint16_t c = 0; c < def.channelCount; c++) {
             const ChannelId id = ChannelId(def.firstChannel + c);
-            encodeChannel(id, valueFor(id, nowMs), frame);
+            encodeChannel(id, valueFor(id, simMs), frame);
         }
         store.onFrame(frame, nowMs);
         if (port) port->write(frame);

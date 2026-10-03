@@ -18,6 +18,7 @@
 #include "hub_config.h"
 #include "hub_state.h"
 #include "library_store.h"
+#include "simulator.h"
 #include "units.h"
 #include "virtual_gauges.h"
 #include "web_assets.h"
@@ -225,6 +226,10 @@ void buildStatus(JsonObject o) {
     o["ws_clients"] = ws.count();
     o["ws_skipped"] = skippedPushes;
     o["simulator"] = s.simulator;
+    JsonObject sim = o["sim"].to<JsonObject>();
+    sim["paused"] = simulator::paused();
+    sim["speed"] = simulator::speed();
+    sim["overrides"] = simulator::overrideCount();
     o["gauges_online"] = s.gaugesOnline;
 
     JsonObject ecu = o["ecu"].to<JsonObject>();
@@ -693,11 +698,44 @@ void handleVirtual(AsyncWebServerRequest* r) {
     sendOk(r);
 }
 
+void simulatorJson(JsonDocument& doc) {
+    doc["enabled"] = hub::simulatorEnabled();
+    doc["paused"] = simulator::paused();
+    doc["speed"] = simulator::speed();
+    simulator::overridesJson(doc["overrides"].to<JsonArray>());
+}
+
+// GET returns the simulator's settings. POST changes any of them: enabled,
+// paused, speed, clear, and overrides as {channel: {hold: v} | {min, max} | null}.
 void handleSimulator(AsyncWebServerRequest* r) {
-    JsonDocument body;
-    if (!parseBody(r, body)) return;
-    hub::setSimulator(body["enabled"] | false);
-    sendOk(r);
+    if (r->method() == HTTP_POST) {
+        JsonDocument body;
+        if (!parseBody(r, body)) return;
+        if (body["enabled"].is<bool>()) hub::setSimulator(body["enabled"].as<bool>());
+        hub::Lock lock;
+        if (body["paused"].is<bool>()) simulator::setPaused(body["paused"].as<bool>());
+        if (body["speed"].is<float>()) simulator::setSpeed(body["speed"].as<float>());
+        if (body["clear"] | false) simulator::clearOverrides();
+        for (JsonPairConst kv : body["overrides"].as<JsonObjectConst>()) {
+            const int id = findChannel(kv.key().c_str());
+            if (id < 0) return sendError(r, 400, "unknown channel in overrides");
+            JsonVariantConst v = kv.value();
+            bool ok = true;
+            if (v.isNull()) {
+                simulator::clearOverride(ChannelId(id));
+            } else if (v["hold"].is<float>()) {
+                ok = simulator::setOverride(ChannelId(id), true, v["hold"].as<float>(), 0, 0);
+            } else if (v["min"].is<float>() && v["max"].is<float>()) {
+                ok = simulator::setOverride(ChannelId(id), false, 0, v["min"].as<float>(), v["max"].as<float>());
+            } else {
+                return sendError(r, 400, "an override is {hold: value} or {min, max}, or null to remove it");
+            }
+            if (!ok) return sendError(r, 409, "at most 16 overrides");
+        }
+    }
+    JsonDocument doc;
+    simulatorJson(doc);
+    sendJson(r, doc);
 }
 
 void handleWifi(AsyncWebServerRequest* r) {
@@ -781,7 +819,7 @@ void begin() {
     server.on("/api/fonts", HTTP_GET, handleFonts);
     server.on("/api/virtual/*", HTTP_PUT | HTTP_DELETE, handleVirtual, nullptr, collectBody);
     server.on("/api/virtual", HTTP_GET | HTTP_POST, handleVirtual, nullptr, collectBody);
-    server.on("/api/simulator", HTTP_POST, handleSimulator, nullptr, collectBody);
+    server.on("/api/simulator", HTTP_GET | HTTP_POST, handleSimulator, nullptr, collectBody);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.onNotFound(handleNotFound);
 

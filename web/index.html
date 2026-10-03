@@ -104,6 +104,14 @@ input[type=range]{width:110px}
 </section>
 
 <section id="tab-live">
+  <div class="card" id="sim-card" style="display:none">
+    <div class="row"><strong>Simulator</strong><span class="muted" id="sim-note"></span><span class="spacer"></span>
+      <button class="btn small" id="sim-run">Pause</button>
+      <label class="inline">Speed <select id="sim-speed"><option value="0.1">0.1x</option><option value="0.25">0.25x</option><option value="0.5">0.5x</option><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select></label></div>
+    <div id="sim-overrides" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:8px"><select id="sim-add-channel" class="chan"></select><button class="btn small" id="sim-add">Add override</button>
+      <span class="muted">Hold a channel at a value, or sweep it between your own limits. Values are in the channel's stored unit.</span></div>
+  </div>
   <div class="card row"><input type="text" id="live-filter" placeholder="Filter channels…"><span class="muted" id="live-note"></span></div>
   <div class="card"><table id="live-table"><thead><tr><th>Channel</th><th>Name</th><th class="live-val">Value</th><th>Unit</th></tr></thead><tbody></tbody></table></div>
 </section>
@@ -203,7 +211,7 @@ const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 1
 const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
-  editing: null, previewCfg: null, faceIndex: 0, fonts: [],
+  editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null,
 };
 
 // ------------------------------------------------------------------- API
@@ -258,6 +266,7 @@ function showTab(name) {
   $$('main > section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   try { localStorage.setItem('tab', name); } catch (e) { /* private mode */ }
   if (name === 'configs') loadConfigs();
+  if (name === 'live') loadSim();
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -278,13 +287,13 @@ function renderStatus() {
   else setChip('ecu', 'ECU bus ' + busState(s.ecu.state), 'bad');
   setChip('bus', 'gauge bus ' + busState(s.bus.state), s.bus.state === 1 ? 'on' : 'bad');
   setChip('gauges', s.gauges_online + (s.gauges_online === 1 ? ' gauge' : ' gauges') + ' online', s.gauges_online ? 'on' : '');
-  setChip('sim', s.simulator ? 'simulator ON' : 'simulator off', s.simulator ? 'on' : '');
+  setChip('sim', s.simulator ? (s.sim && s.sim.paused ? 'simulator PAUSED' : 'simulator ON') : 'simulator off', s.simulator ? 'on' : '');
   renderSettings();
 }
 
 $('#chip-sim').addEventListener('click', async () => {
   if (!state.status) return;
-  try { await api.post('/api/simulator', { enabled: !state.status.simulator }); }
+  try { state.sim = await api.post('/api/simulator', { enabled: !state.status.simulator }); renderSim(); }
   catch (e) { alert(e.message); }
 });
 
@@ -918,6 +927,69 @@ $('#all-fonts').addEventListener('change', ev => {
   ev.target.value = '';
 });
 
+
+// ------------------------------------------------------------- simulator
+// Pause, speed and per-channel overrides, mirrored from the hub's /api/simulator.
+
+async function loadSim() {
+  try { state.sim = await api.get('/api/simulator'); } catch (e) { state.sim = null; }
+  renderSim();
+}
+
+async function simPost(changes) {
+  try { state.sim = await api.post('/api/simulator', changes); } catch (e) { alert(e.message); }
+  renderSim();
+}
+
+const numInput = (value, onchange) => el('input', { type: 'number', step: 'any', value, style: 'width:96px', onchange: ev => onchange(+ev.target.value) });
+
+function renderSim() {
+  const s = state.sim, card = $('#sim-card');
+  if (!s) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  $('#sim-run').textContent = s.paused ? 'Run' : 'Pause';
+  $('#sim-run').disabled = !s.enabled;
+  $('#sim-speed').disabled = !s.enabled;
+  $('#sim-speed').value = String(s.speed);
+  $('#sim-note').textContent = !s.enabled ? 'off: turn it on with the chip at the top' : s.paused ? 'paused, values hold still' : 'values move at ' + s.speed + 'x';
+  const root = $('#sim-overrides');
+  root.innerHTML = '';
+  for (const o of s.overrides) {
+    const m = state.metaByName[o.channel], unit = m && state.meta ? state.meta.units[m.u].s : '';
+    const hold = o.hold != null;
+    const parts = [
+      el('span', { style: 'min-width:190px' }, m ? m.l : o.channel, ' ', el('span', { class: 'muted' }, unit)),
+      el('select', { onchange: ev => simPost({ overrides: { [o.channel]: ev.target.value === 'hold' ? { hold: hold ? o.hold : o.min } : { min: hold ? o.hold : o.min, max: hold ? o.hold + 1 : o.max } } }) },
+        el('option', { value: 'hold', selected: hold ? '' : null }, 'hold at'),
+        el('option', { value: 'sweep', selected: hold ? null : '' }, 'sweep')),
+    ];
+    if (hold) {
+      parts.push(numInput(o.hold, v => simPost({ overrides: { [o.channel]: { hold: v } } })));
+    } else {
+      parts.push(numInput(o.min, v => simPost({ overrides: { [o.channel]: { min: v, max: o.max } } })),
+        el('span', { class: 'muted' }, 'to'),
+        numInput(o.max, v => simPost({ overrides: { [o.channel]: { min: o.min, max: v } } })));
+    }
+    parts.push(btn('remove', () => simPost({ overrides: { [o.channel]: null } }), false, 'small'));
+    root.append(el('div', { class: 'row', style: 'margin-bottom:6px' }, ...parts));
+  }
+  if (!s.overrides.length) root.append(el('div', { class: 'muted' }, 'No overrides: every channel follows its built-in pattern.'));
+  const add = $('#sim-add-channel');
+  if (!add.options.length && state.meta) {
+    for (const c of state.meta.channels.slice().sort((a, b) => a.l.localeCompare(b.l))) add.append(el('option', { value: c.n }, c.l));
+    add.value = 'rpm';
+  }
+}
+
+$('#sim-run').addEventListener('click', () => { if (state.sim) simPost({ paused: !state.sim.paused }); });
+$('#sim-speed').addEventListener('change', ev => simPost({ speed: +ev.target.value }));
+$('#sim-add').addEventListener('click', () => {
+  const name = $('#sim-add-channel').value;
+  if (!name) return;
+  const live = state.live[name];
+  simPost({ overrides: { [name]: { hold: live == null ? 0 : +live.toFixed(2) } } });
+});
+
 // -------------------------------------------------------------- settings
 
 function rows(tbody, pairs) {
@@ -1431,6 +1503,7 @@ document.addEventListener('keydown', ev => {
 
 const mock = {
   configs: {}, assignments: {}, sim: true, t0: Date.now(),
+  simState: { paused: false, speed: 1, overrides: [] }, simClock: 0, simLast: Date.now(),
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -1479,13 +1552,17 @@ const mock = {
   },
   status() {
     const t = Math.floor((Date.now() - this.t0) / 1000);
-    return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim, gauges_online: 1,
+    return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim,
+      sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
   },
   live() {
     if (!this.sim) return {};
-    const t = Date.now(), load = 0.5 - 0.5 * Math.cos(t / 8000 * 2 * Math.PI), rpm = 800 + 6200 * load;
+    const now = Date.now();
+    if (!this.simState.paused) this.simClock += (now - this.simLast) * this.simState.speed;
+    this.simLast = now;
+    const t = this.simClock, load = 0.5 - 0.5 * Math.cos(t / 8000 * 2 * Math.PI), rpm = 800 + 6200 * load;
     const v = { rpm, manifold_pressure: 30 + 220 * load, throttle_position: 100 * load, coolant_temp: 88 + 4 * load, oil_temp: 95, oil_pressure: 180 + rpm / 20,
       wideband_1: 1 - 0.2 * load, target_lambda: 0.9, vehicle_speed: rpm / 60, check_engine_light: (t % 30000) < 5000 ? 1 : 0, oil_pressure_light: 0,
       battery_voltage: 13.8, gear: 1 + Math.floor(load * 5.99) };
@@ -1501,6 +1578,7 @@ const mock = {
         v[c.n] = r[0] + (r[1] - r[0]) * p;
       });
     }
+    for (const o of this.simState.overrides) v[o.channel] = o.hold != null ? o.hold : o.min + (o.max - o.min) * load;
     return v;
   },
   async req(method, path, body, raw) {
@@ -1516,13 +1594,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim })); }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState })); }
     catch (e) { /* no storage */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -1545,7 +1623,19 @@ const mock = {
     if (seg[1] === 'assignments') { if (body.name) this.assignments[seg[2]] = body.name; else delete this.assignments[seg[2]]; return { ok: true }; }
     if (path === '/api/templates') return Object.entries(this.templates).map(([name, t]) => ({ name, title: t.name }));
     if (seg[1] === 'templates') return this.templates[seg[2]];
-    if (path === '/api/simulator') { this.sim = !!body.enabled; return { ok: true }; }
+    if (path === '/api/simulator') {
+      if (method === 'POST') {
+        if (body.enabled != null) this.sim = !!body.enabled;
+        if (body.paused != null) this.simState.paused = !!body.paused;
+        if (body.speed != null) this.simState.speed = Math.max(0.05, Math.min(10, +body.speed));
+        if (body.clear) this.simState.overrides = [];
+        for (const [n, o] of Object.entries(body.overrides || {})) {
+          this.simState.overrides = this.simState.overrides.filter(x => x.channel !== n);
+          if (o) this.simState.overrides.push(Object.assign({ channel: n }, o));
+        }
+      }
+      return { enabled: this.sim, paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides };
+    }
     if (path === '/api/virtual' && method === 'POST') {
       const id = Math.max(0, ...this.virtual.map(v => v.id)) + 1;
       this.virtual.push({ id, label: body.label || 'Gauge ' + id, mac: body.mac || '02:00:00:00:00:0' + id, face: 0 });
@@ -1585,6 +1675,7 @@ async function loadMeta(attempts) {
       state.metaByName = Object.fromEntries(state.meta.channels.map(c => [c.n, c]));
       buildLiveTable();
       if (state.previewCfg) renderWidgetTable();
+      loadSim();
       break;
     } catch (e) {
       $('#live-note').textContent = 'Could not load the channel list: ' + e.message + (i + 1 < attempts ? ', retrying' : '');

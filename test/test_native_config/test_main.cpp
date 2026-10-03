@@ -273,6 +273,19 @@ void test_nfs_options() {
     assertRejected(withWidget(R"({"type":"number","channel":"rpm","rotate":200})"), "'rotate' must be between -180 and 180");
 }
 
+void test_arc_label() {
+    Config c;
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"label","text":"WATER TEMP","arc":200,"arcAngle":-90,"arcSide":"outside"})"), c).ok);
+    const Widget& w = c.faces[0].widgets[0];
+    TEST_ASSERT_EQUAL(200, w.arc);
+    TEST_ASSERT_EQUAL(270, w.arcAngle);
+    TEST_ASSERT_EQUAL(int(ArcSide::Outside), int(w.arcSide));
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"label","text":"x"})"), c).ok);
+    TEST_ASSERT_EQUAL(0, c.faces[0].widgets[0].arc);
+    assertRejected(withWidget(R"({"type":"label","text":"x","arc":300})"), "'arc' must be between 0 and 233");
+    assertRejected(withWidget(R"({"type":"label","text":"x","arc":100,"arcSide":"sideways"})"), "'arcSide': unknown value");
+}
+
 void test_theme_presets_exist() {
     size_t count = 0;
     const ThemePreset* presets = themePresets(count);
@@ -298,6 +311,7 @@ int main(int, char**) {
     RUN_TEST(test_limits);
     RUN_TEST(test_scale_without_needle_and_text_light);
     RUN_TEST(test_nfs_options);
+    RUN_TEST(test_arc_label);
     RUN_TEST(test_theme_presets_exist);
     return UNITY_END();
 }

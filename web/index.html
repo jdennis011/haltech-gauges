@@ -798,6 +798,9 @@ const PANEL_FIELDS = {
            ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
            ['font', 'font', 'Font'], ['size', 'size', 'Size']],
   label:  [['text', 'text', 'Text'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+           ['arc', 'number', 'Arc r', null, 'Radius of the circle the text follows, centred on x, y. 0 is straight text.'],
+           ['arcAngle', 'number', 'Arc at', null, 'Where the middle of the text sits. ' + ANGLE_HINT],
+           ['arcSide', 'select', 'Letters', ['auto', 'inside', 'outside'], 'Which way the letters face: auto is outward on the top half, inward on the bottom.'],
            ['font', 'font', 'Font'], ['size', 'size', 'Size']],
   light:  [['channel', 'channel'], ['text', 'text', 'Text'], ['shape', 'select', 'Shape', ['dot', 'ring', 'square', 'text']],
            ['color', 'color', 'Lit', 'alert'], ['offColor', 'color', 'Off', 'dim'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
@@ -1322,10 +1325,35 @@ function drawNumber(ctx, w, th, t) {
   }
 }
 
+// Whether arched text faces inward: as asked, or by where it sits.
+function arcInside(w) {
+  const a = (((w.arcAngle == null ? 270 : w.arcAngle) % 360) + 360) % 360;
+  return w.arcSide === 'inside' ? true : w.arcSide === 'outside' ? false : (a > 0 && a < 180);
+}
+
+// Text laid letter by letter along a circle, its middle at angleDeg, reading
+// left to right whichever side the letters face.
+function drawArcText(ctx, text, cx, cy, r, angleDeg, inside) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const chars = Array.from(text), widths = chars.map(ch => ctx.measureText(ch).width);
+  const total = widths.reduce((s, v) => s + v, 0), dir = inside ? -1 : 1;
+  let a = rad(angleDeg) - dir * total / (2 * r);
+  chars.forEach((ch, i) => {
+    a += dir * widths[i] / (2 * r);
+    ctx.save();
+    ctx.translate(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    ctx.rotate(a + (inside ? -Math.PI / 2 : Math.PI / 2));
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+    a += dir * widths[i] / (2 * r);
+  });
+}
+
 function drawLabel(ctx, w, th) {
   const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
   ctx.font = (w.size || 24) + 'px ' + fontStack(w.font); ctx.textAlign = w.align || 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = color(w.color, th, th.fg);
+  if (w.arc > 0) { drawArcText(ctx, w.text || '', cx, cy, w.arc, w.arcAngle == null ? 270 : w.arcAngle, arcInside(w)); return; }
   if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); ctx.fillText(w.text || '', 0, 0); }
   else ctx.fillText(w.text || '', cx, cy);
 }
@@ -1438,6 +1466,10 @@ function widgetBounds(ctx, w, t) {
   const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
   ctx.font = size + 'px ' + fontStack(w.font);
   const width = Math.max(ctx.measureText(text).width, size * 0.6), height = size * 1.1;
+  if (w.type === 'label' && w.arc > 0) {
+    const ang = w.arcAngle == null ? 270 : w.arcAngle, a = rad(ang);
+    return { kind: 'rect', cx: cx + w.arc * Math.cos(a), cy: cy + w.arc * Math.sin(a), w: Math.min(width, 2 * w.arc), h: height, rotate: ang + 90, px: cx, py: cy };
+  }
   const align = w.align || 'center';
   const left = align === 'left' ? cx : align === 'right' ? cx - width : cx - width / 2;
   return rotated({ kind: 'rect', cx: left + width / 2, cy, w: width, h: height }, w.rotate || 0, cx, cy);
@@ -1508,10 +1540,12 @@ function drawSelection(ctx, w, t) {
 }
 
 // Rotation of the selected widget, as a drag of a corner handle.
+const rotateKey = w => (w.type === 'label' && w.arc > 0) ? 'arcAngle' : ROTATE_KEY[w.type];
+
 function startRotate(w, b, p) {
-  const key = ROTATE_KEY[w.type];
+  const key = rotateKey(w);
   const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
-  drag = { rotate: key, px, py, a0: Math.atan2(p.y - py, p.x - px) * 180 / Math.PI, base: w[key] == null ? (key === 'start' ? 135 : 0) : w[key], moved: false };
+  drag = { rotate: key, px, py, a0: Math.atan2(p.y - py, p.x - px) * 180 / Math.PI, base: w[key] == null ? (key === 'start' ? 135 : key === 'arcAngle' ? 270 : 0) : w[key], moved: false };
 }
 
 function applyRotate(w, p) {
@@ -1519,7 +1553,7 @@ function applyRotate(w, p) {
   let v = drag.base + (a - drag.a0);
   const snapped = Math.round(v / 15) * 15;
   if (Math.abs(v - snapped) < 4) v = snapped;
-  if (drag.rotate === 'start') v = ((Math.round(v) % 360) + 360) % 360;
+  if (drag.rotate === 'start' || drag.rotate === 'arcAngle') v = ((Math.round(v) % 360) + 360) % 360;
   else { v = Math.round(v); while (v > 180) v -= 360; while (v <= -180) v += 360; }
   w[drag.rotate] = v;
   drag.moved = true;

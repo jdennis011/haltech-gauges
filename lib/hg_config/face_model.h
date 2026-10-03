@@ -38,6 +38,7 @@ enum class UnitPos : uint8_t { Right, Below };
 enum class Hold : uint8_t { None, Max, Min };
 enum class LightShape : uint8_t { Dot, Ring, Square, Text };
 enum class TickShape : uint8_t { Line, Triangle };
+enum class ArcSide : uint8_t { Auto, Inside, Outside };  // which way arched text faces
 enum class NumberFormat : uint8_t { Plain, Gear };  // gear: 0 = N, -1 = R, -2 = P
 enum class RimMode : uint8_t { Flash, Fill };
 
@@ -127,6 +128,11 @@ struct Widget {
     Hold hold = Hold::None;
     std::string text;
     int16_t rotate = 0;     // label, number, light, bar: degrees clockwise about x, y
+    // label along a circle centred on x, y: radius (0 = straight), where the
+    // text's middle sits, and whether the letters face in or out.
+    int16_t arc = 0;
+    int16_t arcAngle = 270;
+    ArcSide arcSide = ArcSide::Auto;
 
     BarStyle barStyle = BarStyle::Horizontal;
     uint8_t cornerRadius = 4;

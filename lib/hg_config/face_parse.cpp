@@ -73,6 +73,11 @@ const Name kTickShapes[] = {
     {"line", uint8_t(TickShape::Line)},
     {"triangle", uint8_t(TickShape::Triangle)},
 };
+const Name kArcSides[] = {
+    {"auto", uint8_t(ArcSide::Auto)},
+    {"inside", uint8_t(ArcSide::Inside)},
+    {"outside", uint8_t(ArcSide::Outside)},
+};
 const Name kNumberFormats[] = {
     {"plain", uint8_t(NumberFormat::Plain)},
     {"gear", uint8_t(NumberFormat::Gear)},
@@ -417,6 +422,10 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.text = readText(obj, "text", ctx);
             if (ctx.ok() && w.text.empty()) ctx.fail("'text' is required");
             w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
+            w.arc = int16_t(readInt(obj, "arc", 0, 0, kScreenSize / 2, ctx));
+            w.arcAngle = int16_t(readInt(obj, "arcAngle", 270, -360, 360, ctx));
+            w.arcAngle = int16_t(((w.arcAngle % 360) + 360) % 360);
+            w.arcSide = ArcSide(readEnum(obj, "arcSide", kArcSides, uint8_t(ArcSide::Auto), ctx));
             break;
 
         case WidgetType::Light:

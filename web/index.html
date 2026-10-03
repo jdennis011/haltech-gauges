@@ -326,11 +326,27 @@ function connect() {
 
 function onMessage(m) {
   if (m.t === 'status') { state.status = m; renderStatus(); }
-  else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGauges(); renderTryGauges(); }
+  else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGaugesIfIdle(); renderTryGauges(); }
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
 }
 
 // ---------------------------------------------------------------- gauges
+
+// The hub pushes the gauge list every few seconds. Rebuilding the cards would
+// close a dropdown or drop a slider mid-drag, so the cards are only rebuilt
+// when something changed and no control on them has focus.
+let gaugesKey = '';
+let gaugesDirty = false;
+function renderGaugesIfIdle() {
+  const key = JSON.stringify(state.gauges);
+  if (key === gaugesKey && !gaugesDirty) return;
+  const focused = document.activeElement;
+  if (focused && $('#gauges').contains(focused)) { gaugesDirty = true; return; }
+  gaugesKey = key;
+  gaugesDirty = false;
+  renderGauges();
+}
+$('#gauges').addEventListener('focusout', () => { if (gaugesDirty) setTimeout(renderGaugesIfIdle, 100); });
 
 async function act(g, action, body) {
   try { await api.post('/api/gauges/' + g.node + '/' + action, body || {}); }
@@ -413,6 +429,7 @@ function linkHardware(g) {
 }
 
 function renderGauges() {
+  gaugesKey = JSON.stringify(state.gauges);
   const root = $('#gauges');
   root.innerHTML = '';
   cardPreviews = [];
@@ -719,6 +736,7 @@ $('#file-import').addEventListener('change', ev => {
 
 function renderTryGauges() {
   const sel = $('#try-gauge');
+  if (document.activeElement === sel) return;  // not while it is open
   const prev = sel.value;
   sel.innerHTML = '';
   const online = state.gauges.filter(g => g.online);

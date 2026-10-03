@@ -60,7 +60,10 @@ input[type=range]{width:110px}
 .fontrow .key{font-family:ui-monospace,Consolas,monospace;color:var(--dim)}
 .wrow{padding:8px 0 8px 6px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
 .wrow.sel{border-left-color:var(--blue);background:#17222f}
-.wrow .wtitle{cursor:pointer}
+.wrow .wtitle{cursor:grab}
+.wrow .wtitle .grip{color:var(--dim);font-size:16px;margin-right:2px}
+.wrow.dragging{opacity:.45}
+.wrow.dropTarget{border-top:2px solid var(--blue)}
 #preview{touch-action:none}
 .wrow .wtitle{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
@@ -161,6 +164,7 @@ input[type=range]{width:110px}
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
+          <div class="muted" style="font-size:13px;margin:4px 0 6px">Rows are the draw order: later rows draw on top. Drag a row by its title to reorder.</div>
           <div id="widget-list"></div>
         </div>
         <div class="sub">
@@ -879,11 +883,18 @@ function renderWidgetTable() {
       if (hint) control.title = hint;
       ctl.append(el('label', { title: hint || null }, label ? label : '', control));
     }
-    root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : '') },
-      el('div', { class: 'wtitle' },
-        el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')),
-        el('span', { class: 'spacer' }),
-        btn('remove', () => removeWidget(i), false, 'small')), ctl));
+    const title = el('div', { class: 'wtitle', draggable: 'true',
+      ondragstart: ev => { dragFrom = i; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); ev.currentTarget.parentNode.classList.add('dragging'); },
+      ondragend: ev => { ev.currentTarget.parentNode.classList.remove('dragging'); dragFrom = -1; } },
+      el('span', { class: 'grip' }, '≡'),
+      el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')),
+      el('span', { class: 'spacer' }),
+      btn('remove', () => removeWidget(i), false, 'small'));
+    root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : ''),
+      ondragover: ev => { if (dragFrom < 0) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; ev.currentTarget.classList.add('dropTarget'); },
+      ondragleave: ev => ev.currentTarget.classList.remove('dropTarget'),
+      ondrop: ev => { ev.preventDefault(); ev.currentTarget.classList.remove('dropTarget'); if (dragFrom >= 0 && dragFrom !== i) reorderWidget(dragFrom, i); dragFrom = -1; } },
+      title, ctl));
   });
   if (!widgets.length) root.append(el('div', { class: 'muted' }, 'This face has no widgets.'));
 }
@@ -915,6 +926,18 @@ $('#btn-add-widget').addEventListener('click', () => {
   });
   if (index >= 0) selectWidget(index);
 });
+
+// Draw order: a row dragged onto another takes that place.
+let dragFrom = -1;
+function reorderWidget(from, to) {
+  editConfig(cfg => {
+    const face = (cfg.faces || [])[state.faceIndex];
+    if (!face || !face.widgets || from >= face.widgets.length || to >= face.widgets.length) return;
+    const [w] = face.widgets.splice(from, 1);
+    face.widgets.splice(to, 0, w);
+  });
+  selectWidget(to);
+}
 
 function removeWidget(i) {
   editConfig(cfg => {

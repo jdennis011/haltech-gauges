@@ -1,0 +1,286 @@
+{
+  "schema": 1,
+  "name": "Performance cluster",
+  "theme": {
+    "bg": "#0E0E0E",
+    "fg": "#FFFFFF",
+    "accent": "#E0001B",
+    "dim": "#2B2B2B",
+    "warn": "#FFD400",
+    "alert": "#E0001B"
+  },
+  "faces": [
+    {
+      "name": "Sport",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "r": 233,
+          "thickness": 14,
+          "start": 135,
+          "sweep": 270,
+          "rounded": false,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 6500,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "major": 8,
+          "minor": 2,
+          "r": 214,
+          "needle": "none",
+          "tickLen": 10,
+          "tickWidth": 2,
+          "labelScale": 1000,
+          "labelFont": "condensed",
+          "labelSize": 26,
+          "zoneWidth": 8,
+          "zones": [
+            {
+              "from": 6500,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "rim",
+          "channel": "rpm",
+          "from": 7000,
+          "thickness": 8
+        },
+        {
+          "type": "number",
+          "channel": "vehicle_speed",
+          "unit": "km/h",
+          "font": "display",
+          "size": 104,
+          "y": 205,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "km/h",
+          "x": 233,
+          "y": 268,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "gear",
+          "format": "gear",
+          "font": "display",
+          "size": 56,
+          "y": 330,
+          "showUnit": false
+        },
+        {
+          "type": "bar",
+          "channel": "coolant_temp",
+          "min": 40,
+          "max": 130,
+          "unit": "C",
+          "x": 118,
+          "y": 392,
+          "w": 110,
+          "h": 10,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "WATER",
+          "x": 118,
+          "y": 414,
+          "font": "condensed",
+          "size": 14,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "bar",
+          "channel": "oil_temp",
+          "min": 40,
+          "max": 150,
+          "unit": "C",
+          "x": 348,
+          "y": 392,
+          "w": 110,
+          "h": 10,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 130,
+              "to": 150,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL",
+          "x": 348,
+          "y": 414,
+          "font": "condensed",
+          "size": 14,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Track",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "r": 233,
+          "thickness": 14,
+          "start": 135,
+          "sweep": 270,
+          "rounded": false,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 6500,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "major": 8,
+          "minor": 2,
+          "r": 214,
+          "needle": "none",
+          "tickLen": 10,
+          "tickWidth": 2,
+          "labelScale": 1000,
+          "labelFont": "condensed",
+          "labelSize": 26,
+          "zoneWidth": 8,
+          "zones": [
+            {
+              "from": 6500,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "rim",
+          "channel": "rpm",
+          "from": 7000,
+          "thickness": 8
+        },
+        {
+          "type": "number",
+          "channel": "vehicle_speed",
+          "unit": "km/h",
+          "font": "display",
+          "size": 104,
+          "y": 205,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "km/h",
+          "x": 233,
+          "y": 268,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "gear",
+          "format": "gear",
+          "font": "display",
+          "size": 56,
+          "y": 330,
+          "showUnit": false
+        },
+        {
+          "type": "bar",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 30,
+          "unit": "psi_gauge",
+          "x": 118,
+          "y": 392,
+          "w": 110,
+          "h": 10,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 25,
+              "to": 30,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 118,
+          "y": 414,
+          "font": "condensed",
+          "size": 14,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "bar",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "unit": "psi",
+          "x": 348,
+          "y": 392,
+          "w": 110,
+          "h": 10,
+          "color": "fg",
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL psi",
+          "x": 348,
+          "y": 414,
+          "font": "condensed",
+          "size": 14,
+          "color": "#8A8F98"
+        }
+      ]
+    }
+  ]
+}

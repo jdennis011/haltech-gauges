@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "name": "Smoked glow",
+  "theme": {
+    "bg": "#000000",
+    "fg": "#1E90FF",
+    "accent": "#FF7A00",
+    "dim": "#0E2238",
+    "warn": "#FFA500",
+    "alert": "#FF2A2A"
+  },
+  "faces": [
+    {
+      "name": "Boost",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 30,
+          "major": 9,
+          "minor": 5,
+          "unit": "psi_gauge",
+          "labelFont": "condensed",
+          "labelSize": 30,
+          "tickWidth": 2,
+          "needle": "tapered",
+          "needleWidth": 5,
+          "zoneWidth": 3,
+          "zones": [
+            {
+              "from": 25,
+              "to": 30,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 20,
+          "color": "fg"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "major": 10,
+          "minor": 5,
+          "unit": "psi",
+          "labelFont": "condensed",
+          "labelSize": 30,
+          "tickWidth": 2,
+          "needle": "tapered",
+          "needleWidth": 5,
+          "zoneWidth": 3,
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 20
+        },
+        {
+          "type": "light",
+          "channel": "oil_pressure",
+          "unit": "psi",
+          "on": {
+            "below": 15
+          },
+          "flash": true,
+          "y": 370,
+          "r": 9,
+          "text": "LOW",
+          "size": 16
+        }
+      ]
+    },
+    {
+      "name": "Trans temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "gearbox_oil_temp",
+          "min": 40,
+          "max": 150,
+          "major": 11,
+          "minor": 5,
+          "unit": "C",
+          "labelFont": "condensed",
+          "labelSize": 28,
+          "tickWidth": 2,
+          "needle": "tapered",
+          "needleWidth": 5,
+          "zoneWidth": 3,
+          "zones": [
+            {
+              "from": 120,
+              "to": 150,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "TRANS TEMP",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 20
+        }
+      ]
+    }
+  ]
+}

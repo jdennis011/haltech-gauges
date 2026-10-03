@@ -1,0 +1,273 @@
+{
+  "schema": 1,
+  "name": "Race dash",
+  "theme": {
+    "bg": "#000000",
+    "fg": "#FFFFFF",
+    "accent": "#2ECC40",
+    "dim": "#333333",
+    "warn": "#FFDC00",
+    "alert": "#FF4136"
+  },
+  "faces": [
+    {
+      "name": "Sprint",
+      "widgets": [
+        {
+          "type": "bar",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "x": 233,
+          "y": 56,
+          "w": 380,
+          "h": 26,
+          "segments": 20,
+          "gap": 3,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 5500,
+              "to": 7000,
+              "color": "warn"
+            },
+            {
+              "from": 7000,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "rim",
+          "channel": "rpm",
+          "from": 7400,
+          "thickness": 10
+        },
+        {
+          "type": "number",
+          "channel": "gear",
+          "format": "gear",
+          "font": "display",
+          "size": 150,
+          "x": 233,
+          "y": 185,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "SPEED km/h",
+          "x": 120,
+          "y": 286,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "vehicle_speed",
+          "unit": "km/h",
+          "font": "display",
+          "size": 52,
+          "x": 120,
+          "y": 320,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "OIL psi",
+          "x": 346,
+          "y": 286,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "oil_pressure",
+          "unit": "psi",
+          "font": "display",
+          "size": 52,
+          "x": 346,
+          "y": 320,
+          "showUnit": false,
+          "warn": {
+            "below": 15,
+            "flash": true
+          }
+        },
+        {
+          "type": "label",
+          "text": "WATER °C",
+          "x": 120,
+          "y": 371,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "coolant_temp",
+          "unit": "C",
+          "font": "display",
+          "size": 40,
+          "x": 120,
+          "y": 405,
+          "showUnit": false,
+          "warn": {
+            "above": 110
+          }
+        },
+        {
+          "type": "label",
+          "text": "BOOST psi",
+          "x": 346,
+          "y": 371,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "manifold_pressure",
+          "unit": "psi_gauge",
+          "font": "display",
+          "size": 40,
+          "x": 346,
+          "y": 405,
+          "decimals": 1,
+          "showUnit": false
+        }
+      ]
+    },
+    {
+      "name": "Endurance",
+      "widgets": [
+        {
+          "type": "bar",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "x": 233,
+          "y": 56,
+          "w": 380,
+          "h": 26,
+          "segments": 20,
+          "gap": 3,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 5500,
+              "to": 7000,
+              "color": "warn"
+            },
+            {
+              "from": 7000,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "rim",
+          "channel": "rpm",
+          "from": 7400,
+          "thickness": 10
+        },
+        {
+          "type": "number",
+          "channel": "gear",
+          "format": "gear",
+          "font": "display",
+          "size": 150,
+          "x": 233,
+          "y": 185,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "OIL °C",
+          "x": 120,
+          "y": 286,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "oil_temp",
+          "unit": "C",
+          "font": "display",
+          "size": 52,
+          "x": 120,
+          "y": 320,
+          "showUnit": false,
+          "warn": {
+            "above": 130
+          }
+        },
+        {
+          "type": "label",
+          "text": "BATT V",
+          "x": 346,
+          "y": 286,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "battery_voltage",
+          "font": "display",
+          "size": 52,
+          "x": 346,
+          "y": 320,
+          "decimals": 1,
+          "showUnit": false,
+          "warn": {
+            "below": 12.5
+          }
+        },
+        {
+          "type": "label",
+          "text": "WATER °C",
+          "x": 120,
+          "y": 371,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "coolant_temp",
+          "unit": "C",
+          "font": "display",
+          "size": 40,
+          "x": 120,
+          "y": 405,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "AFR",
+          "x": 346,
+          "y": 371,
+          "font": "condensed",
+          "size": 15,
+          "color": "#9AA0A6"
+        },
+        {
+          "type": "number",
+          "channel": "wideband_1",
+          "unit": "afr",
+          "font": "display",
+          "size": 40,
+          "x": 346,
+          "y": 405,
+          "decimals": 1,
+          "showUnit": false
+        }
+      ]
+    }
+  ]
+}

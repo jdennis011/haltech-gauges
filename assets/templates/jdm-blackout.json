@@ -1,0 +1,240 @@
+{
+  "schema": 1,
+  "name": "JDM blackout",
+  "theme": {
+    "bg": "#000000",
+    "fg": "#F4F7FF",
+    "accent": "#E8192C",
+    "dim": "#1C1C24",
+    "warn": "#3A7BFF",
+    "alert": "#FF4D1C"
+  },
+  "faces": [
+    {
+      "name": "Boost",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "manifold_pressure",
+          "min": -1,
+          "max": 2,
+          "major": 6,
+          "minor": 5,
+          "unit": "bar_gauge",
+          "labelFont": "sans",
+          "labelSize": 24,
+          "tickWidth": 2,
+          "tickLen": 14,
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "accent",
+          "zoneWidth": 4,
+          "zones": [
+            {
+              "from": 1.6,
+              "to": 2,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 233,
+          "y": 150,
+          "font": "sans",
+          "size": 22
+        },
+        {
+          "type": "label",
+          "text": "bar",
+          "x": 233,
+          "y": 320,
+          "font": "sans",
+          "size": 20,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "light",
+          "channel": "manifold_pressure",
+          "unit": "bar_gauge",
+          "on": {
+            "above": 1.5
+          },
+          "y": 372,
+          "r": 7,
+          "color": "warn",
+          "text": "PEAK",
+          "size": 14
+        }
+      ]
+    },
+    {
+      "name": "Oil temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "oil_temp",
+          "min": 50,
+          "max": 150,
+          "major": 10,
+          "minor": 5,
+          "unit": "C",
+          "labelFont": "sans",
+          "labelSize": 24,
+          "tickWidth": 2,
+          "tickLen": 14,
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "accent",
+          "zoneWidth": 4,
+          "zones": [
+            {
+              "from": 130,
+              "to": 150,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL TEMP",
+          "x": 233,
+          "y": 150,
+          "font": "sans",
+          "size": 22
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 320,
+          "font": "sans",
+          "size": 20,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "light",
+          "channel": "oil_temp",
+          "unit": "C",
+          "on": {
+            "above": 130
+          },
+          "flash": true,
+          "y": 372,
+          "r": 7,
+          "text": "WARN",
+          "size": 14
+        }
+      ]
+    },
+    {
+      "name": "Water temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "coolant_temp",
+          "min": 50,
+          "max": 130,
+          "major": 8,
+          "minor": 5,
+          "unit": "C",
+          "labelFont": "sans",
+          "labelSize": 24,
+          "tickWidth": 2,
+          "tickLen": 14,
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "accent",
+          "zoneWidth": 4,
+          "zones": [
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "WATER TEMP",
+          "x": 233,
+          "y": 150,
+          "font": "sans",
+          "size": 22
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 320,
+          "font": "sans",
+          "size": 20,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "light",
+          "channel": "coolant_temp",
+          "unit": "C",
+          "on": {
+            "above": 110
+          },
+          "flash": true,
+          "y": 372,
+          "r": 7,
+          "text": "WARN",
+          "size": 14
+        }
+      ]
+    },
+    {
+      "name": "Tach",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 9000,
+          "major": 9,
+          "minor": 5,
+          "labelFont": "sans",
+          "labelSize": 24,
+          "tickWidth": 2,
+          "tickLen": 14,
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "accent",
+          "zoneWidth": 4,
+          "labelScale": 1000,
+          "zones": [
+            {
+              "from": 7500,
+              "to": 9000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "RPM x1000",
+          "x": 233,
+          "y": 150,
+          "font": "sans",
+          "size": 20
+        },
+        {
+          "type": "light",
+          "channel": "rpm",
+          "on": {
+            "above": 7200
+          },
+          "flash": true,
+          "y": 372,
+          "r": 9,
+          "text": "SHIFT",
+          "size": 14
+        }
+      ]
+    }
+  ]
+}

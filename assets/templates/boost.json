@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "name": "Boost",
+  "theme": "amber",
+  "faces": [
+    {
+      "name": "Boost",
+      "widgets": [
+        { "type": "dial", "channel": "manifold_pressure", "unit": "psi_gauge", "min": -15, "max": 30,
+          "major": 9, "minor": 5, "labelFont": "condensed", "labelSize": 24,
+          "zones": [ { "from": 20, "to": 30, "color": "alert" } ] },
+        { "type": "number", "channel": "manifold_pressure", "unit": "psi_gauge", "y": 320,
+          "font": "digital", "size": 56, "decimals": 1, "warn": { "above": 25, "flash": true } },
+        { "type": "label", "text": "BOOST", "y": 150, "size": 24, "color": "dim" }
+      ]
+    },
+    {
+      "name": "Lambda",
+      "widgets": [
+        { "type": "ring", "channel": "wideband_1", "unit": "afr", "min": 10, "max": 20, "thickness": 22,
+          "segments": 30,
+          "zones": [ { "from": 10, "to": 11.5, "color": "accent" }, { "from": 16, "to": 20, "color": "alert" } ] },
+        { "type": "number", "channel": "wideband_1", "unit": "afr", "font": "display", "size": 96,
+          "decimals": 1, "unitSize": 26 },
+        { "type": "number", "channel": "target_lambda", "unit": "afr", "y": 360, "size": 28,
+          "color": "dim", "decimals": 1, "showUnit": false },
+        { "type": "label", "text": "TARGET", "y": 395, "size": 16, "color": "dim" }
+      ]
+    }
+  ]
+}

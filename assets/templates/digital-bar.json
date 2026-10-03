@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "name": "Digital bar",
+  "theme": "cyan",
+  "faces": [
+    {
+      "name": "Water temp",
+      "widgets": [
+        { "type": "ring", "channel": "coolant_temp", "unit": "C", "min": 20, "max": 120,
+          "r": 233, "thickness": 30, "start": 135, "sweep": 270, "segments": 45, "gap": 2, "rounded": false, "track": true },
+        { "type": "dial", "channel": "coolant_temp", "unit": "C", "min": 20, "max": 120,
+          "r": 194, "start": 135, "sweep": 270, "major": 10, "minor": 1, "ticks": false, "arcWidth": 3,
+          "needle": "none", "labelFont": "condensed", "labelSize": 32 },
+        { "type": "number", "channel": "coolant_temp", "unit": "C", "font": "digital", "size": 100, "y": 240,
+          "unitPos": "right", "unitSize": 24 },
+        { "type": "light", "channel": "coolant_temp", "unit": "C", "shape": "text", "text": "COOLANT LOW",
+          "on": { "below": 60 }, "y": 330, "font": "condensed", "size": 28, "color": "fg" },
+        { "type": "label", "text": "WATER TEMP °C", "y": 392, "font": "condensed", "size": 36 }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        { "type": "ring", "channel": "oil_pressure", "unit": "psi", "min": 0, "max": 120,
+          "r": 233, "thickness": 30, "start": 135, "sweep": 270, "segments": 45, "gap": 2, "rounded": false, "track": true },
+        { "type": "dial", "channel": "oil_pressure", "unit": "psi", "min": 0, "max": 120,
+          "r": 194, "start": 135, "sweep": 270, "major": 12, "minor": 1, "ticks": false, "arcWidth": 3,
+          "needle": "none", "labelFont": "condensed", "labelSize": 28 },
+        { "type": "number", "channel": "oil_pressure", "unit": "psi", "font": "digital", "size": 100, "y": 240,
+          "unitPos": "right", "unitSize": 24 },
+        { "type": "light", "channel": "oil_pressure", "unit": "psi", "shape": "text", "text": "OIL LOW",
+          "on": { "below": 15 }, "y": 330, "font": "condensed", "size": 28, "color": "alert", "flash": true },
+        { "type": "label", "text": "OIL PRESS PSI", "y": 392, "font": "condensed", "size": 36 }
+      ]
+    },
+    {
+      "name": "Boost",
+      "widgets": [
+        { "type": "ring", "channel": "manifold_pressure", "unit": "psi_gauge", "min": -15, "max": 30,
+          "r": 233, "thickness": 30, "start": 135, "sweep": 270, "segments": 45, "gap": 2, "rounded": false, "track": true,
+          "zones": [ { "from": 25, "to": 30, "color": "alert" } ] },
+        { "type": "dial", "channel": "manifold_pressure", "unit": "psi_gauge", "min": -15, "max": 30,
+          "r": 194, "start": 135, "sweep": 270, "major": 9, "minor": 1, "ticks": false, "arcWidth": 3,
+          "needle": "none", "labelFont": "condensed", "labelSize": 32 },
+        { "type": "number", "channel": "manifold_pressure", "unit": "psi_gauge", "font": "digital", "size": 100, "y": 240,
+          "decimals": 1, "unitPos": "right", "unitSize": 24 },
+        { "type": "light", "channel": "manifold_pressure", "unit": "psi_gauge", "shape": "text", "text": "OVERBOOST",
+          "on": { "above": 25 }, "y": 330, "font": "condensed", "size": 28, "color": "alert", "flash": true },
+        { "type": "label", "text": "BOOST PSI", "y": 392, "font": "condensed", "size": 36 }
+      ]
+    }
+  ]
+}

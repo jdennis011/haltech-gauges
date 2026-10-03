@@ -1,0 +1,454 @@
+// Haltech ECU Broadcast CAN Protocol, document version 2.0 (08/2025).
+// Source: docs/ref/haltech-ecu-broadcast-can-protocol-v2.0.pdf
+//
+// Include with the HG_* macros defined. Entries must stay grouped by CAN ID.
+//
+//   HG_FRAME(can_id, rate_hz)
+//   HG_U16 / HG_S16 / HG_U8 / HG_S8 / HG_U32 / HG_S32
+//          (name, label, can_id, byte, scale, offset, unit)      value = raw * scale + offset
+//   HG_U16E / HG_S16E   same, but raw 0 means "sensor error"
+//   HG_BIT (name, label, can_id, byte, bit)                      bit 7 = MSB of the byte
+//   HG_BITS(name, label, can_id, byte, bit_hi, width, unit)      unsigned field, MSB at byte:bit_hi
+//
+// Conventions:
+//   - Temperatures are sent as Kelvin x10 and stored as Celsius. Haltech's own
+//     conversion uses 273.1 (raw 2731 = 0 C), so that offset is used here.
+//   - Pressures whose formula in the document includes "- 101.3" are gauge kPa.
+//     Manifold and barometric pressure are absolute.
+//   - Target boost, pre-intercooler boost and exhaust manifold pressure are
+//     listed as plain "kPa" with no offset. They are treated as absolute per the
+//     document's blanket statement; confirm against NSP with the engine off.
+//   - Brake pressures really are "x - 101.3" with no /10 in the document.
+
+HG_FRAME(0x360, 50)
+HG_U16(rpm,                     "RPM",                        0x360, 0, 1.0f,   0.0f,    Rpm)
+HG_U16(manifold_pressure,       "Manifold Pressure",          0x360, 2, 0.1f,   0.0f,    KpaAbs)
+HG_U16(throttle_position,       "Throttle Position",          0x360, 4, 0.1f,   0.0f,    Percent)
+HG_U16(coolant_pressure,        "Coolant Pressure",           0x360, 6, 0.1f,   -101.3f, Kpa)
+
+HG_FRAME(0x361, 50)
+HG_U16(fuel_pressure,           "Fuel Pressure",              0x361, 0, 0.1f,   -101.3f, Kpa)
+HG_U16(oil_pressure,            "Oil Pressure",               0x361, 2, 0.1f,   -101.3f, Kpa)
+HG_U16(engine_demand,           "Engine Demand",              0x361, 4, 0.1f,   0.0f,    Percent)
+HG_U16(wastegate_pressure,      "Wastegate Pressure",         0x361, 6, 0.1f,   -101.3f, Kpa)
+
+HG_FRAME(0x362, 50)
+HG_U16(inj_stage1_duty,         "Injection Stage 1 Duty",     0x362, 0, 0.1f,   0.0f,    Percent)
+HG_U16(inj_stage2_duty,         "Injection Stage 2 Duty",     0x362, 2, 0.1f,   0.0f,    Percent)
+HG_S16(ignition_angle,          "Ignition Angle",             0x362, 4, 0.1f,   0.0f,    Degrees)
+
+HG_FRAME(0x363, 20)
+HG_S16(wheel_slip,              "Wheel Slip",                 0x363, 0, 0.1f,   0.0f,    Kmh)
+HG_S16(wheel_diff,              "Wheel Diff",                 0x363, 2, 0.1f,   0.0f,    Kmh)
+HG_U16(launch_end_rpm,          "Launch Control End RPM",     0x363, 6, 1.0f,   0.0f,    Rpm)
+
+HG_FRAME(0x364, 50)
+HG_U16(inj_stage1_time,         "Injection Stage 1 Time",     0x364, 0, 0.001f, 0.0f,    Millisec)
+HG_U16(inj_stage2_time,         "Injection Stage 2 Time",     0x364, 2, 0.001f, 0.0f,    Millisec)
+HG_U16(inj_stage3_time,         "Injection Stage 3 Time",     0x364, 4, 0.001f, 0.0f,    Millisec)
+HG_U16(inj_stage4_time,         "Injection Stage 4 Time",     0x364, 6, 0.001f, 0.0f,    Millisec)
+
+HG_FRAME(0x368, 20)
+HG_U16(wideband_1,              "Wideband 1",                 0x368, 0, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_2,              "Wideband 2",                 0x368, 2, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_3,              "Wideband 3",                 0x368, 4, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_4,              "Wideband 4",                 0x368, 6, 0.001f, 0.0f,    Lambda)
+
+HG_FRAME(0x369, 20)
+HG_U16(trigger_error_count,     "Trigger Error Count",        0x369, 0, 1.0f,   0.0f,    Raw)
+HG_U16(trigger_counter,         "Trigger Counter",            0x369, 2, 1.0f,   0.0f,    Raw)
+HG_U16(trigger_sync_level,      "Trigger Sync Level",         0x369, 6, 1.0f,   0.0f,    Raw)
+
+HG_FRAME(0x36A, 20)
+HG_U16(knock_level_1,           "Knock Level 1",              0x36A, 0, 0.01f,  0.0f,    Decibel)
+HG_U16(knock_level_2,           "Knock Level 2",              0x36A, 2, 0.01f,  0.0f,    Decibel)
+
+HG_FRAME(0x36B, 20)
+HG_U16(brake_pressure_front,    "Brake Pressure Front",       0x36B, 0, 1.0f,   -101.3f, Kpa)
+HG_U16(nos_pressure_1,          "NOS Pressure 1",             0x36B, 2, 0.22f,  -101.3f, Kpa)
+HG_U16(turbo_speed_1,           "Turbo Speed 1",              0x36B, 4, 10.0f,  0.0f,    Rpm)
+HG_S16(lateral_g,               "Lateral G",                  0x36B, 6, 0.1f,   0.0f,    Mps2)
+
+HG_FRAME(0x36C, 20)
+HG_U16(wheel_speed_fl,          "Wheel Speed Front Left",     0x36C, 0, 0.1f,   0.0f,    Kmh)
+HG_U16(wheel_speed_fr,          "Wheel Speed Front Right",    0x36C, 2, 0.1f,   0.0f,    Kmh)
+HG_U16(wheel_speed_rl,          "Wheel Speed Rear Left",      0x36C, 4, 0.1f,   0.0f,    Kmh)
+HG_U16(wheel_speed_rr,          "Wheel Speed Rear Right",     0x36C, 6, 0.1f,   0.0f,    Kmh)
+
+HG_FRAME(0x36D, 20)
+HG_S16(exhaust_cam_angle_1,     "Exhaust Cam Angle 1",        0x36D, 4, 0.1f,   0.0f,    Degrees)
+HG_S16(exhaust_cam_angle_2,     "Exhaust Cam Angle 2",        0x36D, 6, 0.1f,   0.0f,    Degrees)
+
+HG_FRAME(0x36E, 20)
+HG_U16(engine_limiting_active,  "Engine Limiting Active",     0x36E, 0, 1.0f,   0.0f,    Bool)
+HG_S16(launch_ign_retard,       "Launch Ignition Retard",     0x36E, 2, 0.1f,   0.0f,    Degrees)
+HG_S16(launch_fuel_enrich,      "Launch Fuel Enrich",         0x36E, 4, 0.1f,   0.0f,    Percent)
+HG_S16(longitudinal_g,          "Longitudinal G",             0x36E, 6, 0.1f,   0.0f,    Mps2)
+
+HG_FRAME(0x36F, 20)
+HG_U16(generic_output_1_duty,   "Generic Output 1 Duty",      0x36F, 0, 0.1f,   0.0f,    Percent)
+HG_U16(boost_control_output,    "Boost Control Output",       0x36F, 2, 0.1f,   0.0f,    Percent)
+
+// 0x370 bytes 2-3 (combined gear) duplicate the gear channels in 0x470 and are not decoded.
+HG_FRAME(0x370, 20)
+HG_U16(vehicle_speed,           "Vehicle Speed",              0x370, 0, 0.1f,   0.0f,    Kmh)
+HG_S16(intake_cam_angle_1,      "Intake Cam Angle 1",         0x370, 4, 0.1f,   0.0f,    Degrees)
+HG_S16(intake_cam_angle_2,      "Intake Cam Angle 2",         0x370, 6, 0.1f,   0.0f,    Degrees)
+
+HG_FRAME(0x371, 10)
+HG_U16(fuel_flow,               "Fuel Flow",                  0x371, 0, 1.0f,   0.0f,    CcPerMin)
+HG_U16(fuel_flow_return,        "Fuel Flow Return",           0x371, 2, 1.0f,   0.0f,    CcPerMin)
+
+HG_FRAME(0x372, 10)
+HG_U16(battery_voltage,         "Battery Voltage",            0x372, 0, 0.1f,   0.0f,    Volts)
+HG_U16(target_boost,            "Target Boost",               0x372, 4, 0.1f,   0.0f,    KpaAbs)
+HG_U16(barometric_pressure,     "Barometric Pressure",        0x372, 6, 0.1f,   0.0f,    KpaAbs)
+
+HG_FRAME(0x373, 10)
+HG_U16(egt_1,                   "EGT 1",                      0x373, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_2,                   "EGT 2",                      0x373, 2, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_3,                   "EGT 3",                      0x373, 4, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_4,                   "EGT 4",                      0x373, 6, 0.1f,   -273.1f, Celsius)
+
+HG_FRAME(0x374, 10)
+HG_U16(egt_5,                   "EGT 5",                      0x374, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_6,                   "EGT 6",                      0x374, 2, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_7,                   "EGT 7",                      0x374, 4, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_8,                   "EGT 8",                      0x374, 6, 0.1f,   -273.1f, Celsius)
+
+HG_FRAME(0x375, 10)
+HG_U16(egt_9,                   "EGT 9",                      0x375, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_10,                  "EGT 10",                     0x375, 2, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_11,                  "EGT 11",                     0x375, 4, 0.1f,   -273.1f, Celsius)
+HG_U16(egt_12,                  "EGT 12",                     0x375, 6, 0.1f,   -273.1f, Celsius)
+
+HG_FRAME(0x376, 10)
+HG_U16(ambient_air_temp,        "Ambient Air Temperature",    0x376, 0, 0.1f,   -273.1f, Celsius)
+HG_S16(relative_humidity,       "Relative Humidity",          0x376, 2, 0.1f,   0.0f,    Percent)
+HG_U16(specific_humidity,       "Specific Humidity",          0x376, 4, 100.0f, 0.0f,    Ppm)
+HG_U16(absolute_humidity,       "Absolute Humidity",          0x376, 6, 0.1f,   0.0f,    GramPerM3)
+
+HG_FRAME(0x377, 50)
+HG_U16(boost_pre_intercooler,   "Boost Pre Intercooler",      0x377, 0, 0.1f,   0.0f,    KpaAbs)
+
+HG_FRAME(0x380, 10)
+HG_U16(generic_output_1_value,  "Generic Output 1 Value",     0x380, 0, 1.0f,   0.0f,    Raw)
+HG_U16(generic_output_2_value,  "Generic Output 2 Value",     0x380, 2, 1.0f,   0.0f,    Raw)
+HG_U16(generic_output_3_value,  "Generic Output 3 Value",     0x380, 4, 1.0f,   0.0f,    Raw)
+HG_U16(generic_output_4_value,  "Generic Output 4 Value",     0x380, 6, 1.0f,   0.0f,    Raw)
+
+HG_FRAME(0x3E0, 5)
+HG_U16(coolant_temp,            "Coolant Temperature",        0x3E0, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(air_temp,                "Air Temperature",            0x3E0, 2, 0.1f,   -273.1f, Celsius)
+HG_U16(fuel_temp,               "Fuel Temperature",           0x3E0, 4, 0.1f,   -273.1f, Celsius)
+HG_U16(oil_temp,                "Oil Temperature",            0x3E0, 6, 0.1f,   -273.1f, Celsius)
+
+HG_FRAME(0x3E1, 5)
+HG_U16(gearbox_oil_temp,        "Gearbox Oil Temperature",    0x3E1, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(diff_oil_temp,           "Diff Oil Temperature",       0x3E1, 2, 0.1f,   -273.1f, Celsius)
+HG_U16(fuel_composition,        "Fuel Composition (Ethanol)", 0x3E1, 4, 0.1f,   0.0f,    Percent)
+HG_U16(air_temp_pre_intercooler, "Air Temp Pre Intercooler",  0x3E1, 6, 0.1f,   -273.1f, Celsius)
+
+// 0x3E2 lists Fuel Level twice (bytes 0-1 and 6-7); only the first is decoded.
+HG_FRAME(0x3E2, 5)
+HG_U16(fuel_level,              "Fuel Level",                 0x3E2, 0, 0.1f,   0.0f,    Litres)
+HG_S16(fuel_flow_estimated,     "Fuel Estimated Flow",        0x3E2, 2, 0.1f,   0.0f,    CcPerMin)
+HG_U16(fuel_mileage_avg,        "Average Fuel Mileage",       0x3E2, 4, 0.1f,   0.0f,    KmPerLitre)
+
+HG_FRAME(0x3E3, 5)
+HG_S16(fuel_trim_st_bank1,      "Fuel Trim Short Term B1",    0x3E3, 0, 0.1f,   0.0f,    Percent)
+HG_S16(fuel_trim_st_bank2,      "Fuel Trim Short Term B2",    0x3E3, 2, 0.1f,   0.0f,    Percent)
+HG_S16(fuel_trim_lt_bank1,      "Fuel Trim Long Term B1",     0x3E3, 4, 0.1f,   0.0f,    Percent)
+HG_S16(fuel_trim_lt_bank2,      "Fuel Trim Long Term B2",     0x3E3, 6, 0.1f,   0.0f,    Percent)
+
+HG_FRAME(0x3E4, 5)
+HG_BIT(neutral_switch,          "Neutral Switch",             0x3E4, 1, 7)
+HG_BIT(reverse_switch,          "Reverse Switch",             0x3E4, 1, 6)
+HG_BIT(gear_switch,             "Gear Switch",                0x3E4, 1, 5)
+HG_BIT(decel_cut_active,        "Decel Cut Active",           0x3E4, 1, 4)
+HG_BIT(transient_throttle_active, "Transient Throttle Active", 0x3E4, 1, 3)
+HG_BIT(brake_pedal_switch,      "Brake Pedal Switch",         0x3E4, 1, 2)
+HG_BIT(clutch_switch,           "Clutch Switch",              0x3E4, 1, 1)
+HG_BIT(oil_pressure_light,      "Oil Pressure Light",         0x3E4, 1, 0)
+HG_BIT(launch_control_active,   "Launch Control Active",      0x3E4, 2, 7)
+HG_BIT(launch_control_switch,   "Launch Control Switch",      0x3E4, 2, 6)
+HG_BIT(aux_rpm_limiter_active,  "Aux RPM Limiter Active",     0x3E4, 2, 5)
+HG_BIT(brake_fluid_level_switch, "Brake Fluid Level Switch",  0x3E4, 2, 4)
+HG_BIT(flat_shift_switch,       "Flat Shift Switch",          0x3E4, 2, 3)
+HG_BIT(clutch_pressure_sensor,  "Clutch Pressure Sensor",     0x3E4, 2, 2)
+HG_BIT(torque_reduction_active, "Torque Reduction Active",    0x3E4, 2, 1)
+HG_BIT(traction_control_enabled, "Traction Control Enabled",  0x3E4, 3, 7)
+HG_BIT(traction_control_active, "Traction Control Active",    0x3E4, 3, 6)
+HG_BIT(aircon_request,          "Air Con Request",            0x3E4, 3, 5)
+HG_BIT(aircon_output,           "Air Con Output",             0x3E4, 3, 4)
+HG_BIT(thermofan_4,             "Thermo Fan 4",               0x3E4, 3, 3)
+HG_BIT(thermofan_3,             "Thermo Fan 3",               0x3E4, 3, 2)
+HG_BIT(thermofan_2,             "Thermo Fan 2",               0x3E4, 3, 1)
+HG_BIT(thermofan_1,             "Thermo Fan 1",               0x3E4, 3, 0)
+HG_S8 (rotary_trim_pot_1,       "Rotary Trim Pot 1",          0x3E4, 4, 1.0f,   0.0f,    Raw)
+HG_S8 (rotary_trim_pot_2,       "Rotary Trim Pot 2",          0x3E4, 5, 1.0f,   0.0f,    Raw)
+HG_S8 (rotary_trim_pot_3,       "Rotary Trim Pot 3",          0x3E4, 6, 1.0f,   0.0f,    Raw)
+HG_BIT(check_engine_light,      "Check Engine Light",         0x3E4, 7, 7)
+HG_BIT(battery_light,           "Battery Light",              0x3E4, 7, 6)
+HG_BIT(hand_brake,              "Hand Brake",                 0x3E4, 7, 1)
+HG_BIT(traction_control_light,  "Traction Control Light",     0x3E4, 7, 0)
+
+HG_FRAME(0x3E5, 50)
+HG_U8 (ignition_switch,         "Ignition Switch",            0x3E5, 0, 1.0f,   0.0f,    Bool)
+HG_U8 (turbo_timer_remaining,   "Turbo Timer Remaining",      0x3E5, 1, 1.0f,   0.0f,    Seconds)
+HG_U8 (turbo_timer_engine_remaining, "Turbo Timer Engine Remaining", 0x3E5, 2, 1.0f, 0.0f, Seconds)
+HG_BIT(pit_limiter_error,       "Pit Limiter Error",          0x3E5, 3, 6)
+HG_BIT(pit_limiter_active,      "Pit Limiter Active",         0x3E5, 3, 5)
+HG_BIT(pit_limiter_switch,      "Pit Limiter Switch",         0x3E5, 3, 4)
+HG_BIT(abs_error,               "ABS Error",                  0x3E5, 3, 2)
+HG_BIT(abs_active,              "ABS Active",                 0x3E5, 3, 1)
+HG_BIT(abs_armed,               "ABS Armed",                  0x3E5, 3, 0)
+HG_S16(steering_angle,          "Steering Wheel Angle",       0x3E5, 4, 0.1f,   0.0f,    Degrees)
+HG_U16(driveshaft_rpm,          "Driveshaft RPM",             0x3E5, 6, 1.0f,   0.0f,    Rpm)
+
+HG_FRAME(0x3E6, 20)
+HG_U16(nos_pressure_2,          "NOS Pressure 2",             0x3E6, 0, 0.22f,  -101.3f, Kpa)
+HG_U16(nos_pressure_3,          "NOS Pressure 3",             0x3E6, 2, 0.22f,  -101.3f, Kpa)
+HG_U16(nos_pressure_4,          "NOS Pressure 4",             0x3E6, 4, 0.22f,  -101.3f, Kpa)
+HG_U16(turbo_speed_2,           "Turbo Speed 2",              0x3E6, 6, 10.0f,  0.0f,    Rpm)
+
+// Generic sensors are sent raw; their scaling depends on how each one is set up in the ECU.
+HG_FRAME(0x3E7, 20)
+HG_U16(generic_sensor_1,        "Generic Sensor 1",           0x3E7, 0, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_2,        "Generic Sensor 2",           0x3E7, 2, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_3,        "Generic Sensor 3",           0x3E7, 4, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_4,        "Generic Sensor 4",           0x3E7, 6, 1.0f,   0.0f,    Raw)
+
+HG_FRAME(0x3E8, 20)
+HG_U16(generic_sensor_5,        "Generic Sensor 5",           0x3E8, 0, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_6,        "Generic Sensor 6",           0x3E8, 2, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_7,        "Generic Sensor 7",           0x3E8, 4, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_8,        "Generic Sensor 8",           0x3E8, 6, 1.0f,   0.0f,    Raw)
+
+HG_FRAME(0x3E9, 20)
+HG_U16(generic_sensor_9,        "Generic Sensor 9",           0x3E9, 0, 1.0f,   0.0f,    Raw)
+HG_U16(generic_sensor_10,       "Generic Sensor 10",          0x3E9, 2, 1.0f,   0.0f,    Raw)
+HG_U16(target_lambda,           "Target Lambda",              0x3E9, 4, 0.001f, 0.0f,    Lambda)
+HG_BIT(nitrous_stage_1_output,  "Nitrous Stage 1 Output",     0x3E9, 6, 7)
+HG_BIT(nitrous_stage_2_output,  "Nitrous Stage 2 Output",     0x3E9, 6, 6)
+HG_BIT(nitrous_stage_3_output,  "Nitrous Stage 3 Output",     0x3E9, 6, 5)
+HG_BIT(nitrous_stage_4_output,  "Nitrous Stage 4 Output",     0x3E9, 6, 4)
+HG_BIT(nitrous_stage_5_output,  "Nitrous Stage 5 Output",     0x3E9, 6, 3)
+HG_BIT(nitrous_stage_6_output,  "Nitrous Stage 6 Output",     0x3E9, 6, 2)
+HG_BIT(water_injection_output,  "Water Injection Output",     0x3E9, 6, 1)
+HG_S8 (torque_mgmt_knob,        "Torque Management Knob",     0x3E9, 7, 1.0f,   0.0f,    Raw)
+
+HG_FRAME(0x3EA, 50)
+HG_U16(gearbox_line_pressure,   "Gearbox Line Pressure",      0x3EA, 0, 0.1f,   -101.3f, Kpa)
+HG_U16(inj_stage3_duty,         "Injection Stage 3 Duty",     0x3EA, 2, 0.1f,   0.0f,    Percent)
+HG_U16(inj_stage4_duty,         "Injection Stage 4 Duty",     0x3EA, 4, 0.1f,   0.0f,    Percent)
+HG_U16(crank_case_pressure,     "Crank Case Pressure",        0x3EA, 6, 0.1f,   -101.3f, Kpa)
+
+HG_FRAME(0x3EB, 50)
+HG_U32(race_timer,              "Race Timer",                 0x3EB, 0, 1.0f,   0.0f,    Millisec)
+HG_S16(ignition_angle_bank1,    "Ignition Angle Bank 1",      0x3EB, 4, 0.1f,   0.0f,    Degrees)
+HG_S16(ignition_angle_bank2,    "Ignition Angle Bank 2",      0x3EB, 6, 0.1f,   0.0f,    Degrees)
+
+HG_FRAME(0x3EC, 50)
+HG_S16(tm_driveshaft_rpm_target, "TM Driveshaft RPM Target",  0x3EC, 0, 1.0f,   0.0f,    Rpm)
+HG_S16(tm_driveshaft_rpm_error, "TM Driveshaft RPM Error",    0x3EC, 2, 1.0f,   0.0f,    Rpm)
+HG_S16(tm_error_ign_correction, "TM Error Ign Correction",    0x3EC, 4, 0.1f,   0.0f,    Degrees)
+HG_S16(tm_timed_ign_correction, "TM Timed Ign Correction",    0x3EC, 6, 0.1f,   0.0f,    Degrees)
+
+HG_FRAME(0x3ED, 50)
+HG_S16(tm_combined_ign_correction, "TM Combined Ign Correction", 0x3ED, 0, 0.1f, 0.0f,   Degrees)
+
+HG_FRAME(0x3EE, 20)
+HG_U16(wideband_5,              "Wideband 5",                 0x3EE, 0, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_6,              "Wideband 6",                 0x3EE, 2, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_7,              "Wideband 7",                 0x3EE, 4, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_8,              "Wideband 8",                 0x3EE, 6, 0.001f, 0.0f,    Lambda)
+
+HG_FRAME(0x3EF, 20)
+HG_U16(wideband_9,              "Wideband 9",                 0x3EF, 0, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_10,             "Wideband 10",                0x3EF, 2, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_11,             "Wideband 11",                0x3EF, 4, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_12,             "Wideband 12",                0x3EF, 6, 0.001f, 0.0f,    Lambda)
+
+HG_FRAME(0x3F0, 50)
+HG_U16(shock_travel_fl_raw,     "Shock Travel FL (Uncal)",    0x3F0, 0, 0.1f,   0.0f,    Millimetres)
+HG_U16(shock_travel_fr_raw,     "Shock Travel FR (Uncal)",    0x3F0, 2, 0.1f,   0.0f,    Millimetres)
+HG_U16(shock_travel_rl_raw,     "Shock Travel RL (Uncal)",    0x3F0, 4, 0.1f,   0.0f,    Millimetres)
+HG_U16(shock_travel_rr_raw,     "Shock Travel RR (Uncal)",    0x3F0, 6, 0.1f,   0.0f,    Millimetres)
+
+HG_FRAME(0x3F1, 50)
+HG_S16(shock_travel_fl,         "Shock Travel FL",            0x3F1, 0, 0.1f,   0.0f,    Millimetres)
+HG_S16(shock_travel_fr,         "Shock Travel FR",            0x3F1, 2, 0.1f,   0.0f,    Millimetres)
+HG_S16(shock_travel_rl,         "Shock Travel RL",            0x3F1, 4, 0.1f,   0.0f,    Millimetres)
+HG_S16(shock_travel_rr,         "Shock Travel RR",            0x3F1, 6, 0.1f,   0.0f,    Millimetres)
+
+HG_FRAME(0x3F2, 20)
+HG_S16E(ride_height_front,      "Ride Height Front",          0x3F2, 0, 0.1f,   0.0f,    Millimetres)
+HG_S16E(ride_height_front_raw,  "Ride Height Front (Uncal)",  0x3F2, 2, 0.1f,   0.0f,    Millimetres)
+HG_S16E(ride_height_front_rate, "Ride Height Front Rate",     0x3F2, 4, 0.1f,   0.0f,    MmPerSec)
+
+HG_FRAME(0x3F3, 20)
+HG_S16E(ride_height_rear,       "Ride Height Rear",           0x3F3, 0, 0.1f,   0.0f,    Millimetres)
+HG_S16E(ride_height_rear_raw,   "Ride Height Rear (Uncal)",   0x3F3, 2, 0.1f,   0.0f,    Millimetres)
+HG_S16E(ride_height_rear_rate,  "Ride Height Rear Rate",      0x3F3, 4, 0.1f,   0.0f,    MmPerSec)
+
+HG_FRAME(0x469, 5)
+HG_U16(ecu_temp,                "ECU Temperature",            0x469, 0, 0.1f,   -273.1f, Celsius)
+HG_U16(oil_level,               "Oil Level",                  0x469, 4, 0.1f,   0.0f,    Percent)
+
+// Gear values: 1-10 = gear, 0 = neutral, -1 reverse, -2 park, -3 unknown,
+// -4 drive, -5 sport, -6 manual, -7 low, -8 overdrive.
+HG_FRAME(0x470, 20)
+HG_U16(wideband_overall,        "Wideband Overall",           0x470, 0, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_bank1,          "Wideband Bank 1",            0x470, 2, 0.001f, 0.0f,    Lambda)
+HG_U16(wideband_bank2,          "Wideband Bank 2",            0x470, 4, 0.001f, 0.0f,    Lambda)
+HG_S8 (gear_selector,           "Gear Selector Position",     0x470, 6, 1.0f,   0.0f,    Enum)
+HG_S8 (gear,                    "Gear",                       0x470, 7, 1.0f,   0.0f,    Enum)
+
+HG_FRAME(0x471, 50)
+HG_S16(injector_pressure_diff,  "Injector Pressure Diff",     0x471, 0, 0.1f,   0.0f,    Kpa)
+HG_U16(accelerator_pedal,       "Accelerator Pedal Position", 0x471, 2, 0.1f,   0.0f,    Percent)
+HG_U16(exhaust_manifold_pressure, "Exhaust Manifold Pressure", 0x471, 4, 0.1f,  0.0f,    KpaAbs)
+
+// Cruise state: 0 disabled, 1 inactive, 2 cruising, 3 accelerating, 4 decelerating, 5 cancelling, 6 disabling.
+HG_FRAME(0x472, 20)
+HG_U16(cruise_target_speed,     "Cruise Target Speed",        0x472, 0, 0.1f,   0.0f,    Kmh)
+HG_U16(cruise_last_target_speed, "Cruise Last Target Speed",  0x472, 2, 0.1f,   0.0f,    Kmh)
+HG_S16(cruise_speed_error,      "Cruise Speed Error",         0x472, 4, 0.1f,   0.0f,    Kmh)
+HG_BITS(cruise_state,           "Cruise Control State",       0x472, 6, 7, 4,  Enum)
+HG_BITS(cruise_input_state,     "Cruise Input State",         0x472, 6, 3, 12, Raw)
+
+HG_FRAME(0x473, 10)
+HG_U32(total_fuel_used,         "Total Fuel Used",            0x473, 0, 1.0f,   0.0f,    Cc)
+HG_BIT(rolling_antilag_switch,  "Rolling Antilag Switch",     0x473, 4, 7)
+HG_BIT(antilag_switch,          "Antilag Switch",             0x473, 4, 6)
+HG_BIT(antilag_output,          "Antilag Output",             0x473, 4, 5)
+HG_BIT(traction_control_switch, "Traction Control Switch",    0x473, 4, 4)
+HG_BIT(fuel_pump_primary_output, "Primary Fuel Pump Output",  0x473, 4, 3)
+HG_BIT(fuel_pump_aux1_output,   "Aux 1 Fuel Pump Output",     0x473, 4, 2)
+HG_BIT(fuel_pump_aux2_output,   "Aux 2 Fuel Pump Output",     0x473, 4, 1)
+HG_BIT(fuel_pump_aux3_output,   "Aux 3 Fuel Pump Output",     0x473, 4, 0)
+HG_BIT(nitrous_enable_1_switch, "Nitrous Enable 1 Switch",    0x473, 5, 7)
+HG_BIT(nitrous_enable_1_output, "Nitrous Enable 1 Output",    0x473, 5, 6)
+HG_BIT(nitrous_enable_2_switch, "Nitrous Enable 2 Switch",    0x473, 5, 5)
+HG_BIT(nitrous_enable_2_output, "Nitrous Enable 2 Output",    0x473, 5, 4)
+HG_BIT(nitrous_enable_3_switch, "Nitrous Enable 3 Switch",    0x473, 5, 3)
+HG_BIT(nitrous_enable_3_output, "Nitrous Enable 3 Output",    0x473, 5, 2)
+HG_BIT(nitrous_enable_4_switch, "Nitrous Enable 4 Switch",    0x473, 5, 1)
+HG_BIT(nitrous_enable_4_output, "Nitrous Enable 4 Output",    0x473, 5, 0)
+HG_BIT(nitrous_override_1_switch, "Nitrous Override 1 Switch", 0x473, 6, 7)
+HG_BIT(nitrous_override_1_output, "Nitrous Override 1 Output", 0x473, 6, 6)
+HG_BIT(nitrous_override_2_switch, "Nitrous Override 2 Switch", 0x473, 6, 5)
+HG_BIT(nitrous_override_2_output, "Nitrous Override 2 Output", 0x473, 6, 4)
+HG_BIT(nitrous_override_3_switch, "Nitrous Override 3 Switch", 0x473, 6, 3)
+HG_BIT(nitrous_override_3_output, "Nitrous Override 3 Output", 0x473, 6, 2)
+HG_BIT(nitrous_override_4_switch, "Nitrous Override 4 Switch", 0x473, 6, 1)
+HG_BIT(nitrous_override_4_output, "Nitrous Override 4 Output", 0x473, 6, 0)
+HG_BIT(water_inj_enable_switch, "Water Inj Enable Switch",    0x473, 7, 7)
+HG_BIT(water_inj_enable_output, "Water Inj Enable Output",    0x473, 7, 6)
+HG_BIT(water_inj_override_switch, "Water Inj Override Switch", 0x473, 7, 5)
+HG_BIT(water_inj_override_output, "Water Inj Override Output", 0x473, 7, 4)
+HG_BITS(cut_percentage_method,  "Cut Percentage Method",      0x473, 7, 3, 4,  Enum)
+
+HG_FRAME(0x474, 20)
+HG_S16(vertical_g,              "Vertical G",                 0x474, 0, 0.1f,   0.0f,    Mps2)
+HG_S16(pitch_rate,              "Pitch Rate",                 0x474, 2, 0.1f,   0.0f,    DegPerSec)
+HG_S16(roll_rate,               "Roll Rate",                  0x474, 4, 0.1f,   0.0f,    DegPerSec)
+HG_S16(yaw_rate,                "Yaw Rate",                   0x474, 6, 0.1f,   0.0f,    DegPerSec)
+
+HG_FRAME(0x475, 5)
+HG_U16(fuel_pump_primary_duty,  "Primary Fuel Pump Duty",     0x475, 0, 0.1f,   0.0f,    Percent)
+HG_U16(fuel_pump_aux1_duty,     "Aux 1 Fuel Pump Duty",       0x475, 2, 0.1f,   0.0f,    Percent)
+HG_U16(fuel_pump_aux2_duty,     "Aux 2 Fuel Pump Duty",       0x475, 4, 0.1f,   0.0f,    Percent)
+HG_U16(fuel_pump_aux3_duty,     "Aux 3 Fuel Pump Duty",       0x475, 6, 0.1f,   0.0f,    Percent)
+
+HG_FRAME(0x476, 20)
+HG_U16(brake_pressure_rear,     "Brake Pressure Rear",        0x476, 0, 1.0f,   -101.3f, Kpa)
+HG_U16(brake_front_ratio,       "Brake Pressure Front Ratio", 0x476, 2, 0.1f,   0.0f,    Percent)
+HG_U16(brake_rear_ratio,        "Brake Pressure Rear Ratio",  0x476, 4, 0.1f,   0.0f,    Percent)
+HG_S16(brake_pressure_diff,     "Brake Pressure Difference",  0x476, 6, 1.0f,   0.0f,    Kpa)
+
+// Limiter methods: 0 no cut, 1 fuel, 2 ignition, 3 fuel and ignition.
+HG_FRAME(0x477, 10)
+HG_U16(engine_limiter_max_rpm,  "Engine Limiter Max RPM",     0x477, 0, 1.0f,   0.0f,    Rpm)
+HG_U16(cut_percentage,          "Cut Percentage",             0x477, 2, 0.1f,   0.0f,    Percent)
+HG_U8 (engine_limiter_function, "Engine Limiter Function",    0x477, 4, 1.0f,   0.0f,    Enum)
+HG_U8 (rpm_limiter_function,    "RPM Limiter Function",       0x477, 5, 1.0f,   0.0f,    Enum)
+HG_U8 (cut_percentage_function, "Cut Percentage Function",    0x477, 6, 1.0f,   0.0f,    Enum)
+HG_BITS(engine_limiter_method,  "Engine Limiter Method",      0x477, 7, 7, 4,  Enum)
+HG_BITS(rpm_limiter_method,     "RPM Limiter Method",         0x477, 7, 3, 4,  Enum)
+
+HG_FRAME(0x6F0, 5)
+HG_U16E(tyre_pressure_fl,       "Tyre Pressure FL",           0x6F0, 0, 0.1f,   -101.3f, Kpa)
+HG_U16E(tyre_pressure_fr,       "Tyre Pressure FR",           0x6F0, 2, 0.1f,   -101.3f, Kpa)
+HG_U16E(tyre_pressure_rl,       "Tyre Pressure RL",           0x6F0, 4, 0.1f,   -101.3f, Kpa)
+HG_U16E(tyre_pressure_rr,       "Tyre Pressure RR",           0x6F0, 6, 0.1f,   -101.3f, Kpa)
+
+HG_FRAME(0x6F1, 5)
+HG_U16E(tyre_temp_fl,           "Tyre Temperature FL",        0x6F1, 0, 0.1f,   -273.1f, Celsius)
+HG_U16E(tyre_temp_fr,           "Tyre Temperature FR",        0x6F1, 2, 0.1f,   -273.1f, Celsius)
+HG_U16E(tyre_temp_rl,           "Tyre Temperature RL",        0x6F1, 4, 0.1f,   -273.1f, Celsius)
+HG_U16E(tyre_temp_rr,           "Tyre Temperature RR",        0x6F1, 6, 0.1f,   -273.1f, Celsius)
+
+HG_FRAME(0x6F2, 5)
+HG_U16E(tyre_sensor_battery_fl, "Tyre Sensor Battery FL",     0x6F2, 0, 0.001f, 0.0f,    Volts)
+HG_U16E(tyre_sensor_battery_fr, "Tyre Sensor Battery FR",     0x6F2, 2, 0.001f, 0.0f,    Volts)
+HG_U16E(tyre_sensor_battery_rl, "Tyre Sensor Battery RL",     0x6F2, 4, 0.001f, 0.0f,    Volts)
+HG_U16E(tyre_sensor_battery_rr, "Tyre Sensor Battery RR",     0x6F2, 6, 0.001f, 0.0f,    Volts)
+
+// Engine protection reason is an OBD-II DTC: top 2 bits pick the letter
+// (P, B, C, U), the low 14 bits read as hex are the number.
+HG_FRAME(0x6F3, 5)
+HG_U16(tyre_recommended_front,  "Recommended Tyre Pressure Front", 0x6F3, 0, 0.1f, -101.3f, Kpa)
+HG_U16(tyre_recommended_rear,   "Recommended Tyre Pressure Rear",  0x6F3, 2, 0.1f, -101.3f, Kpa)
+HG_BIT(tyre_leak_rr,            "Tyre Leak RR",               0x6F3, 4, 3)
+HG_BIT(tyre_leak_rl,            "Tyre Leak RL",               0x6F3, 4, 2)
+HG_BIT(tyre_leak_fr,            "Tyre Leak FR",               0x6F3, 4, 1)
+HG_BIT(tyre_leak_fl,            "Tyre Leak FL",               0x6F3, 4, 0)
+HG_U8 (engine_protection_level, "Engine Protection Level",    0x6F3, 5, 1.0f,   0.0f,    Enum)
+HG_U16(engine_protection_reason, "Engine Protection Reason",  0x6F3, 6, 1.0f,   0.0f,    Raw)
+
+// Engine state: 0 stopped, 1 cranking, 2 idling, 3 running, 4 limiting.
+HG_FRAME(0x6F4, 100)
+HG_BIT(park_light,              "Park Lights",                0x6F4, 0, 0)
+HG_BIT(head_light,              "Head Lights",                0x6F4, 0, 1)
+HG_BIT(high_beam,               "High Beam",                  0x6F4, 0, 2)
+HG_BIT(left_indicator,          "Left Indicator",             0x6F4, 0, 3)
+HG_BIT(right_indicator,         "Right Indicator",            0x6F4, 0, 4)
+HG_BITS(engine_state,           "Engine State",               0x6F4, 1, 3, 4,  Enum)
+
+HG_FRAME(0x6F6, 5)
+HG_S32(trip_fuel_used,          "Trip Fuel Used",             0x6F6, 0, 1.0f,   0.0f,    Cc)
+HG_S32(trip_meter_1,            "Trip Meter 1",               0x6F6, 4, 1.0f,   0.0f,    Metres)
+
+// Generic output states: bit X = generic output X+1.
+HG_FRAME(0x6F7, 10)
+HG_U32(generic_output_states,   "Generic Output States",      0x6F7, 0, 1.0f,   0.0f,    Raw)
+HG_U16(calculated_air_temp,     "Calculated Air Temperature", 0x6F7, 4, 0.1f,   -273.1f, Celsius)
+HG_U16(water_injection_duty,    "Water Injection Duty",       0x6F7, 6, 0.1f,   0.0f,    Percent)
+
+// Motor states: -1 input error, 0 disabled, 1 closed, 2 opening, 3 open, 4 closing, 5 paused part way.
+HG_FRAME(0x6F8, 5)
+HG_S8 (exhaust_cutout_state,    "Exhaust Cutout State",       0x6F8, 0, 1.0f,   0.0f,    Enum)
+HG_S8 (nitrous_bottle_opener_state, "Nitrous Bottle Opener State", 0x6F8, 1, 1.0f, 0.0f, Enum)
+HG_S8 (open_loop_motor_1_state, "Open Loop Motor 1 State",    0x6F8, 2, 1.0f,   0.0f,    Enum)
+HG_S8 (open_loop_motor_2_state, "Open Loop Motor 2 State",    0x6F8, 3, 1.0f,   0.0f,    Enum)
+HG_S8 (open_loop_motor_3_state, "Open Loop Motor 3 State",    0x6F8, 4, 1.0f,   0.0f,    Enum)
+HG_U16(fuel_level_percent_0,    "Fuel Level % (Tank 0)",      0x6F8, 6, 0.1f,   0.0f,    Percent)
+
+HG_FRAME(0x6F9, 5)
+HG_U16(fuel_level_percent_1,    "Fuel Level % (Tank 1)",      0x6F9, 0, 0.1f,   0.0f,    Percent)
+
+HG_FRAME(0x6FF, 20)
+HG_S16E(torque_converter_pressure, "Torque Converter Pressure", 0x6FF, 0, 0.1f, -101.3f, Kpa)
+HG_S16E(transfer_case_pressure, "Transfer Case Pressure",     0x6FF, 2, 0.1f,   -101.3f, Kpa)
+HG_S16E(aircon_pressure,        "Air Con Pressure",           0x6FF, 4, 0.1f,   -101.3f, Kpa)
+HG_S16E(power_steering_pressure, "Power Steering Pressure",   0x6FF, 6, 0.01f,  -101.3f, Kpa)
+
+// 0x700 carries multiplexed PDM data and is not decoded.
+// 0x701 lists "Instantaneous Mileage" at bytes 5-6, overlapping the field
+// before it; it is left out until checked against a real ECU.
+HG_FRAME(0x701, 20)
+HG_U16(fuel_economy_avg,        "Average Fuel Economy",       0x701, 0, 0.1f,   0.0f,    LitrePer100Km)
+HG_U16(fuel_economy_inst,       "Instant Fuel Economy",       0x701, 2, 0.1f,   0.0f,    LitrePer100Km)
+HG_S16(aircon_temp,             "Air Con Temperature",        0x701, 4, 0.1f,   -273.1f, Celsius)

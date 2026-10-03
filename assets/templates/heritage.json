@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "name": "Heritage",
+  "theme": {
+    "bg": "#0A0A0A",
+    "fg": "#7ED99A",
+    "accent": "#F2F2F2",
+    "dim": "#1E2A22",
+    "warn": "#FFD27A",
+    "alert": "#D62828"
+  },
+  "faces": [
+    {
+      "name": "Tach",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "major": 8,
+          "minor": 5,
+          "r": 226,
+          "tickWidth": 1,
+          "tickLen": 14,
+          "labelFont": "sans",
+          "labelSize": 24,
+          "labelScale": 1000,
+          "needle": "line",
+          "needleWidth": 3,
+          "zoneWidth": 5,
+          "zones": [
+            {
+              "from": 7000,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "RPM x 1000",
+          "x": 233,
+          "y": 150,
+          "font": "sans",
+          "size": 18
+        },
+        {
+          "type": "label",
+          "text": "HERITAGE",
+          "x": 233,
+          "y": 320,
+          "font": "sans",
+          "size": 14,
+          "color": "#6B8F76"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "major": 4,
+          "minor": 5,
+          "unit": "psi",
+          "x": 233,
+          "y": 318,
+          "r": 232,
+          "start": 210,
+          "sweep": 120,
+          "tickWidth": 1,
+          "tickLen": 14,
+          "labelFont": "sans",
+          "labelSize": 26,
+          "color": "#111111",
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "#111111",
+          "zoneWidth": 5,
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL",
+          "x": 233,
+          "y": 200,
+          "font": "sans",
+          "size": 22,
+          "color": "#111111"
+        },
+        {
+          "type": "label",
+          "text": "lb/in²",
+          "x": 233,
+          "y": 228,
+          "font": "sans",
+          "size": 16,
+          "color": "#55554E"
+        }
+      ],
+      "bg": "#EDE4CB"
+    },
+    {
+      "name": "Water temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "coolant_temp",
+          "min": 40,
+          "max": 130,
+          "major": 3,
+          "minor": 5,
+          "unit": "C",
+          "x": 233,
+          "y": 318,
+          "r": 232,
+          "start": 210,
+          "sweep": 120,
+          "tickWidth": 1,
+          "tickLen": 14,
+          "labelFont": "sans",
+          "labelSize": 26,
+          "color": "#111111",
+          "needle": "line",
+          "needleWidth": 3,
+          "needleColor": "#111111",
+          "zoneWidth": 5,
+          "zones": [
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "WATER",
+          "x": 233,
+          "y": 200,
+          "font": "sans",
+          "size": 22,
+          "color": "#111111"
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 228,
+          "font": "sans",
+          "size": 16,
+          "color": "#55554E"
+        }
+      ],
+      "bg": "#EDE4CB"
+    }
+  ]
+}

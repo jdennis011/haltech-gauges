@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "name": "Racing black",
+  "theme": {
+    "bg": "#0B0B0B",
+    "fg": "#F2F2F2",
+    "accent": "#FF3B1F",
+    "dim": "#2A2A2A",
+    "warn": "#FFCC00",
+    "alert": "#FF1A1A"
+  },
+  "faces": [
+    {
+      "name": "Boost",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 30,
+          "major": 9,
+          "minor": 5,
+          "unit": "psi_gauge",
+          "labelFont": "condensed",
+          "labelSize": 30,
+          "needle": "tapered_cap",
+          "zones": [
+            {
+              "from": 25,
+              "to": 30,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "dim"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "major": 10,
+          "minor": 5,
+          "unit": "psi",
+          "labelFont": "condensed",
+          "labelSize": 30,
+          "needle": "tapered_cap",
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL PRESS",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "dim"
+        }
+      ]
+    },
+    {
+      "name": "Water temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "coolant_temp",
+          "min": 40,
+          "max": 130,
+          "major": 9,
+          "minor": 5,
+          "unit": "C",
+          "labelFont": "condensed",
+          "labelSize": 30,
+          "needle": "tapered_cap",
+          "zones": [
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "WATER TEMP",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "dim"
+        }
+      ]
+    },
+    {
+      "name": "Tach",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "major": 8,
+          "minor": 5,
+          "labelScale": 1000,
+          "labelFont": "condensed",
+          "labelSize": 34,
+          "needle": "tapered_cap",
+          "zones": [
+            {
+              "from": 6800,
+              "to": 8000,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "RPM x1000",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "rim",
+          "channel": "rpm",
+          "from": 7200
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,229 @@
+{
+  "schema": 1,
+  "name": "Smart arc",
+  "theme": {
+    "bg": "#000000",
+    "fg": "#FFFFFF",
+    "accent": "#00E5FF",
+    "dim": "#1A1F24",
+    "warn": "#FFB300",
+    "alert": "#FF3D00"
+  },
+  "faces": [
+    {
+      "name": "Boost",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 30,
+          "unit": "psi_gauge",
+          "r": 233,
+          "thickness": 34,
+          "start": 135,
+          "sweep": 270,
+          "rounded": true,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 25,
+              "to": 30,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 233,
+          "y": 140,
+          "font": "sans",
+          "size": 24,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "manifold_pressure",
+          "unit": "psi_gauge",
+          "font": "sans",
+          "size": 120,
+          "y": 236,
+          "decimals": 1,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "psi",
+          "x": 233,
+          "y": 330,
+          "font": "sans",
+          "size": 26,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Coolant",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "coolant_temp",
+          "min": 40,
+          "max": 130,
+          "unit": "C",
+          "r": 233,
+          "thickness": 34,
+          "start": 135,
+          "sweep": 270,
+          "rounded": true,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 100,
+              "to": 110,
+              "color": "warn"
+            },
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "COOLANT",
+          "x": 233,
+          "y": 140,
+          "font": "sans",
+          "size": 24,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "coolant_temp",
+          "unit": "C",
+          "font": "sans",
+          "size": 120,
+          "y": 236,
+          "decimals": 0,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 330,
+          "font": "sans",
+          "size": 26,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Battery",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "battery_voltage",
+          "min": 8,
+          "max": 18,
+          "r": 233,
+          "thickness": 34,
+          "start": 135,
+          "sweep": 270,
+          "rounded": true,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 8,
+              "to": 12,
+              "color": "warn"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "BATTERY",
+          "x": 233,
+          "y": 140,
+          "font": "sans",
+          "size": 24,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "battery_voltage",
+          "font": "sans",
+          "size": 120,
+          "y": 236,
+          "decimals": 1,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "volts",
+          "x": 233,
+          "y": 330,
+          "font": "sans",
+          "size": 26,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "unit": "psi",
+          "r": 233,
+          "thickness": 34,
+          "start": 135,
+          "sweep": 270,
+          "rounded": true,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL PRESSURE",
+          "x": 233,
+          "y": 140,
+          "font": "sans",
+          "size": 24,
+          "color": "#8A8F98"
+        },
+        {
+          "type": "number",
+          "channel": "oil_pressure",
+          "unit": "psi",
+          "font": "sans",
+          "size": 120,
+          "y": 236,
+          "decimals": 0,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "psi",
+          "x": 233,
+          "y": 330,
+          "font": "sans",
+          "size": 26,
+          "color": "#8A8F98"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "Classic tach",
+  "theme": "white",
+  "faces": [
+    {
+      "name": "Tach",
+      "widgets": [
+        { "type": "dial", "channel": "rpm", "min": 0, "max": 8000, "major": 8, "minor": 5,
+          "labelScale": 1000, "labelFont": "condensed", "labelSize": 26, "needle": "tapered_cap",
+          "zones": [ { "from": 6800, "to": 8000, "color": "alert" } ] },
+        { "type": "number", "channel": "rpm", "y": 320, "font": "digital", "size": 56 },
+        { "type": "label", "text": "RPM x1000", "y": 150, "size": 22, "color": "dim" },
+        { "type": "light", "channel": "check_engine_light", "y": 400, "r": 10, "text": "CEL" },
+        { "type": "rim", "channel": "rpm", "from": 7200 }
+      ]
+    },
+    {
+      "name": "Speed",
+      "widgets": [
+        { "type": "ring", "channel": "vehicle_speed", "min": 0, "max": 260, "thickness": 18, "color": "accent" },
+        { "type": "number", "channel": "vehicle_speed", "font": "display", "size": 120, "unitSize": 28 },
+        { "type": "number", "channel": "rpm", "y": 370, "size": 32, "color": "dim", "showUnit": false },
+        { "type": "label", "text": "RPM", "y": 405, "size": 18, "color": "dim" }
+      ]
+    }
+  ]
+}

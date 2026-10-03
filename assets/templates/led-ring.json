@@ -1,0 +1,295 @@
+{
+  "schema": 1,
+  "name": "LED ring digital",
+  "theme": {
+    "bg": "#000000",
+    "fg": "#FFFFFF",
+    "accent": "#2EFF4A",
+    "dim": "#143A1A",
+    "warn": "#FFB000",
+    "alert": "#FF3030"
+  },
+  "faces": [
+    {
+      "name": "AFR",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "wideband_1",
+          "min": 8,
+          "max": 18,
+          "unit": "afr",
+          "r": 233,
+          "thickness": 20,
+          "start": 135,
+          "sweep": 270,
+          "segments": 24,
+          "gap": 4,
+          "rounded": false,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 8,
+              "to": 11,
+              "color": "warn"
+            },
+            {
+              "from": 16,
+              "to": 18,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "wideband_1",
+          "min": 8,
+          "max": 18,
+          "major": 5,
+          "minor": 1,
+          "unit": "afr",
+          "r": 204,
+          "needle": "none",
+          "ticks": false,
+          "labelFont": "sans",
+          "labelSize": 18,
+          "color": "fg"
+        },
+        {
+          "type": "number",
+          "channel": "wideband_1",
+          "unit": "afr",
+          "font": "digital",
+          "size": 104,
+          "y": 236,
+          "decimals": 1,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "AFR",
+          "x": 233,
+          "y": 112,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "WIDEBAND",
+          "x": 233,
+          "y": 352,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Boost",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 35,
+          "unit": "psi_gauge",
+          "r": 233,
+          "thickness": 20,
+          "start": 135,
+          "sweep": 270,
+          "segments": 24,
+          "gap": 4,
+          "rounded": false,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 28,
+              "to": 35,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "manifold_pressure",
+          "min": -15,
+          "max": 35,
+          "major": 10,
+          "minor": 1,
+          "unit": "psi_gauge",
+          "r": 204,
+          "needle": "none",
+          "ticks": false,
+          "labelFont": "sans",
+          "labelSize": 18,
+          "color": "fg"
+        },
+        {
+          "type": "number",
+          "channel": "manifold_pressure",
+          "unit": "psi_gauge",
+          "font": "digital",
+          "size": 104,
+          "y": 236,
+          "decimals": 1,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "BOOST",
+          "x": 233,
+          "y": 112,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 352,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 150,
+          "unit": "psi",
+          "r": 233,
+          "thickness": 20,
+          "start": 135,
+          "sweep": 270,
+          "segments": 24,
+          "gap": 4,
+          "rounded": false,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 150,
+          "major": 10,
+          "minor": 1,
+          "unit": "psi",
+          "r": 204,
+          "needle": "none",
+          "ticks": false,
+          "labelFont": "sans",
+          "labelSize": 18,
+          "color": "fg"
+        },
+        {
+          "type": "number",
+          "channel": "oil_pressure",
+          "unit": "psi",
+          "font": "digital",
+          "size": 104,
+          "y": 236,
+          "decimals": 0,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "OIL PRESS",
+          "x": 233,
+          "y": 112,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 352,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        }
+      ]
+    },
+    {
+      "name": "Oil temp",
+      "widgets": [
+        {
+          "type": "ring",
+          "channel": "oil_temp",
+          "min": 40,
+          "max": 150,
+          "unit": "C",
+          "r": 233,
+          "thickness": 20,
+          "start": 135,
+          "sweep": 270,
+          "segments": 24,
+          "gap": 4,
+          "rounded": false,
+          "color": "accent",
+          "zones": [
+            {
+              "from": 130,
+              "to": 150,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "dial",
+          "channel": "oil_temp",
+          "min": 40,
+          "max": 150,
+          "major": 11,
+          "minor": 1,
+          "unit": "C",
+          "r": 204,
+          "needle": "none",
+          "ticks": false,
+          "labelFont": "sans",
+          "labelSize": 18,
+          "color": "fg"
+        },
+        {
+          "type": "number",
+          "channel": "oil_temp",
+          "unit": "C",
+          "font": "digital",
+          "size": 104,
+          "y": 236,
+          "decimals": 0,
+          "showUnit": false
+        },
+        {
+          "type": "label",
+          "text": "OIL TEMP",
+          "x": 233,
+          "y": 112,
+          "font": "condensed",
+          "size": 24
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 352,
+          "font": "condensed",
+          "size": 20,
+          "color": "#8A8F98"
+        }
+      ]
+    }
+  ]
+}

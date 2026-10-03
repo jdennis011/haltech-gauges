@@ -1,0 +1,1332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haltech Gauges</title>
+<style>
+:root{--bg:#111;--panel:#1c1c1e;--line:#2c2c2e;--fg:#f2f2f7;--dim:#8e8e93;--ok:#30d158;--bad:#ff453a;--blue:#0a84ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 10px 0 0}
+.chip{padding:3px 10px;border-radius:999px;background:#2c2c2e;font-size:13px;color:var(--dim);border:0;font-family:inherit}
+.chip.on{background:#1f3b2a;color:var(--ok)}
+.chip.bad{background:#3b1f1f;color:var(--bad)}
+.chip.plan{background:#1f2a3b;color:#6cb2ff}
+button.chip{cursor:pointer}
+nav{display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{background:none;border:0;color:var(--dim);padding:8px 14px;border-radius:8px;font-size:15px;cursor:pointer;white-space:nowrap}
+nav button.active{background:#2c2c2e;color:var(--fg)}
+main{padding:16px;max-width:1100px;margin:0 auto}
+section{display:none}
+section.active{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn,select,input[type=text],input[type=password],input[type=number],textarea{background:#2c2c2e;color:var(--fg);border:1px solid #3a3a3c;border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit}
+.btn{cursor:pointer}
+.btn.primary{background:var(--blue);border-color:var(--blue)}
+.btn.danger{background:#5a1f1f;border-color:#7a2a2a}
+.btn.small{padding:4px 9px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:default}
+table{width:100%;border-collapse:collapse}
+td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:14px;vertical-align:top}
+th{color:var(--dim);font-weight:500}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.muted{color:var(--dim)}
+.ok{color:var(--ok)}
+.bad{color:var(--bad)}
+.editor{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:820px){.editor{grid-template-columns:1fr}}
+textarea{width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical;line-height:1.35}
+canvas{width:100%;max-width:466px;aspect-ratio:1;display:block;margin:0 auto;border-radius:50%;background:#000}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.gcard{margin:0;display:flex;flex-direction:column;gap:8px}
+.gcard .face{display:flex;gap:12px;align-items:flex-start}
+.gcard canvas{width:170px;flex:none;margin:0}
+.gcard .nocfg{width:170px;height:170px;flex:none;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
+.gcard .title{font-size:16px;font-weight:600}
+.msg{min-height:22px;font-size:14px;margin:6px 0}
+label.inline{display:inline-flex;gap:6px;align-items:center}
+input[type=range]{width:110px}
+.sub{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.fontrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.fontrow .sample{display:block;font-size:30px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fontrow .about{display:block;font-size:13px;margin-top:4px}
+.fontrow .fam{font-weight:600;font-size:14px}
+.fontrow .key{font-family:ui-monospace,Consolas,monospace;color:var(--dim)}
+.wrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.wrow .wtitle{font-weight:600;margin-bottom:6px}
+.wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.wrow label{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--dim)}
+.wrow select,.wrow input{padding:4px 8px;font-size:13px;color:var(--fg)}
+.wrow input[type=number]{width:74px}
+.wrow input[type=text]{width:150px}
+.wrow select.chan{max-width:230px}
+.live-val{font-family:ui-monospace,Consolas,monospace;text-align:right}
+.stale{color:var(--dim)}
+.spacer{flex:1}
+.banner{background:#7a1f1f;color:#fff;padding:8px 16px;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Haltech Gauges</h1>
+  <span class="chip" id="chip-ws">connecting…</span>
+  <span class="chip" id="chip-ecu">ECU</span>
+  <span class="chip" id="chip-bus">gauge bus</span>
+  <span class="chip" id="chip-gauges">0 gauges</span>
+  <button class="chip" id="chip-sim" title="Generate Haltech data on the hub for testing">simulator off</button>
+</header>
+<nav>
+  <button data-tab="gauges" class="active">Gauges</button>
+  <button data-tab="live">Live data</button>
+  <button data-tab="configs">Configs</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+<main>
+<section id="tab-gauges" class="active">
+  <div class="card row">
+    <span class="muted">Each card shows what that gauge displays. Planned gauges exist only on the hub, for laying out and assigning configs before the hardware arrives; link them to the real gauge later.</span>
+    <span class="spacer"></span>
+    <button class="btn" id="btn-add-gauge">Add a planned gauge</button>
+  </div>
+  <div id="gauges" class="grid"></div>
+</section>
+
+<section id="tab-live">
+  <div class="card row"><input type="text" id="live-filter" placeholder="Filter channels…"><span class="muted" id="live-note"></span></div>
+  <div class="card"><table id="live-table"><thead><tr><th>Channel</th><th>Name</th><th class="live-val">Value</th><th>Unit</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="tab-configs">
+  <div class="card">
+    <div class="row">
+      <strong>Config library</strong><span class="muted" id="config-count"></span><span class="spacer"></span>
+      <select id="template-select"></select>
+      <button class="btn" id="btn-new">New from template</button>
+      <button class="btn" id="btn-import">Import file</button>
+      <input type="file" id="file-import" accept=".json,application/json" style="display:none">
+    </div>
+    <table id="config-table" style="margin-top:10px"><thead><tr><th>Name</th><th>Title</th><th>Faces</th><th>Size</th><th>Assigned to</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card" id="editor" style="display:none">
+    <div class="row">
+      <label class="inline">Name <input type="text" id="edit-name" maxlength="32" size="18"></label>
+      <button class="btn" id="btn-validate">Validate</button>
+      <button class="btn primary" id="btn-save">Save</button>
+      <button class="btn" id="btn-download">Download</button>
+      <button class="btn danger" id="btn-delete">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" id="btn-close">Close</button>
+    </div>
+    <div class="msg" id="edit-msg"></div>
+    <div class="editor">
+      <div><textarea id="edit-text" spellcheck="false"></textarea></div>
+      <div>
+        <div class="row" style="margin-bottom:8px">
+          <label class="inline">Face <select id="face-select"></select></label>
+          <span class="spacer"></span>
+          <select id="try-gauge"></select>
+          <button class="btn" id="btn-try">Try on gauge</button>
+          <button class="btn" id="btn-endtry">End try</button>
+        </div>
+        <canvas id="preview" width="466" height="466"></canvas>
+        <p class="muted" style="text-align:center;font-size:13px">Preview uses live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
+        <div class="sub">
+          <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
+            <label class="inline">All fonts <select id="all-fonts"></select></label></div>
+          <div id="widget-list"></div>
+        </div>
+        <div class="sub">
+          <div class="row"><strong>Fonts on the hub</strong><span class="muted">drawn with the gauge's own font files</span></div>
+          <div id="font-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-settings">
+  <div class="card"><h3>Hub</h3><table><tbody id="hub-info"></tbody></table></div>
+  <div class="card"><h3>Access point</h3><p class="muted">Always on. Join it to reach this page at <span class="mono">http://192.168.4.1/</span>.</p><table><tbody id="ap-info"></tbody></table></div>
+  <div class="card"><h3>Home Wi-Fi (optional)</h3>
+    <p class="muted">The hub can also join your network, so a PC can open it without switching Wi-Fi.</p>
+    <div class="row"><input type="text" id="sta-ssid" placeholder="Network name"><input type="password" id="sta-pass" placeholder="Password"><button class="btn primary" id="btn-sta-save">Connect</button><button class="btn" id="btn-sta-forget">Forget</button></div>
+    <div class="msg" id="sta-msg"></div>
+    <table><tbody id="sta-info"></tbody></table>
+  </div>
+</section>
+</main>
+
+<script>
+'use strict';
+window.addEventListener('error', e => {
+  const b = document.createElement('div');
+  b.className = 'banner';
+  b.textContent = 'Page error: ' + e.message + ' (line ' + e.lineno + ')';
+  document.body.prepend(b);
+});
+
+const MOCK = location.protocol === 'file:' || /[?&]mock\b/.test(location.search);
+const $ = (s, root) => (root || document).querySelector(s);
+const $$ = (s, root) => Array.from((root || document).querySelectorAll(s));
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c === null || c === undefined) continue;
+    e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return e;
+}
+const btn = (label, onclick, disabled, cls) => el('button', { class: 'btn' + (cls ? ' ' + cls : ''), onclick, disabled: disabled ? '' : null }, label);
+const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2); };
+
+const state = {
+  status: null, gauges: [], live: {}, meta: null, metaByName: {},
+  configs: [], assignments: {}, templates: [],
+  editing: null, previewCfg: null, faceIndex: 0, fonts: [],
+};
+
+// ------------------------------------------------------------------- API
+
+const api = {
+  async req(method, path, body, raw) {
+    if (MOCK) return mock.req(method, path, body, raw);
+    const opt = { method, headers: {} };
+    if (body !== undefined) {
+      opt.body = raw ? body : JSON.stringify(body);
+      opt.headers['Content-Type'] = 'application/json';
+    }
+    let r = await fetch(path, opt);
+    // The hub answers 503 while it is busy with other downloads; reads are retried.
+    for (let attempt = 1; r.status === 503 && method === 'GET' && attempt <= 4; attempt++) {
+      await new Promise(res => setTimeout(res, 700 * attempt));
+      r = await fetch(path, opt);
+    }
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = { ok: false, error: text.slice(0, 200) }; }
+    if (!r.ok) throw new Error((data && data.error) || (method + ' ' + path + ': HTTP ' + r.status));
+    return data;
+  },
+  get: p => api.req('GET', p),
+  put: (p, b, raw) => api.req('PUT', p, b, raw),
+  post: (p, b, raw) => api.req('POST', p, b, raw),
+  del: p => api.req('DELETE', p),
+};
+
+// Stored configs the page has fetched, by name, for the card previews.
+const configCache = {};
+const configPending = {};
+const configRetryAt = {};
+function cachedConfig(name) {
+  if (!name) return null;
+  if (configCache[name]) return configCache[name];
+  if (!configPending[name] && !(configRetryAt[name] > Date.now())) {
+    configPending[name] = api.get('/api/configs/' + name)
+      .then(c => { configCache[name] = c; })
+      .catch(() => { configRetryAt[name] = Date.now() + 3000; })
+      .finally(() => { delete configPending[name]; });
+  }
+  return null;
+}
+function forgetConfig(name) { delete configCache[name]; }
+
+// ------------------------------------------------------------------ tabs
+
+function showTab(name) {
+  $$('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $$('main > section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  try { localStorage.setItem('tab', name); } catch (e) { /* private mode */ }
+  if (name === 'configs') loadConfigs();
+}
+$$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- status
+
+function setChip(id, text, cls) {
+  const c = $('#chip-' + id);
+  c.textContent = text;
+  c.className = 'chip' + (cls ? ' ' + cls : '');
+}
+const busState = n => ['stopped', 'running', 'bus-off', 'recovering'][n] || ('state ' + n);
+
+function renderStatus() {
+  const s = state.status;
+  if (!s) return;
+  if (!s.ecu.present) setChip('ecu', 'no ECU bridge (dev board)', '');
+  else if (s.ecu.state === 1) setChip('ecu', 'ECU ' + s.ecu.frames + ' frames', 'on');
+  else setChip('ecu', 'ECU bus ' + busState(s.ecu.state), 'bad');
+  setChip('bus', 'gauge bus ' + busState(s.bus.state), s.bus.state === 1 ? 'on' : 'bad');
+  setChip('gauges', s.gauges_online + (s.gauges_online === 1 ? ' gauge' : ' gauges') + ' online', s.gauges_online ? 'on' : '');
+  setChip('sim', s.simulator ? 'simulator ON' : 'simulator off', s.simulator ? 'on' : '');
+  renderSettings();
+}
+
+$('#chip-sim').addEventListener('click', async () => {
+  if (!state.status) return;
+  try { await api.post('/api/simulator', { enabled: !state.status.simulator }); }
+  catch (e) { alert(e.message); }
+});
+
+// ------------------------------------------------------------- WebSocket
+
+function connect() {
+  if (MOCK) { mock.start(); return; }
+  const sock = new WebSocket('ws://' + location.host + '/ws');
+  sock.onopen = () => setChip('ws', 'connected', 'on');
+  sock.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } onMessage(m); };
+  sock.onclose = () => { setChip('ws', 'reconnecting…', 'bad'); setTimeout(connect, 2000); };
+  sock.onerror = () => sock.close();
+}
+
+function onMessage(m) {
+  if (m.t === 'status') { state.status = m; renderStatus(); }
+  else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGauges(); renderTryGauges(); }
+  else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
+}
+
+// ---------------------------------------------------------------- gauges
+
+async function act(g, action, body) {
+  try { await api.post('/api/gauges/' + g.node + '/' + action, body || {}); }
+  catch (e) { alert(e.message); }
+}
+
+async function planned(method, path, body) {
+  try { await api.req(method, path, body); if (MOCK) renderGauges(); }
+  catch (e) { alert(e.message); }
+}
+
+const gaugeTitle = g => g.label || (g.virtual ? 'Planned gauge ' + g.id : 'Gauge ' + g.node);
+const isSynthetic = mac => /^02:00:00:00:00:/.test(mac || '');
+
+function pushChip(g) {
+  if (g.virtual) return el('span', { class: 'chip plan' }, isSynthetic(g.mac) ? 'planned, no hardware yet' : 'waiting for ' + g.mac);
+  if (g.push.active) return el('span', { class: 'chip' }, 'pushing config…');
+  if (g.push.failed) return el('span', { class: 'chip bad' }, 'push ' + g.push.result);
+  if (!g.assigned) return el('span', { class: 'chip' }, 'no config assigned');
+  const cfg = state.configs.find(c => c.name === g.assigned);
+  if (cfg && cfg.crc === g.config_crc) return el('span', { class: 'chip on' }, 'config in sync');
+  return el('span', { class: 'chip' }, g.online ? 'config will be pushed' : 'config pushed when online');
+}
+
+// Per-card previews, redrawn a few times a second while the tab is visible.
+let cardPreviews = [];
+function drawCards() {
+  if (!$('#tab-gauges').classList.contains('active')) return;
+  const now = performance.now();
+  for (const p of cardPreviews) {
+    const cfg = cachedConfig(p.name);
+    if (cfg) drawFace(p.canvas, cfg, Math.min(p.face, (cfg.faces || []).length - 1), now);
+  }
+}
+setInterval(drawCards, 250);
+
+function assignSelect(g) {
+  return el('select', {
+    disabled: g.mac ? null : '',
+    onchange: async ev => {
+      try { await api.put('/api/assignments/' + g.mac, { name: ev.target.value }); await loadConfigs(); }
+      catch (e) { alert(e.message); }
+    },
+  }, el('option', { value: '' }, '— no config —'),
+    ...state.configs.map(c => el('option', { value: c.name, selected: c.name === g.assigned ? '' : null }, c.name)));
+}
+
+function faceControl(g) {
+  const cfg = g.assigned ? cachedConfig(g.assigned) : null;
+  if (g.virtual) {
+    const count = cfg ? (cfg.faces || []).length : 0;
+    const options = [];
+    for (let i = 0; i < Math.max(count, 1); i++) {
+      const name = cfg && cfg.faces[i] ? cfg.faces[i].name || 'face' : 'face';
+      options.push(el('option', { value: i, selected: i === g.face ? '' : null }, (i + 1) + ': ' + name));
+    }
+    return el('label', { class: 'inline' }, 'Face ',
+      el('select', { onchange: ev => planned('PUT', '/api/virtual/' + g.id, { face: +ev.target.value }) }, ...options));
+  }
+  const off = !g.online;
+  return el('span', { class: 'row' },
+    btn('◀ face', () => act(g, 'face', { index: Math.max(0, (g.face || 0) - 1) }), off, 'small'),
+    el('span', { class: 'muted' }, g.faces != null ? (g.face + 1) + ' of ' + g.faces : ''),
+    btn('face ▶', () => act(g, 'face', { index: Math.min((g.faces || 1) - 1, (g.face || 0) + 1) }), off, 'small'));
+}
+
+function rename(g) {
+  const label = prompt('Name for this gauge', g.label || '');
+  if (label === null) return;
+  if (g.id) planned('PUT', '/api/virtual/' + g.id, { label });
+  else planned('POST', '/api/virtual', { label, mac: g.mac });  // names a real gauge by planning it
+}
+
+function linkHardware(g) {
+  const candidates = state.gauges.filter(x => !x.virtual && x.mac && !x.id);
+  const hint = candidates.length ? 'Unnamed gauges online: ' + candidates.map(x => x.mac + ' (' + x.node + ')').join(', ') : 'No unnamed gauge is online; type the MAC from its serial banner.';
+  const mac = prompt('MAC of the real gauge for "' + gaugeTitle(g) + '"\n' + hint, candidates[0] ? candidates[0].mac : '');
+  if (mac === null) return;
+  planned('PUT', '/api/virtual/' + g.id, { mac: mac.trim() });
+}
+
+function renderGauges() {
+  const root = $('#gauges');
+  root.innerHTML = '';
+  cardPreviews = [];
+  if (!state.gauges.length) {
+    root.append(el('div', { class: 'card muted', style: 'grid-column:1/-1' },
+      'No gauge has announced itself and none is planned. Add a planned gauge to start laying out, or power a gauge on the chain. ',
+      'Turn on the simulator (top right) for live Haltech data without the car.'));
+    return;
+  }
+  for (const g of state.gauges) {
+    const off = !g.online;
+    const details = g.virtual
+      ? (isSynthetic(g.mac) ? 'not linked to hardware yet' : 'linked to ' + g.mac + ', not seen on the bus')
+      : [g.node + (g.mac ? ' · ' + g.mac : ' · identity not announced'),
+         g.fw ? 'firmware ' + g.fw : null,
+         g.vbus_mv ? (g.vbus_mv / 1000).toFixed(2) + ' V' : null,
+         g.config_crc ? 'config ' + g.config_crc : null].filter(Boolean).join(' · ');
+
+    const canvas = g.assigned ? el('canvas', { width: 466, height: 466 }) : null;
+    if (canvas) cardPreviews.push({ canvas, name: g.assigned, face: g.face || 0 });
+    const preview = canvas || el('div', { class: 'nocfg' }, 'no config assigned');
+
+    const card = el('div', { class: 'card gcard' },
+      el('div', { class: 'row' },
+        el('span', { class: 'title' }, gaugeTitle(g)),
+        btn('rename', () => rename(g), false, 'small'),
+        el('span', { class: 'spacer' }),
+        g.virtual ? el('span', { class: 'chip plan' }, 'planned')
+                  : el('span', { class: 'chip ' + (g.online ? 'on' : 'bad') }, g.online ? 'online' : 'offline ' + g.last_seen_s + ' s'),
+        g.duplicate ? el('span', { class: 'chip bad' }, 'duplicate id') : null,
+        g.trying ? el('span', { class: 'chip' }, 'trial config') : null),
+      el('div', { class: 'muted', style: 'font-size:13px' }, details),
+      el('div', { class: 'face' }, preview,
+        el('div', { class: 'row', style: 'flex-direction:column;align-items:flex-start;flex:1' },
+          el('label', { class: 'inline' }, 'Config ', assignSelect(g)),
+          faceControl(g),
+          pushChip(g),
+          g.assigned ? btn('Edit config', () => { showTab('configs'); openStored(g.assigned); }, false, 'small') : null)),
+      g.virtual
+        ? el('div', { class: 'row' },
+            btn('Link to hardware…', () => linkHardware(g), false, 'small'),
+            btn('Remove', () => { if (confirm('Remove planned gauge "' + gaugeTitle(g) + '"?')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small danger'))
+        : el('div', { class: 'row' },
+            btn('Identify', () => act(g, 'identify', { seconds: 5 }), off, 'small'),
+            el('label', { class: 'inline' }, 'Brightness ',
+              el('input', { type: 'range', min: 10, max: 255, value: 200, disabled: off ? '' : null,
+                onchange: ev => act(g, 'brightness', { level: +ev.target.value }) })),
+            g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
+            btn('Reboot', () => { if (confirm('Reboot ' + gaugeTitle(g) + '?')) act(g, 'reboot'); }, off, 'small'),
+            g.id ? btn('Unlink', () => { if (confirm('Forget the name and planned entry for this gauge? Its config assignment stays.')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small') : null));
+    root.append(card);
+  }
+  drawCards();
+}
+
+$('#btn-add-gauge').addEventListener('click', () => {
+  const label = prompt('Name for the planned gauge (e.g. "Left pod")', '');
+  if (label === null) return;
+  planned('POST', '/api/virtual', { label });
+});
+
+// ------------------------------------------------------------------ live
+
+let liveRows = null;
+
+function buildLiveTable() {
+  const tbody = $('#live-table tbody');
+  tbody.innerHTML = '';
+  liveRows = {};
+  for (const c of state.meta.channels) {
+    const val = el('td', { class: 'live-val stale' }, '—');
+    const tr = el('tr', {}, el('td', { class: 'mono' }, c.n), el('td', {}, c.l), val,
+      el('td', { class: 'muted' }, state.meta.units[c.u].s));
+    tbody.append(tr);
+    liveRows[c.n] = { tr, val, c };
+  }
+  $('#live-filter').addEventListener('input', filterLive);
+}
+
+function filterLive() {
+  const q = $('#live-filter').value.toLowerCase();
+  for (const name in liveRows) {
+    const r = liveRows[name];
+    r.tr.style.display = (!q || name.includes(q) || r.c.l.toLowerCase().includes(q)) ? '' : 'none';
+  }
+}
+
+function renderLive() {
+  if (!liveRows) return;
+  let n = 0;
+  for (const name in liveRows) {
+    const r = liveRows[name];
+    const v = state.live[name];
+    if (v == null) { r.val.textContent = '—'; r.val.classList.add('stale'); }
+    else { r.val.textContent = fmt(v); r.val.classList.remove('stale'); n++; }
+  }
+  $('#live-note').textContent = n ? n + ' channels live' : 'No data: connect the ECU or turn on the simulator';
+}
+
+// --------------------------------------------------------------- configs
+
+async function loadConfigs() {
+  try {
+    const [configs, assignments, templates] = await Promise.all([
+      api.get('/api/configs'), api.get('/api/assignments'), api.get('/api/templates')]);
+    state.configs = configs;
+    state.assignments = assignments;
+    state.templates = templates;
+  } catch (e) {
+    $('#config-count').textContent = e.message;
+    return;
+  }
+  renderConfigs();
+  renderGauges();
+}
+
+function renderConfigs() {
+  const tbody = $('#config-table tbody');
+  tbody.innerHTML = '';
+  $('#config-count').textContent = state.configs.length + ' stored';
+  const sel = $('#template-select');
+  sel.innerHTML = '';
+  for (const t of state.templates) sel.append(el('option', { value: t.name }, t.title || t.name));
+  for (const c of state.configs) {
+    const users = Object.entries(state.assignments).filter(([, name]) => name === c.name).map(([mac]) => {
+      const g = state.gauges.find(x => x.mac === mac);
+      return g ? gaugeTitle(g) : mac;
+    });
+    tbody.append(el('tr', {},
+      el('td', { class: 'mono' }, c.name), el('td', {}, c.title || ''), el('td', {}, c.faces == null ? '' : c.faces),
+      el('td', {}, (c.size / 1024).toFixed(1) + ' KB'), el('td', { class: 'muted' }, users.join(', ') || '—'),
+      el('td', {}, btn('Edit', () => openStored(c.name)))));
+  }
+  if (!state.configs.length) {
+    tbody.append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'Nothing stored yet. Start from a template, or import a JSON file.')));
+  }
+}
+
+function setMsg(text, cls) {
+  const m = $('#edit-msg');
+  m.textContent = text;
+  m.className = 'msg' + (cls ? ' ' + cls : '');
+}
+
+async function openStored(name) {
+  try { openEditor(name, await api.get('/api/configs/' + name), false); }
+  catch (e) { alert(e.message); }
+}
+
+// The five gauge fonts are only needed by the preview canvases, and each is a
+// separate download from the hub, so they are fetched the first time a
+// preview is drawn rather than on every page load.
+// Fonts are fetched one at a time, after the channel list, because the hub
+// cannot serve many large downloads at once. Each is retried if refused.
+let fontsWanted = false, fontsStarted = false, metaSettled = false;
+function loadFonts() { fontsWanted = true; startFonts(); }
+async function startFonts() {
+  if (fontsStarted || !fontsWanted || !metaSettled || !state.fonts.length) return;
+  fontsStarted = true;
+  if (MOCK) return;
+  for (const f of state.fonts) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const r = await fetch('/fonts/' + f.key + '.ttf');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const face = new FontFace('HG ' + f.key, await r.arrayBuffer());
+        await face.load();
+        document.fonts.add(face);
+        break;
+      } catch (e) {
+        await new Promise(res => setTimeout(res, 1000 * (attempt + 1)));
+      }
+    }
+  }
+}
+
+function openEditor(name, cfg, isNew) {
+  state.editing = { name, isNew };
+  $('#edit-name').value = name;
+  $('#edit-text').value = JSON.stringify(cfg, null, 2);
+  $('#editor').style.display = '';
+  state.faceIndex = 0;
+  renderFontList();
+  parseEditor();
+  setMsg(isNew ? 'New config, not saved yet.' : '');
+  $('#editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function rebuildFaceSelect(cfg) {
+  const sel = $('#face-select');
+  sel.innerHTML = '';
+  (cfg.faces || []).forEach((f, i) => sel.append(el('option', { value: i }, (i + 1) + ': ' + (f.name || 'face'))));
+  if (state.faceIndex >= (cfg.faces || []).length) state.faceIndex = 0;
+  sel.value = state.faceIndex;
+}
+
+function parseEditor() {
+  try {
+    const cfg = JSON.parse($('#edit-text').value);
+    state.previewCfg = cfg;
+    rebuildFaceSelect(cfg);
+    renderWidgetTable();
+    return cfg;
+  } catch (e) {
+    setMsg('JSON error: ' + e.message, 'bad');
+    return null;
+  }
+}
+
+let editTimer = null;
+$('#edit-text').addEventListener('input', () => {
+  clearTimeout(editTimer);
+  editTimer = setTimeout(() => { if (parseEditor()) setMsg(''); }, 250);
+});
+$('#face-select').addEventListener('change', ev => { state.faceIndex = +ev.target.value; renderWidgetTable(); });
+
+function currentName() {
+  const name = $('#edit-name').value.trim();
+  if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) { setMsg('Name: 1-32 characters, letters, digits, - and _ only.', 'bad'); return null; }
+  return name;
+}
+
+$('#btn-validate').addEventListener('click', async () => {
+  try {
+    const r = await api.post('/api/validate', $('#edit-text').value, true);
+    if (r.ok) setMsg('Valid: "' + r.name + '", ' + r.faces.length + ' face(s), ' + r.widgets + ' widgets.', 'ok');
+    else setMsg('Invalid: ' + r.error, 'bad');
+  } catch (e) { setMsg(e.message, 'bad'); }
+});
+
+$('#btn-save').addEventListener('click', async () => {
+  const name = currentName();
+  if (!name) return;
+  try {
+    await api.put('/api/configs/' + name, $('#edit-text').value, true);
+    state.editing = { name, isNew: false };
+    forgetConfig(name);
+    setMsg('Saved "' + name + '". Assigned gauges receive it within a few seconds.', 'ok');
+    await loadConfigs();
+  } catch (e) { setMsg('Not saved: ' + e.message, 'bad'); }
+});
+
+$('#btn-download').addEventListener('click', () => {
+  const name = $('#edit-name').value.trim() || 'config';
+  const blob = new Blob([$('#edit-text').value], { type: 'application/json' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: name + '.json' });
+  document.body.append(a);
+  a.click();
+  a.remove();
+});
+
+$('#btn-delete').addEventListener('click', async () => {
+  if (!state.editing || state.editing.isNew) { $('#editor').style.display = 'none'; return; }
+  if (!confirm('Delete "' + state.editing.name + '" from the hub?')) return;
+  try {
+    await api.del('/api/configs/' + state.editing.name);
+    forgetConfig(state.editing.name);
+    $('#editor').style.display = 'none';
+    state.previewCfg = null;
+    await loadConfigs();
+  } catch (e) { setMsg(e.message, 'bad'); }
+});
+
+$('#btn-close').addEventListener('click', () => { $('#editor').style.display = 'none'; state.previewCfg = null; });
+
+$('#btn-new').addEventListener('click', async () => {
+  const t = $('#template-select').value;
+  if (!t) return;
+  try {
+    const cfg = await api.get('/api/templates/' + t);
+    let name = t, i = 1;
+    while (state.configs.some(c => c.name === name)) name = t + '-' + (++i);
+    openEditor(name, cfg, true);
+  } catch (e) { alert(e.message); }
+});
+
+$('#btn-import').addEventListener('click', () => $('#file-import').click());
+$('#file-import').addEventListener('change', ev => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const cfg = JSON.parse(reader.result);
+      const name = file.name.replace(/\.json$/i, '').replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 32) || 'imported';
+      openEditor(name, cfg, true);
+    } catch (e) { alert('Not a JSON file: ' + e.message); }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+});
+
+function renderTryGauges() {
+  const sel = $('#try-gauge');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  const online = state.gauges.filter(g => g.online);
+  if (!online.length) sel.append(el('option', { value: '' }, 'no gauge online'));
+  for (const g of online) sel.append(el('option', { value: g.node }, gaugeTitle(g)));
+  if (prev && online.some(g => g.node === prev)) sel.value = prev;
+  $('#btn-try').disabled = $('#btn-endtry').disabled = !online.length;
+}
+
+$('#btn-try').addEventListener('click', async () => {
+  const node = $('#try-gauge').value;
+  if (!node) return;
+  try { await api.post('/api/gauges/' + node + '/try', $('#edit-text').value, true); setMsg('Sent to gauge ' + node + ' for a look; it is not stored there.', 'ok'); }
+  catch (e) { setMsg(e.message, 'bad'); }
+});
+$('#btn-endtry').addEventListener('click', async () => {
+  const node = $('#try-gauge').value;
+  if (!node) return;
+  try { await api.post('/api/gauges/' + node + '/endtry', {}); setMsg('Gauge ' + node + ' is back on its stored config.', 'ok'); }
+  catch (e) { setMsg(e.message, 'bad'); }
+});
+
+
+// ---------------------------------------------------------- widget styles
+// A table of the widgets on the selected face with their font and size, the
+// first piece of the builder. Edits rewrite the JSON in the editor.
+
+const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
+const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22 };
+const FONT_SAMPLE = '0123456789 RPM 14.7 \u00b0C km/h';
+
+function widgetName(w) {
+  let s = w.type || '?';
+  if (w.channel) s += ' ' + w.channel;
+  if (w.text) s += ' "' + w.text + '"';
+  if (w.type === 'dial') s += ' (tick labels)';
+  return s;
+}
+
+function fontOptions(selected, allowDefault) {
+  const opts = [];
+  if (allowDefault) opts.push(el('option', { value: '' }, 'default (sans)'));
+  for (const f of state.fonts) opts.push(el('option', { value: f.key, selected: f.key === selected ? '' : null }, f.family + ' (' + f.key + ')'));
+  return opts;
+}
+
+function renderFontList() {
+  loadFonts();
+  const root = $('#font-list');
+  root.innerHTML = '';
+  for (const f of state.fonts) {
+    root.append(el('div', { class: 'fontrow' },
+      el('span', { class: 'sample', style: 'font-family:' + fontStack(f.key) }, FONT_SAMPLE),
+      el('span', { class: 'about' }, el('span', { class: 'fam' }, f.family), ' ', el('span', { class: 'key' }, '"' + f.key + '"'),
+        el('br'), el('span', { class: 'muted' }, f.style))));
+  }
+  const all = $('#all-fonts');
+  all.innerHTML = '';
+  all.append(el('option', { value: '' }, 'set every widget to\u2026'), ...fontOptions('', false));
+}
+
+// What the panel offers per widget type: [key, kind, label, options].
+const PANEL_FIELDS = {
+  dial:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
+           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
+           ['labelFont', 'font', 'Labels'], ['labelSize', 'size', 'Size']],
+  ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'], ['segments', 'number', 'Segments']],
+  bar:    [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'], ['segments', 'number', 'Segments']],
+  number: [['channel', 'channel'], ['unit', 'unit'], ['format', 'select', 'Format', ['plain', 'gear']], ['decimals', 'number', 'Decimals'],
+           ['pad', 'number', 'Pad'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  label:  [['text', 'text', 'Text'], ['rotate', 'number', 'Rotate'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  light:  [['channel', 'channel'], ['text', 'text', 'Text'], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  rim:    [['channel', 'channel'], ['unit', 'unit'], ['from', 'number', 'From'], ['to', 'number', 'To']],
+};
+
+function channelSelect(w, i) {
+  const sel = el('select', { class: 'chan', onchange: ev => { if (ev.target.value) setWidgetFields(i, { channel: ev.target.value, unit: '' }); } });
+  const chans = state.meta ? state.meta.channels.slice().sort((a, b) => a.l.localeCompare(b.l)) : [];
+  if (!chans.some(c => c.n === w.channel)) sel.append(el('option', { value: w.channel || '', selected: '' }, w.channel || 'choose a channel'));
+  for (const c of chans) sel.append(el('option', { value: c.n, selected: c.n === w.channel ? '' : null }, c.l + (state.meta.units[c.u].s ? ' (' + state.meta.units[c.u].s + ')' : '')));
+  return sel;
+}
+
+function unitSelect(w, i) {
+  const m = state.metaByName[w.channel];
+  const opts = m && state.meta ? state.meta.units[m.u].o.filter(o => o.n) : [];
+  const sel = el('select', { disabled: opts.length > 1 ? null : '', onchange: ev => setWidgetFields(i, { unit: ev.target.value }) });
+  sel.append(el('option', { value: '' }, opts[0] ? 'default (' + opts[0].n + ')' : 'n/a'));
+  for (const o of opts) sel.append(el('option', { value: o.n, selected: o.n === w.unit ? '' : null }, o.n + (o.s && o.s !== o.n ? ' (' + o.s + ')' : '')));
+  return sel;
+}
+
+function renderWidgetTable() {
+  const root = $('#widget-list');
+  root.innerHTML = '';
+  const cfg = state.previewCfg;
+  const face = cfg ? (cfg.faces || [])[state.faceIndex] : null;
+  const widgets = face ? face.widgets || [] : [];
+  $('#widget-note').textContent = face ? 'on face ' + (state.faceIndex + 1) + (face.name ? ': ' + face.name : '') : '';
+  widgets.forEach((w, i) => {
+    const ctl = el('div', { class: 'ctl' });
+    const numeric = (key, extra) => el('input', Object.assign({ type: 'number', value: w[key] == null ? '' : w[key],
+      onchange: ev => setWidgetFields(i, { [key]: ev.target.value === '' ? '' : +ev.target.value }) }, extra || {}));
+    for (const [key, kind, label, opts] of PANEL_FIELDS[w.type] || []) {
+      let control;
+      if (kind === 'channel') control = channelSelect(w, i);
+      else if (kind === 'unit') control = unitSelect(w, i);
+      else if (kind === 'font') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) }, ...fontOptions(w[key], true));
+      else if (kind === 'size') control = numeric(key, { min: 8, max: 200, placeholder: DEFAULT_SIZES[w.type] });
+      else if (kind === 'number') control = numeric(key, { step: 'any' });
+      else if (kind === 'select') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) },
+        el('option', { value: '' }, 'default'), ...opts.map(o => el('option', { value: o, selected: o === w[key] ? '' : null }, o)));
+      else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) });
+      ctl.append(el('label', {}, label ? label : '', control));
+    }
+    root.append(el('div', { class: 'wrow' }, el('div', { class: 'wtitle' }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')), ctl));
+  });
+  if (!widgets.length) root.append(el('div', { class: 'muted' }, 'This face has no widgets.'));
+}
+
+// Applies a change to the config in the editor and refreshes the preview.
+function editConfig(mutate) {
+  let cfg;
+  try { cfg = JSON.parse($('#edit-text').value); }
+  catch (e) { setMsg('Fix the JSON first: ' + e.message, 'bad'); return; }
+  mutate(cfg);
+  $('#edit-text').value = JSON.stringify(cfg, null, 2);
+  parseEditor();
+  setMsg('Changed, not saved yet.');
+}
+
+// Applies several property changes to one widget; '' or null removes a property.
+function setWidgetFields(i, changes) {
+  editConfig(cfg => {
+    const face = (cfg.faces || [])[state.faceIndex];
+    const w = face && face.widgets ? face.widgets[i] : null;
+    if (!w) return;
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === '' || value == null) delete w[key]; else w[key] = value;
+    }
+  });
+}
+
+$('#all-fonts').addEventListener('change', ev => {
+  const key = ev.target.value;
+  if (!key) return;
+  editConfig(cfg => {
+    for (const face of cfg.faces || []) {
+      for (const w of face.widgets || []) {
+        const fields = FONT_FIELDS[w.type];
+        if (fields) w[fields[0]] = key;
+      }
+    }
+  });
+  ev.target.value = '';
+});
+
+// -------------------------------------------------------------- settings
+
+function rows(tbody, pairs) {
+  tbody.innerHTML = '';
+  for (const [k, v] of pairs) tbody.append(el('tr', {}, el('td', { class: 'muted' }, k), el('td', {}, v)));
+}
+
+function renderSettings() {
+  const s = state.status;
+  if (!s) return;
+  const up = s.uptime_s;
+  rows($('#hub-info'), [
+    ['Firmware', s.fw], ['Board', s.board], ['Last restart', s.reset || ''],
+    ['Uptime', Math.floor(up / 3600) + 'h ' + Math.floor(up % 3600 / 60) + 'm ' + (up % 60) + 's'],
+    ['Free memory', Math.round(s.heap_free / 1024) + ' KB (lowest ' + Math.round(s.heap_min / 1024) + ' KB)'],
+    ['Gauge bus', busState(s.bus.state) + ', ' + s.bus.simulated + ' simulated, ' + s.bus.forwarded + ' forwarded, ' + s.bus.missed + ' missed'],
+    ['ECU bus', s.ecu.present ? busState(s.ecu.state) + ', ' + s.ecu.frames + ' frames, ' + s.ecu.missed + ' missed' : 'not on this board'],
+  ]);
+  rows($('#ap-info'), [['Network', s.ap.ssid], ['Password', s.ap.password], ['Address', s.ap.ip + ' (http://' + s.hostname + '.local/)'], ['Connected devices', s.ap.clients]]);
+  rows($('#sta-info'), [['Network', s.sta.ssid || '— not set —'], ['Status', s.sta.connected ? 'connected, ' + s.sta.ip + ' (' + s.sta.rssi + ' dBm)' : (s.sta.ssid ? 'not connected' : '')]]);
+  const ssid = $('#sta-ssid');
+  if (!ssid.dataset.touched && !ssid.value) ssid.value = s.sta.ssid || '';
+}
+$('#sta-ssid').addEventListener('input', ev => { ev.target.dataset.touched = '1'; });
+$('#btn-sta-save').addEventListener('click', async () => {
+  try { await api.put('/api/wifi', { ssid: $('#sta-ssid').value.trim(), password: $('#sta-pass').value }); $('#sta-msg').textContent = 'Saved. Connecting…'; }
+  catch (e) { $('#sta-msg').textContent = e.message; }
+});
+$('#btn-sta-forget').addEventListener('click', async () => {
+  try { await api.del('/api/wifi'); $('#sta-ssid').value = ''; $('#sta-pass').value = ''; $('#sta-msg').textContent = 'Forgotten.'; }
+  catch (e) { $('#sta-msg').textContent = e.message; }
+});
+
+// --------------------------------------------------------------- preview
+// Mirrors the gauge's renderer closely enough to lay a face out. Colours and
+// theme presets must match lib/hg_config/face_parse.cpp.
+
+const PRESETS = {
+  white: { bg: '#000000', fg: '#FFFFFF', accent: '#FF3B30', dim: '#3A3A3C', warn: '#FFCC00', alert: '#FF0000' },
+  red:   { bg: '#000000', fg: '#E0281A', accent: '#FF6A5A', dim: '#3A0D09', warn: '#FFB020', alert: '#FFFFFF' },
+  amber: { bg: '#000000', fg: '#FFB000', accent: '#FF5A00', dim: '#3D2A00', warn: '#FFE680', alert: '#FF2D1A' },
+  green: { bg: '#000000', fg: '#39FF88', accent: '#C8FF3D', dim: '#0E3B22', warn: '#FFD23D', alert: '#FF3B30' },
+  cyan:  { bg: '#000000', fg: '#2EE6E6', accent: '#7FF6FF', dim: '#0B3A3A', warn: '#FFD23D', alert: '#FF3B30' },
+  nfs:   { bg: '#000000', fg: '#FFFFFF', accent: '#2DB5FF', dim: '#262626', warn: '#F6E63B', alert: '#E0325A' },
+};
+// The families the hub serves, from /api/fonts. The page falls back to this
+// list (and the mock uses it) so an older hub still previews.
+const DEFAULT_FONTS = [
+  { key: 'sans', family: 'Fira Sans', style: 'Clean and readable. The default for everything.' },
+  { key: 'condensed', family: 'Barlow Condensed', style: 'Narrow, DIN-like. Fits more on a dial\'s tick labels.' },
+  { key: 'digital', family: 'DSEG7 Classic', style: 'Seven-segment digits. Letters are approximate; best for numbers.' },
+  { key: 'mono', family: 'Share Tech Mono', style: 'Monospaced, so digits do not jump about as values change.' },
+  { key: 'display', family: 'Russo One', style: 'Wide, heavy racing style for a headline number.' },
+];
+const FONT_FALLBACK = { sans: 'Arial,sans-serif', condensed: '"Arial Narrow",sans-serif', digital: 'monospace', mono: 'monospace', display: 'Impact,sans-serif' };
+const FONTS = {};
+function setFonts(list) {
+  state.fonts = list;
+  for (const f of list) FONTS[f.key] = '"HG ' + f.key + '","' + f.family + '",' + (FONT_FALLBACK[f.key] || 'sans-serif');
+}
+const fontStack = key => FONTS[key] || fontStack('sans') || 'sans-serif';
+const rad = d => d * Math.PI / 180;
+const clamp = (v, a, b) => v == null ? a : Math.min(b, Math.max(a, v));
+
+function resolveTheme(t) {
+  if (!t) return Object.assign({}, PRESETS.white);
+  if (typeof t === 'string') return Object.assign({}, PRESETS[t] || PRESETS.white);
+  return Object.assign({}, PRESETS.white, t);
+}
+function color(c, theme, dflt) {
+  if (c == null) return dflt;
+  if (theme[c] != null) return theme[c];
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c)) return c;
+  return dflt;
+}
+function withAlpha(hex, a) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(x => x + x).join('');
+  const n = parseInt(h, 16);
+  return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function unitFor(w) {
+  const m = state.metaByName[w.channel];
+  if (!m || !state.meta) return null;
+  const u = state.meta.units[m.u];
+  if (!w.unit) return u.o[0];
+  return u.o.find(o => o.n === w.unit) || u.o[0];
+}
+
+// The widget's value in its display unit: live data when the hub has it,
+// otherwise a slow sweep so the layout can be judged.
+function valueOf(w, t) {
+  const v = state.live[w.channel];
+  if (v != null) { const u = unitFor(w); return u ? v * u.m + u.a : v; }
+  const p = 0.5 - 0.5 * Math.cos(t / 4000 * 2 * Math.PI);
+  if (w.format === 'gear') return Math.floor(p * 6.99);
+  if (w.min != null && w.max != null) return w.min + (w.max - w.min) * p;
+  if (w.type === 'light') return Math.floor(t / 3000) % 2;
+  if (w.type === 'rim') { const lo = w.from * 0.8, hi = w.to != null ? w.to : w.from * 1.2; return lo + (hi - lo) * p; }
+  return 100 * p;
+}
+
+function applyWarn(w, v, col, th, t) {
+  const wn = w.warn;
+  if (!wn || v == null) return col;
+  const hit = wn.above != null ? v > wn.above : (wn.below != null ? v < wn.below : false);
+  if (!hit) return col;
+  if (wn.flash && Math.floor(t / 250) % 2) return col;
+  return color(wn.color, th, th.alert);
+}
+
+function drawDial(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 220 : w.r;
+  const start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
+  const min = w.min, max = w.max, major = w.major || 10, minor = w.minor || 5;
+  const tickLen = w.tickLen == null ? 16 : w.tickLen, tickW = w.tickWidth == null ? 3 : w.tickWidth;
+  const fg = color(w.color, th, th.fg);
+  const v = clamp(valueOf(w, t), min, max);
+  const zw = w.zoneWidth == null ? 6 : w.zoneWidth;
+  for (const z of w.zones || []) {
+    const a0 = start + sweep * (z.from - min) / (max - min), a1 = start + sweep * (z.to - min) / (max - min);
+    ctx.beginPath(); ctx.strokeStyle = color(z.color, th, th.alert); ctx.lineWidth = zw;
+    ctx.arc(cx, cy, r - zw / 2, rad(a0), rad(a1)); ctx.stroke();
+  }
+  const total = major * minor, inner = r - zw - 2;
+  const labelSize = w.labelSize == null ? 22 : w.labelSize;
+  const ticks = w.ticks !== false, tl = ticks ? tickLen : 4;
+  if (w.arcWidth) {
+    ctx.beginPath(); ctx.strokeStyle = fg; ctx.lineWidth = w.arcWidth; ctx.lineCap = 'butt';
+    ctx.arc(cx, cy, inner, rad(start), rad(start + sweep)); ctx.stroke();
+  }
+  for (let i = 0; i <= total; i++) {
+    const a = rad(start + sweep * i / total), isMajor = i % minor === 0;
+    const len = isMajor ? tickLen : tickLen * 0.55;
+    if (ticks && w.tickShape === 'triangle') {
+      // A filled triangle with its base on the arc, pointing inward.
+      const half = Math.max(2, len * 0.4), px = -Math.sin(a) * half, py = Math.cos(a) * half;
+      const bx = cx + Math.cos(a) * inner, by = cy + Math.sin(a) * inner;
+      ctx.beginPath(); ctx.fillStyle = isMajor ? fg : withAlpha(fg, 0.55);
+      ctx.moveTo(bx + px, by + py); ctx.lineTo(bx - px, by - py);
+      ctx.lineTo(cx + Math.cos(a) * (inner - len), cy + Math.sin(a) * (inner - len)); ctx.closePath(); ctx.fill();
+    } else if (ticks) {
+      ctx.beginPath(); ctx.strokeStyle = isMajor ? fg : withAlpha(fg, 0.55); ctx.lineWidth = isMajor ? tickW : Math.max(1, tickW - 1);
+      ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      ctx.lineTo(cx + Math.cos(a) * (inner - len), cy + Math.sin(a) * (inner - len)); ctx.stroke();
+    }
+    if (isMajor && (w.labels == null || w.labels)) {
+      const val = (min + (max - min) * i / total) / (w.labelScale || 1);
+      const lr = inner - tl - labelSize * 0.9;
+      ctx.fillStyle = fg; ctx.font = labelSize + 'px ' + fontStack(w.labelFont);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(Number.isInteger(+val.toFixed(6)) ? String(Math.round(val)) : val.toFixed(1), cx + Math.cos(a) * lr, cy + Math.sin(a) * lr);
+    }
+  }
+  const a = rad(start + sweep * (v - min) / (max - min));
+  const len = w.needleLen == null ? r - 24 : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
+  const nc = color(w.needleColor, th, th.accent), style = w.needle || 'tapered';
+  if (style === 'none') return;
+  if (style === 'line') {
+    ctx.beginPath(); ctx.strokeStyle = nc; ctx.lineWidth = nw; ctx.lineCap = 'round';
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); ctx.stroke();
+  } else {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.fillStyle = nc;
+    ctx.beginPath(); ctx.moveTo(-14, -nw); ctx.lineTo(len, -1); ctx.lineTo(len, 1); ctx.lineTo(-14, nw); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    if (style === 'tapered_cap') {
+      ctx.beginPath(); ctx.fillStyle = nc; ctx.arc(cx, cy, nw * 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.fillStyle = th.bg; ctx.arc(cx, cy, nw * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function zoneColor(w, v, th, base) {
+  let col = base;
+  for (const z of w.zones || []) if (v >= z.from && v <= z.to) col = color(z.color, th, th.alert);
+  return col;
+}
+
+function drawRing(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 225 : w.r;
+  const thick = w.thickness == null ? 20 : w.thickness, start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
+  const min = w.min, max = w.max, v = clamp(valueOf(w, t), min, max), frac = (v - min) / (max - min);
+  const rr = r - thick / 2, track = w.track == null || w.track, trackCol = color(w.trackColor, th, th.dim);
+  const col = applyWarn(w, v, zoneColor(w, v, th, color(w.color, th, th.fg)), th, t);
+  ctx.lineWidth = thick;
+  const segs = w.segments || 0;
+  if (!segs) {
+    ctx.lineCap = (w.rounded == null || w.rounded) ? 'round' : 'butt';
+    if (track) { ctx.beginPath(); ctx.strokeStyle = trackCol; ctx.arc(cx, cy, rr, rad(start), rad(start + sweep)); ctx.stroke(); }
+    if (frac > 0) { ctx.beginPath(); ctx.strokeStyle = col; ctx.arc(cx, cy, rr, rad(start), rad(start + sweep * frac)); ctx.stroke(); }
+  } else {
+    const gap = w.gap == null ? 3 : w.gap, seg = (sweep - gap * (segs - 1)) / segs;
+    ctx.lineCap = 'butt';
+    for (let i = 0; i < segs; i++) {
+      const lit = (i + 0.5) / segs <= frac;
+      if (!lit && !track) continue;
+      const a0 = start + i * (seg + gap);
+      ctx.beginPath(); ctx.strokeStyle = lit ? col : trackCol; ctx.arc(cx, cy, rr, rad(a0), rad(a0 + seg)); ctx.stroke();
+    }
+  }
+}
+
+function drawBar(ctx, w, th, t) {
+  const horiz = (w.style || 'horizontal') === 'horizontal';
+  const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, x0 = cx - W / 2, y0 = cy - H / 2;
+  const min = w.min, max = w.max, v = clamp(valueOf(w, t), min, max), frac = (v - min) / (max - min);
+  const col = applyWarn(w, v, zoneColor(w, v, th, color(w.color, th, th.fg)), th, t);
+  const track = w.track == null || w.track, trackCol = color(w.trackColor, th, th.dim);
+  const cr = w.cornerRadius == null ? 4 : w.cornerRadius, segs = w.segments || 0;
+  if (!segs) {
+    if (track) { ctx.fillStyle = trackCol; roundRect(ctx, x0, y0, W, H, cr); ctx.fill(); }
+    if (frac > 0) {
+      ctx.fillStyle = col;
+      if (horiz) roundRect(ctx, x0, y0, W * frac, H, cr); else roundRect(ctx, x0, y0 + H * (1 - frac), W, H * frac, cr);
+      ctx.fill();
+    }
+  } else {
+    const gap = w.gap == null ? 3 : w.gap;
+    for (let i = 0; i < segs; i++) {
+      const lit = (i + 0.5) / segs <= frac;
+      if (!lit && !track) continue;
+      ctx.fillStyle = lit ? col : trackCol;
+      if (horiz) { const sw = (W - gap * (segs - 1)) / segs; roundRect(ctx, x0 + i * (sw + gap), y0, sw, H, cr); }
+      else { const sh = (H - gap * (segs - 1)) / segs; roundRect(ctx, x0, y0 + H - (i + 1) * sh - i * gap, W, sh, cr); }
+      ctx.fill();
+    }
+  }
+}
+
+const GEARS = { '0': 'N', '-1': 'R', '-2': 'P' };
+// The text a number widget shows: plain, zero-padded, or a gear letter.
+function numberText(w, v) {
+  if (w.format === 'gear') {
+    if (v == null) return '-';
+    const g = Math.round(v);
+    return GEARS[String(g)] || (g > 0 ? String(g) : '-');
+  }
+  if (v == null) return '---';
+  let txt = v.toFixed(w.decimals || 0);
+  if (!w.pad) return txt;
+  const neg = txt.startsWith('-');
+  if (neg) txt = txt.slice(1);
+  const dot = txt.indexOf('.');
+  const whole = dot < 0 ? txt : txt.slice(0, dot), rest = dot < 0 ? '' : txt.slice(dot);
+  return (neg ? '-' : '') + whole.padStart(w.pad, '0') + rest;
+}
+
+function drawNumber(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, size = w.size || 72, font = fontStack(w.font);
+  const v = valueOf(w, t), col = applyWarn(w, v, color(w.color, th, th.fg), th, t);
+  const txt = numberText(w, v), align = w.align || 'center';
+  ctx.font = size + 'px ' + font; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = col;
+  ctx.fillText(txt, cx, cy);
+  if (w.showUnit == null || w.showUnit) {
+    const u = unitFor(w), sym = u ? u.s : '';
+    if (!sym) return;
+    const us = w.unitSize || Math.max(12, Math.floor(size / 3));
+    const mw = ctx.measureText(txt).width;
+    ctx.font = us + 'px ' + fontStack('sans'); ctx.fillStyle = withAlpha(col, 0.75);
+    if ((w.unitPos || 'below') === 'below') { ctx.textAlign = 'center'; ctx.fillText(sym, cx, cy + size * 0.55 + us * 0.6); }
+    else {
+      const left = align === 'center' ? cx + mw / 2 : align === 'left' ? cx + mw : cx;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(sym, left + 6, cy + size * 0.3);
+    }
+  }
+}
+
+function drawLabel(ctx, w, th) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  ctx.font = (w.size || 24) + 'px ' + fontStack(w.font); ctx.textAlign = w.align || 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = color(w.color, th, th.fg);
+  if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); ctx.fillText(w.text || '', 0, 0); }
+  else ctx.fillText(w.text || '', cx, cy);
+}
+
+function drawLight(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 14 : w.r;
+  const v = valueOf(w, t), on = w.on || { above: 0.5 };
+  const lit = v != null && (on.above != null ? v > on.above : v < on.below);
+  const visible = lit && (!w.flash || Math.floor(t / 250) % 2 === 0);
+  const col = visible ? color(w.color, th, th.alert) : color(w.offColor, th, th.dim), shape = w.shape || 'dot';
+  ctx.fillStyle = col; ctx.strokeStyle = col;
+  if (shape === 'text') {
+    if (!visible) return;
+    ctx.font = (w.size || 18) + 'px ' + fontStack(w.font); ctx.textAlign = w.align || 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(w.text || '', cx, cy);
+    return;
+  }
+  if (shape === 'dot') { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); }
+  else if (shape === 'ring') { ctx.lineWidth = Math.max(3, r / 3); ctx.beginPath(); ctx.arc(cx, cy, r - ctx.lineWidth / 2, 0, Math.PI * 2); ctx.stroke(); }
+  else { roundRect(ctx, cx - r, cy - r, 2 * r, 2 * r, r / 4); ctx.fill(); }
+  if (w.text) {
+    ctx.font = (w.size || 18) + 'px ' + fontStack(w.font); ctx.fillStyle = withAlpha(th.fg, 0.8);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(w.text, cx, cy + r + 4);
+  }
+}
+
+function drawRim(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 233 : w.r, thick = w.thickness == null ? 12 : w.thickness;
+  const v = valueOf(w, t), col = color(w.color, th, th.alert);
+  ctx.lineWidth = thick; ctx.strokeStyle = col;
+  if ((w.mode || 'flash') === 'flash') {
+    if (v != null && v >= w.from && Math.floor(t / 150) % 2 === 0) { ctx.beginPath(); ctx.arc(cx, cy, r - thick / 2, 0, Math.PI * 2); ctx.stroke(); }
+  } else {
+    const frac = clamp((v - w.from) / (w.to - w.from), 0, 1);
+    if (frac > 0) { ctx.beginPath(); ctx.arc(cx, cy, r - thick / 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke(); }
+  }
+}
+
+const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim };
+
+function drawFace(canvas, cfg, faceIdx, t) {
+  loadFonts();
+  const ctx = canvas.getContext('2d'), S = 466;
+  const theme = resolveTheme(cfg.theme), face = (cfg.faces || [])[faceIdx];
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, S, S);
+  if (!face) return;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = color(face.bg, theme, theme.bg); ctx.fillRect(0, 0, S, S);
+  for (const w of face.widgets || []) {
+    const fn = DRAW[w.type];
+    if (!fn) continue;
+    ctx.save();
+    try { fn(ctx, w, theme, t); } catch (e) { /* half-typed widget */ }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function tick(now) {
+  if (state.previewCfg && $('#editor').style.display !== 'none' && $('#tab-configs').classList.contains('active')) {
+    drawFace($('#preview'), state.previewCfg, state.faceIndex, now);
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ------------------------------------------------------------------ mock
+// Lets the page run from a file for layout work: file:///…/index.html
+
+const mock = {
+  configs: {}, assignments: {}, sim: true, t0: Date.now(),
+  virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
+  templates: {
+    'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
+      { type: 'dial', channel: 'rpm', min: 0, max: 8000, major: 8, minor: 5, labelScale: 1000, labelFont: 'condensed', labelSize: 26, needle: 'tapered_cap', zones: [{ from: 6800, to: 8000, color: 'alert' }] },
+      { type: 'number', channel: 'rpm', y: 320, font: 'digital', size: 56 },
+      { type: 'label', text: 'RPM x1000', y: 150, size: 22, color: 'dim' },
+      { type: 'light', channel: 'check_engine_light', y: 400, r: 10, text: 'CEL' },
+      { type: 'rim', channel: 'rpm', from: 7200 }] },
+      { name: 'Boost', widgets: [
+      { type: 'ring', channel: 'manifold_pressure', unit: 'psi_gauge', min: -15, max: 30, thickness: 22, segments: 30, zones: [{ from: 20, to: 30, color: 'alert' }] },
+      { type: 'number', channel: 'manifold_pressure', unit: 'psi_gauge', font: 'display', size: 96, decimals: 1 },
+      { type: 'bar', channel: 'coolant_temp', min: 40, max: 130, y: 380, w: 200, h: 18, segments: 12 }] }] },
+  },
+  meta: {
+    units: [
+      { s: 'rpm', o: [{ n: '', s: 'rpm', m: 1, a: 0 }] },
+      { s: 'kPa', o: [{ n: 'kPa', s: 'kPa', m: 1, a: 0 }, { n: 'psi', s: 'psi', m: 0.1450377, a: 0 }] },
+      { s: 'kPa', o: [{ n: 'kPa', s: 'kPa', m: 1, a: 0 }, { n: 'psi', s: 'psi', m: 0.1450377, a: 0 }, { n: 'psi_gauge', s: 'psi', m: 0.1450377, a: -14.69 }] },
+      { s: '%', o: [{ n: '', s: '%', m: 1, a: 0 }] },
+      { s: 'λ', o: [{ n: 'lambda', s: 'λ', m: 1, a: 0 }, { n: 'afr', s: 'AFR', m: 14.7, a: 0 }] },
+      { s: 'km/h', o: [{ n: 'km/h', s: 'km/h', m: 1, a: 0 }, { n: 'mph', s: 'mph', m: 0.6213712, a: 0 }] },
+      { s: '°C', o: [{ n: 'C', s: '°C', m: 1, a: 0 }, { n: 'F', s: '°F', m: 1.8, a: 32 }] },
+      { s: '', o: [{ n: '', s: '', m: 1, a: 0 }] },
+      { s: 'V', o: [{ n: '', s: 'V', m: 1, a: 0 }] },
+    ],
+    channels: [
+      { n: 'rpm', l: 'RPM', u: 0, f: 864 }, { n: 'manifold_pressure', l: 'Manifold Pressure', u: 2, f: 864 },
+      { n: 'throttle_position', l: 'Throttle Position', u: 3, f: 864 }, { n: 'oil_pressure', l: 'Oil Pressure', u: 1, f: 865 },
+      { n: 'wideband_1', l: 'Wideband 1', u: 4, f: 872 }, { n: 'target_lambda', l: 'Target Lambda', u: 4, f: 1001 },
+      { n: 'vehicle_speed', l: 'Vehicle Speed', u: 5, f: 880 }, { n: 'coolant_temp', l: 'Coolant Temperature', u: 6, f: 992 },
+      { n: 'oil_temp', l: 'Oil Temperature', u: 6, f: 992 }, { n: 'check_engine_light', l: 'Check Engine Light', u: 7, f: 996 },
+      { n: 'oil_pressure_light', l: 'Oil Pressure Light', u: 7, f: 996 }, { n: 'battery_voltage', l: 'Battery Voltage', u: 8, f: 882 },
+    ],
+  },
+  gauges() {
+    const real = [
+      { node: '112233', virtual: false, online: true, mac: 'A0:76:4E:11:22:33', fw: '0.1.0', face: 0, faces: 2, config_crc: 'MOCK0001', vbus_mv: 4900,
+        assigned: this.assignments['A0:76:4E:11:22:33'] || null, push: { failed: false, result: 'ok', active: false }, last_seen_s: 0, duplicate: false, trying: false, demo: false },
+      { node: '445566', virtual: false, online: false, mac: 'A0:76:4E:44:55:66', last_seen_s: 42, assigned: null, push: { failed: false, result: 'ok', active: false }, duplicate: false },
+    ];
+    for (const g of real) { const v = this.virtual.find(x => x.mac === g.mac); if (v) { g.id = v.id; g.label = v.label; } }
+    const planned = this.virtual.filter(v => !real.some(g => g.mac === v.mac)).map(v => ({
+      node: 'V' + v.id, id: v.id, virtual: true, label: v.label, mac: v.mac, online: false, face: v.face,
+      assigned: this.assignments[v.mac] || null, push: { failed: false, result: 'n/a', active: false } }));
+    return real.concat(planned);
+  },
+  status() {
+    const t = Math.floor((Date.now() - this.t0) / 1000);
+    return { t: 'status', uptime_s: t, fw: '0.2.0 (mock)', board: 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim, gauges_online: 1,
+      ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
+      ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
+  },
+  live() {
+    if (!this.sim) return {};
+    const t = Date.now(), load = 0.5 - 0.5 * Math.cos(t / 8000 * 2 * Math.PI), rpm = 800 + 6200 * load;
+    return { rpm, manifold_pressure: 30 + 220 * load, throttle_position: 100 * load, coolant_temp: 88, oil_temp: 95, oil_pressure: 180 + rpm / 20,
+      wideband_1: 1 - 0.2 * load, target_lambda: 0.9, vehicle_speed: rpm / 60, check_engine_light: (t % 30000) < 5000 ? 1 : 0, oil_pressure_light: 0, battery_voltage: 13.8 };
+  },
+  async req(method, path, body, raw) {
+    const seg = path.split('/').filter(Boolean);
+    const parse = () => raw ? JSON.parse(body) : body;
+    if (path === '/api/channels/meta') return this.meta;
+    if (path === '/api/fonts') return DEFAULT_FONTS;
+    if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length }));
+    if (seg[1] === 'configs') {
+      if (method === 'GET') { if (!this.configs[seg[2]]) throw new Error('no such config'); return this.configs[seg[2]]; }
+      if (method === 'PUT') { this.configs[seg[2]] = parse(); return { ok: true }; }
+      if (method === 'DELETE') { delete this.configs[seg[2]]; return { ok: true }; }
+    }
+    if (path === '/api/validate') {
+      const c = parse();
+      if (!c.faces || !c.faces.length) return { ok: false, error: "'faces' must list at least one face" };
+      return { ok: true, name: c.name, faces: c.faces.map(f => f.name), widgets: c.faces.reduce((n, f) => n + (f.widgets || []).length, 0) };
+    }
+    if (path === '/api/assignments') return this.assignments;
+    if (seg[1] === 'assignments') { if (body.name) this.assignments[seg[2]] = body.name; else delete this.assignments[seg[2]]; return { ok: true }; }
+    if (path === '/api/templates') return Object.entries(this.templates).map(([name, t]) => ({ name, title: t.name }));
+    if (seg[1] === 'templates') return this.templates[seg[2]];
+    if (path === '/api/simulator') { this.sim = !!body.enabled; return { ok: true }; }
+    if (path === '/api/virtual' && method === 'POST') {
+      const id = Math.max(0, ...this.virtual.map(v => v.id)) + 1;
+      this.virtual.push({ id, label: body.label || 'Gauge ' + id, mac: body.mac || '02:00:00:00:00:0' + id, face: 0 });
+      return { ok: true, id };
+    }
+    if (seg[1] === 'virtual') {
+      const v = this.virtual.find(x => x.id === +seg[2]);
+      if (!v) throw new Error('no such planned gauge');
+      if (method === 'DELETE') { this.virtual = this.virtual.filter(x => x !== v); return { ok: true }; }
+      if (body.label != null) v.label = body.label;
+      if (body.face != null) v.face = body.face;
+      if (body.mac != null) { const old = v.mac; v.mac = body.mac || '02:00:00:00:00:0' + v.id; if (this.assignments[old]) { this.assignments[v.mac] = this.assignments[old]; delete this.assignments[old]; } }
+      return { ok: true };
+    }
+    if (path === '/api/wifi' || seg[1] === 'gauges') return { ok: true };
+    throw new Error('mock: ' + method + ' ' + path);
+  },
+  start() {
+    setChip('ws', 'mock data', 'on');
+    const push = () => { onMessage(this.status()); onMessage({ t: 'gauges', gauges: this.gauges() }); };
+    push();
+    setInterval(push, 1000);
+    setInterval(() => onMessage({ t: 'live', v: this.live() }), 333);
+  },
+};
+
+// ------------------------------------------------------------------ init
+
+// The channel list is the largest download and the hub refuses it while it
+// is short of memory, so it is retried, and whatever depends on it is rebuilt
+// when it arrives.
+async function loadMeta(attempts) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      state.meta = await api.get('/api/channels/meta');
+      state.metaByName = Object.fromEntries(state.meta.channels.map(c => [c.n, c]));
+      buildLiveTable();
+      if (state.previewCfg) renderWidgetTable();
+      break;
+    } catch (e) {
+      $('#live-note').textContent = 'Could not load the channel list: ' + e.message + (i + 1 < attempts ? ', retrying' : '');
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  metaSettled = true;
+  startFonts();
+}
+
+async function init() {
+  let saved = null;
+  try { saved = localStorage.getItem('tab'); } catch (e) { /* private mode */ }
+  // #live, #configs and so on open that tab directly.
+  const linked = location.hash.replace('#', '').replace('-demo', '');
+  showTab(['gauges', 'live', 'configs', 'settings'].includes(linked) ? linked : (saved || 'gauges'));
+  try { setFonts(await api.get('/api/fonts')); } catch (e) { setFonts(DEFAULT_FONTS); }
+  const metaReady = loadMeta(6);
+  await loadConfigs();
+  connect();
+  await metaReady;
+  if (MOCK && location.hash === '#configs-demo') openEditor('demo', mock.templates['classic-tach'], true);
+  if (MOCK && location.hash === '#gauges-demo') { mock.configs['classic-tach'] = mock.templates['classic-tach']; mock.assignments['02:00:00:00:00:01'] = 'classic-tach'; mock.assignments['A0:76:4E:11:22:33'] = 'classic-tach'; await loadConfigs(); }
+}
+init();
+</script>
+</body>
+</html>

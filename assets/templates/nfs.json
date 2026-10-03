@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "name": "NFS",
+  "theme": "nfs",
+  "faces": [
+    {
+      "name": "Street",
+      "widgets": [
+        { "type": "ring", "channel": "throttle_position", "min": 0, "max": 100,
+          "r": 233, "thickness": 22, "start": 160, "sweep": 150, "segments": 15, "gap": 1, "rounded": false,
+          "color": "accent", "trackColor": "#123A52" },
+        { "type": "label", "text": "THROTTLE", "x": 415, "y": 119, "rotate": 58, "font": "condensed", "size": 22, "color": "accent" },
+        { "type": "dial", "channel": "rpm", "min": 0, "max": 8000,
+          "r": 206, "start": 60, "sweep": 270, "needle": "none", "labels": false,
+          "major": 8, "minor": 2, "tickLen": 9, "tickShape": "triangle", "color": "warn",
+          "zones": [ { "from": 6500, "to": 8000, "color": "alert" } ], "zoneWidth": 10 },
+        { "type": "ring", "channel": "rpm", "min": 0, "max": 8000,
+          "r": 184, "thickness": 12, "start": 60, "sweep": 270, "rounded": false,
+          "color": "warn", "trackColor": "#3A3A12", "zones": [ { "from": 6500, "to": 8000, "color": "alert" } ] },
+        { "type": "number", "channel": "gear", "format": "gear", "font": "display", "size": 80, "x": 330, "y": 190, "showUnit": false },
+        { "type": "number", "channel": "vehicle_speed", "unit": "mph", "pad": 3, "font": "display", "size": 92, "x": 318, "y": 290, "showUnit": false },
+        { "type": "label", "text": "MPH", "x": 318, "y": 352, "font": "sans", "size": 30 }
+      ]
+    },
+    {
+      "name": "Track",
+      "widgets": [
+        { "type": "ring", "channel": "manifold_pressure", "unit": "psi_gauge", "min": -15, "max": 30,
+          "r": 233, "thickness": 22, "start": 160, "sweep": 150, "segments": 15, "gap": 1, "rounded": false,
+          "color": "accent", "trackColor": "#123A52" },
+        { "type": "label", "text": "BOOST", "x": 415, "y": 119, "rotate": 58, "font": "condensed", "size": 22, "color": "accent" },
+        { "type": "dial", "channel": "rpm", "min": 0, "max": 8000,
+          "r": 206, "start": 60, "sweep": 270, "needle": "none", "labels": false,
+          "major": 8, "minor": 2, "tickLen": 9, "tickShape": "triangle", "color": "warn",
+          "zones": [ { "from": 6500, "to": 8000, "color": "alert" } ], "zoneWidth": 10 },
+        { "type": "ring", "channel": "rpm", "min": 0, "max": 8000,
+          "r": 184, "thickness": 12, "start": 60, "sweep": 270, "rounded": false,
+          "color": "warn", "trackColor": "#3A3A12", "zones": [ { "from": 6500, "to": 8000, "color": "alert" } ] },
+        { "type": "number", "channel": "gear", "format": "gear", "font": "display", "size": 80, "x": 330, "y": 190, "showUnit": false },
+        { "type": "number", "channel": "oil_pressure", "unit": "psi", "pad": 3, "font": "display", "size": 92, "x": 318, "y": 290, "showUnit": false },
+        { "type": "label", "text": "OIL PSI", "x": 318, "y": 352, "font": "sans", "size": 30 }
+      ]
+    }
+  ]
+}

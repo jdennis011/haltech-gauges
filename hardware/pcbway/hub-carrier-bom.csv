@@ -1,0 +1,21 @@
+Item,Designator,Qty,Manufacturer,Manufacturer Part Number,Description,Package,Type,LCSC,Notes
+1,U2,1,NXP,TJA1051T/3/1J,"CAN transceiver, 5 V supply, 3.3 V logic, ECU bus",SOIC-8,SMT,C38695,
+2,U3,1,Texas Instruments,SN65HVD230DR,"CAN transceiver, 3.3 V, gauge bus",SOIC-8,SMT,C12084,
+3,"D4, D5",2,Nexperia,"PESD2CAN,215","CAN bus ESD protection diode, one per connector",SOT-23,SMT,C75176,
+4,D1,1,Vishay,SMBJ26CA-E3/52,"TVS diode, bidirectional, 26 V standoff, 12 V input",SMB (DO-214AA),SMT,C515606,
+5,D2,1,MDD,SS34,"Schottky diode 3 A 40 V, reverse-polarity block",SMA (DO-214AC),SMT,C8678,Distributor alternative in the same SMA package: Diodes Inc B340A-13-F
+6,D3,1,MDD,SS14,"Schottky diode 1 A 40 V, 5 V rail to DevKit",SMA (DO-214AC),SMT,C2480,Any SS14 in SMA; Vishay SS14-E3/61T from a distributor
+7,F2,1,Littelfuse,1812L200/16DR,"PTC resettable fuse, 2 A hold, 16 V, chain output",1812,SMT,C439873,
+8,"C1, C3",2,Nichicon,UUD1H101MNL1GS,"100 uF 50 V aluminium electrolytic, SMD",8 x 10 mm,SMT,C116241,Polarised
+9,C2,1,Samsung,CL21B105KBFNNNE,"1 uF 50 V X7R, buck input",0805,SMT,C28323,
+10,"C4, C5",2,Samsung,CL21A106KAYNNNE,"10 uF 25 V X5R, 5 V rail",0805,SMT,C15850,
+11,"C6, C7, C8, C10",4,Samsung,CL21B104KBCNNNC,"100 nF 50 V X7R, decoupling",0805,SMT,C49678,
+12,C9,1,Samsung,CL21B472KBANNNC,"4.7 nF 50 V X7R, split termination",0805,SMT,C1744,
+13,"R3, R4, R5, R6, R7",5,Yageo,RC1206FR-07120RL,"120 R 1%, termination",1206,SMT,C17909,
+14,"R1, R2, R9",3,Yageo,RC0805FR-0710KL,10 k 1%,0805,SMT,C17414,
+15,R8,1,Yageo,RC0805FR-07100KL,"100 k 1%, 12 V sense divider",0805,SMT,C149504,
+16,"J10, J11",2,Molex,43045-0412,"Micro-Fit 3.0 header, 2x2, vertical: ECU in, chain out","THT, 4 pins + 2 pegs",THT,,
+17,JP1,1,Wurth Elektronik,61300211121,"1x2 male header 2.54 mm, ECU termination jumper",THT,THT,,"Shunt 60900213421 supplied loose, fitted only if the ECU bus needs it"
+18,U1,1,Pololu,D36V28F5 (Pololu item 3782),5 V 3.2 A step-down regulator module,"THT module, 1x4 pins",THT,,"Consign, or solder it yourself"
+19,U4,1,Espressif,ESP32-C6-DevKitC-1-N8,"ESP32-C6 development board, 8 MB flash",2 x 1x16 2.54 mm,THT,,"Consign, or solder it yourself. Optional sockets: 2 x Sullins PPTC161LFBN-RC"
+20,TP1-TP5,0,,,"Test pads: GND, 5 V, 3V3, 12 V sense, RST",bare pads,none,,No part

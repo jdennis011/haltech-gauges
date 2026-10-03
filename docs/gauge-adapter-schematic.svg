@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">
+  <title>Gauge adapter schematic</title>
+  <defs>
+    <g id="gnd" stroke="#222" stroke-width="1.6" fill="none">
+      <line x1="0" y1="0" x2="0" y2="8"/>
+      <line x1="-9" y1="8" x2="9" y2="8"/>
+      <line x1="-6" y1="12" x2="6" y2="12"/>
+      <line x1="-3" y1="16" x2="3" y2="16"/>
+    </g>
+  </defs>
+  <rect width="960" height="600" fill="#ffffff"/>
+
+  <!-- ===== P1: gauge rear header ===== -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <rect x="70" y="120" width="130" height="270" rx="3"/>
+    <!-- pin stubs -->
+    <line x1="200" y1="140" x2="215" y2="140"/>
+    <line x1="200" y1="172" x2="215" y2="172"/>
+    <line x1="200" y1="204" x2="215" y2="204"/>
+    <line x1="200" y1="236" x2="215" y2="236"/>
+    <line x1="200" y1="268" x2="215" y2="268"/>
+    <line x1="200" y1="300" x2="215" y2="300"/>
+    <line x1="200" y1="332" x2="215" y2="332"/>
+    <line x1="200" y1="364" x2="215" y2="364"/>
+  </g>
+  <g fill="#222">
+    <text x="75" y="112" font-weight="bold">P1  gauge rear header</text>
+    <text x="75" y="100" font-size="10" fill="#555">1x8 male 2.54 mm, position 1 = VBUS end</text>
+    <text x="80" y="144">1  VBUS (5 V in)</text>
+    <text x="80" y="176">2  GND</text>
+    <text x="80" y="208">3  3V3 out</text>
+    <text x="80" y="240">4  UART0, n/c</text>
+    <text x="80" y="272">5  UART0, n/c</text>
+    <text x="80" y="304">6  GPIO  (CAN TX)</text>
+    <text x="80" y="336">7  GPIO  (CAN RX)</text>
+    <text x="80" y="368">8  GPIO  (spare)</text>
+  </g>
+
+  <!-- ===== 5 V in: J 5V bus -> D1 -> JP1 -> P1-1 ===== -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <polyline points="685,140 685,80 370,80"/>
+    <!-- D1 Schottky, anode right (chain), cathode left (gauge) -->
+    <polygon points="370,70 370,90 342,80" fill="#fff"/>
+    <line x1="342" y1="70" x2="342" y2="90"/>
+    <line x1="342" y1="80" x2="300" y2="80"/>
+    <!-- JP1 jumper -->
+    <circle cx="300" cy="80" r="4" fill="#fff"/>
+    <circle cx="272" cy="80" r="4" fill="#fff"/>
+    <rect x="268" y="70" width="36" height="20" rx="3" stroke-dasharray="3 2"/>
+    <polyline points="268,80 220,80 220,140 215,140"/>
+  </g>
+  <g fill="#222">
+    <text x="330" y="62" font-weight="bold">D1</text>
+    <text x="352" y="62">SS14 (low-drop Schottky)</text>
+    <text x="262" y="62" font-weight="bold">JP1</text>
+    <text x="200" y="48" font-size="10" fill="#555">JP1: chain-power jumper, pull it to run the gauge from USB while on the chain</text>
+    <text x="520" y="74" fill="#555">+5V_CHAIN</text>
+    <text x="226" y="128" font-size="10" fill="#555">VBUS</text>
+  </g>
+
+  <!-- ===== 3V3 from the gauge to U1, with R1 and C1 ===== -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <polyline points="215,204 240,204 240,120 495,120 495,185"/>
+    <!-- R1 10k pull-up: from 3V3 line (y=120) down to TXD line (y=225) at x=345 -->
+    <line x1="345" y1="120" x2="345" y2="160"/>
+    <rect x="340" y="160" width="10" height="30" fill="#fff"/>
+    <line x1="345" y1="190" x2="345" y2="225"/>
+    <!-- C1 100 nF at x=400 -->
+    <line x1="400" y1="120" x2="400" y2="140"/>
+    <line x1="391" y1="140" x2="409" y2="140"/>
+    <line x1="391" y1="147" x2="409" y2="147"/>
+    <line x1="400" y1="147" x2="400" y2="158"/>
+  </g>
+  <use href="#gnd" x="400" y="158"/>
+  <g fill="#222">
+    <circle cx="345" cy="120" r="3"/>
+    <circle cx="400" cy="120" r="3"/>
+    <circle cx="345" cy="225" r="3"/>
+    <text x="290" y="134" fill="#555">+3V3</text>
+    <text x="356" y="172" font-weight="bold">R1</text>
+    <text x="356" y="184">10k</text>
+    <text x="411" y="136" font-weight="bold">C1</text>
+    <text x="411" y="150">100n, at pin 3</text>
+  </g>
+
+  <!-- ===== U1 SN65HVD230 ===== -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <rect x="430" y="200" width="130" height="170" rx="3"/>
+    <line x1="415" y1="225" x2="430" y2="225"/>
+    <line x1="415" y1="265" x2="430" y2="265"/>
+    <line x1="415" y1="305" x2="430" y2="305"/>
+    <line x1="415" y1="345" x2="430" y2="345"/>
+    <line x1="560" y1="245" x2="575" y2="245"/>
+    <line x1="560" y1="285" x2="575" y2="285"/>
+    <line x1="495" y1="185" x2="495" y2="200"/>
+    <line x1="495" y1="370" x2="495" y2="385"/>
+  </g>
+  <use href="#gnd" x="495" y="385"/>
+  <g fill="#222">
+    <text x="440" y="194" font-weight="bold">U1  SN65HVD230DR</text>
+    <text x="436" y="229">1 D</text>
+    <text x="436" y="269">4 R</text>
+    <text x="436" y="309">8 RS</text>
+    <text x="436" y="349">5 Vref</text>
+    <text x="508" y="249">7 CANH</text>
+    <text x="508" y="289">6 CANL</text>
+    <text x="500" y="214">3 VCC</text>
+    <text x="500" y="364">2 GND</text>
+  </g>
+
+  <!-- TXD / RXD / spare from P1 -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <polyline points="215,300 260,300 260,225 415,225"/>
+    <polyline points="215,332 280,332 280,265 415,265"/>
+    <line x1="215" y1="364" x2="240" y2="364"/>
+    <circle cx="246" cy="364" r="5" fill="#fff"/>
+    <!-- RS to ground (high-speed mode); Vref not connected -->
+    <polyline points="415,305 385,305 385,325"/>
+    <line x1="410" y1="340" x2="420" y2="350"/>
+    <line x1="410" y1="350" x2="420" y2="340"/>
+  </g>
+  <use href="#gnd" x="385" y="325"/>
+  <g fill="#222">
+    <text x="300" y="220" fill="#555">CAN_TX</text>
+    <text x="300" y="261" fill="#555">CAN_RX</text>
+    <text x="256" y="356" font-size="10" fill="#555">TP1 spare GPIO</text>
+    <text x="296" y="362" font-size="10" fill="#555"></text>
+    <text x="300" y="322" font-size="10" fill="#555">RS low =</text>
+    <text x="300" y="334" font-size="10" fill="#555">high speed</text>
+    <text x="380" y="372" font-size="10" fill="#555">n/c</text>
+  </g>
+
+  <!-- P1-2 ground -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <line x1="215" y1="172" x2="235" y2="172"/>
+    <line x1="235" y1="172" x2="235" y2="182"/>
+  </g>
+  <use href="#gnd" x="235" y="182"/>
+
+  <!-- ===== CAN bus, D2, connectors ===== -->
+  <g stroke="#222" stroke-width="1.6" fill="none">
+    <!-- bus lines -->
+    <line x1="640" y1="190" x2="640" y2="360"/>
+    <line x1="655" y1="215" x2="655" y2="385"/>
+    <line x1="670" y1="165" x2="670" y2="425"/>
+    <line x1="685" y1="140" x2="685" y2="310"/>
+    <!-- U1 to bus -->
+    <line x1="575" y1="245" x2="640" y2="245"/>
+    <line x1="575" y1="285" x2="655" y2="285"/>
+    <!-- D2 PESD2CAN -->
+    <rect x="585" y="320" width="40" height="60" rx="3"/>
+    <line x1="625" y1="335" x2="640" y2="335"/>
+    <line x1="625" y1="360" x2="655" y2="360"/>
+    <line x1="605" y1="380" x2="605" y2="395"/>
+    <!-- J1 -->
+    <rect x="720" y="120" width="120" height="115" rx="3"/>
+    <line x1="705" y1="140" x2="720" y2="140"/>
+    <line x1="705" y1="165" x2="720" y2="165"/>
+    <line x1="705" y1="190" x2="720" y2="190"/>
+    <line x1="705" y1="215" x2="720" y2="215"/>
+    <line x1="685" y1="140" x2="705" y2="140"/>
+    <line x1="670" y1="165" x2="705" y2="165"/>
+    <line x1="640" y1="190" x2="705" y2="190"/>
+    <line x1="655" y1="215" x2="705" y2="215"/>
+    <!-- J2 -->
+    <rect x="720" y="290" width="120" height="115" rx="3"/>
+    <line x1="705" y1="310" x2="720" y2="310"/>
+    <line x1="705" y1="335" x2="720" y2="335"/>
+    <line x1="705" y1="360" x2="720" y2="360"/>
+    <line x1="705" y1="385" x2="720" y2="385"/>
+    <line x1="685" y1="310" x2="705" y2="310"/>
+    <line x1="670" y1="335" x2="705" y2="335"/>
+    <line x1="640" y1="360" x2="705" y2="360"/>
+    <line x1="655" y1="385" x2="705" y2="385"/>
+  </g>
+  <use href="#gnd" x="605" y="395"/>
+  <use href="#gnd" x="670" y="425"/>
+  <g fill="#222">
+    <!-- junctions -->
+    <circle cx="640" cy="245" r="3"/>
+    <circle cx="655" cy="285" r="3"/>
+    <circle cx="640" cy="335" r="3"/>
+    <circle cx="655" cy="360" r="3"/>
+    <circle cx="685" cy="140" r="3"/>
+    <circle cx="670" cy="165" r="3"/>
+    <circle cx="640" cy="190" r="3"/>
+    <circle cx="655" cy="215" r="3"/>
+    <circle cx="670" cy="335" r="3"/>
+    <circle cx="640" cy="360" r="3"/>
+    <circle cx="655" cy="385" r="3"/>
+    <text x="588" y="312" font-weight="bold">D2</text>
+    <text x="608" y="312" font-size="10">PESD2CAN</text>
+    <text x="590" y="340" font-size="10">1</text>
+    <text x="590" y="364" font-size="10">2</text>
+    <text x="596" y="378" font-size="10">3</text>
+    <text x="725" y="112" font-weight="bold">J1  CHAIN IN</text>
+    <text x="725" y="144">1  +5V</text>
+    <text x="725" y="169">2  GND</text>
+    <text x="725" y="194">3  CAN H</text>
+    <text x="725" y="219">4  CAN L</text>
+    <text x="725" y="282" font-weight="bold">J2  CHAIN OUT</text>
+    <text x="725" y="314">1  +5V</text>
+    <text x="725" y="339">2  GND</text>
+    <text x="725" y="364">3  CAN H</text>
+    <text x="725" y="389">4  CAN L</text>
+    <text x="848" y="144" font-size="10" fill="#555">Micro-Fit 3.0</text>
+    <text x="848" y="156" font-size="10" fill="#555">2x2 vertical,</text>
+    <text x="848" y="168" font-size="10" fill="#555">43045-0412</text>
+    <text x="848" y="314" font-size="10" fill="#555">last gauge: fit</text>
+    <text x="848" y="326" font-size="10" fill="#555">120R terminator</text>
+    <text x="848" y="338" font-size="10" fill="#555">plug here</text>
+    <text x="582" y="240" fill="#555">CANH</text>
+    <text x="582" y="300" fill="#555">CANL</text>
+  </g>
+
+  <!-- ===== notes ===== -->
+  <g fill="#222">
+    <text x="70" y="430" font-weight="bold" font-size="14">Gauge adapter, one per gauge</text>
+    <text x="70" y="452">J1 and J2 are wired pin for pin in parallel; the chain passes straight through, the gauge hangs off it.</text>
+    <text x="70" y="470">P1 positions 6, 7, 8 carry GPIO16/17/18 in an order confirmed at bring-up step 1; the firmware maps CAN TX/RX to whichever two land on 6 and 7.</text>
+    <text x="70" y="488">U1 is powered from the gauge's 3V3, so an unpowered gauge leaves the bus alone. RS tied to ground selects high-speed mode, needed for 1 Mbit/s.</text>
+    <text x="70" y="506">R1 keeps the bus recessive while the gauge's ESP32 is in reset. C1 sits within 2 mm of pin 3. D2 goes next to the connectors.</text>
+    <text x="70" y="524">No termination on the adapter: the hub terminates one end, a plug in the last J2 the other.</text>
+    <text x="70" y="542">Mounting: three M2 holes at the gauge standoffs, (-13.75, +14.7), (+13.75, +14.7), (0, -20.5) mm from the display centre, +y toward P1.</text>
+    <text x="70" y="575" font-size="10" fill="#555">haltech-gauges / docs / gauge-adapter-schematic.svg. Pinouts from TI SLOS346 (SN65HVD230) and the Nexperia PESD2CAN datasheet. LCSC: U1 C12084, D2 C75176, D1 C2480, C1 C49678, R1 C17414.</text>
+  </g>
+</svg>

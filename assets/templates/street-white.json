@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "name": "Street white",
+  "theme": {
+    "bg": "#F5F5F0",
+    "fg": "#111111",
+    "accent": "#FF6A00",
+    "dim": "#C9C9C4",
+    "warn": "#C77700",
+    "alert": "#D40000"
+  },
+  "faces": [
+    {
+      "name": "Tach",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "rpm",
+          "min": 0,
+          "max": 8000,
+          "major": 8,
+          "minor": 5,
+          "labelFont": "condensed",
+          "labelSize": 32,
+          "needle": "tapered_cap",
+          "color": "fg",
+          "zones": [
+            {
+              "from": 6500,
+              "to": 8000,
+              "color": "alert"
+            }
+          ],
+          "labelScale": 1000
+        },
+        {
+          "type": "label",
+          "text": "RPM x1000",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26,
+          "color": "fg"
+        }
+      ]
+    },
+    {
+      "name": "Oil pressure",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "oil_pressure",
+          "min": 0,
+          "max": 100,
+          "major": 10,
+          "minor": 5,
+          "unit": "psi",
+          "labelFont": "condensed",
+          "labelSize": 32,
+          "needle": "tapered_cap",
+          "color": "fg",
+          "zones": [
+            {
+              "from": 0,
+              "to": 15,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "OIL PRESS",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26,
+          "color": "fg"
+        },
+        {
+          "type": "label",
+          "text": "PSI",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "#55555A"
+        }
+      ]
+    },
+    {
+      "name": "Water temp",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "coolant_temp",
+          "min": 40,
+          "max": 130,
+          "major": 9,
+          "minor": 5,
+          "unit": "C",
+          "labelFont": "condensed",
+          "labelSize": 32,
+          "needle": "tapered_cap",
+          "color": "fg",
+          "zones": [
+            {
+              "from": 110,
+              "to": 130,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "WATER TEMP",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26,
+          "color": "fg"
+        },
+        {
+          "type": "label",
+          "text": "°C",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "#55555A"
+        }
+      ]
+    },
+    {
+      "name": "Volts",
+      "widgets": [
+        {
+          "type": "dial",
+          "channel": "battery_voltage",
+          "min": 8,
+          "max": 18,
+          "major": 10,
+          "minor": 5,
+          "labelFont": "condensed",
+          "labelSize": 32,
+          "needle": "tapered_cap",
+          "color": "fg",
+          "zones": [
+            {
+              "from": 8,
+              "to": 11,
+              "color": "alert"
+            },
+            {
+              "from": 15.5,
+              "to": 18,
+              "color": "alert"
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "text": "VOLTS",
+          "x": 233,
+          "y": 150,
+          "font": "condensed",
+          "size": 26,
+          "color": "fg"
+        },
+        {
+          "type": "label",
+          "text": "V",
+          "x": 233,
+          "y": 320,
+          "font": "condensed",
+          "size": 22,
+          "color": "#55555A"
+        }
+      ]
+    }
+  ]
+}

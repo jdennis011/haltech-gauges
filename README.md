@@ -32,6 +32,8 @@ The hub's web page, templates and fonts are embedded into the firmware by
 
 ## Online copy
 
+**https://haltech-gauges.jdennis011.workers.dev**
+
 The same page runs on Cloudflare without a hub, in demo mode: every template, font and
 channel is there, previews animate, and what you make stays in your browser. Export a
 config there and import it on your hub's page.

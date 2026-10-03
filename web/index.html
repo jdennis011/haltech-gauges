@@ -763,7 +763,7 @@ const PANEL_FIELDS = {
            ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
            ['sweep', 'number', 'Sweep', null, 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.'],
            ['color', 'color', 'Colour', 'fg'], ['needleColor', 'color', 'Needle', 'accent'],
-           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none', 'marker']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
+           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none', 'marker', 'marker_out']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
            ['labelFont', 'font', 'Labels'], ['labelSize', 'size', 'Size']],
   ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
            ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
@@ -1170,13 +1170,20 @@ function drawDial(ctx, w, th, t) {
   }
   const a = rad(start + sweep * (v - min) / (max - min));
   const style = w.needle || 'tapered';
-  const len = w.needleLen == null ? (style === 'marker' ? 28 : r - 24) : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
+  const len = w.needleLen == null ? (style === 'marker' || style === 'marker_out' ? 28 : r - 24) : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
   const nc = color(w.needleColor, th, th.accent);
   if (style === 'none') return;
   if (style === 'marker') {
     // An arrow sitting on the rim, pointing inward at the value.
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.fillStyle = nc;
     ctx.beginPath(); ctx.moveTo(r + 1, -nw); ctx.lineTo(r + 1, nw); ctx.lineTo(r - len, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (style === 'marker_out') {
+    // An arrow inside the scale, its tip on the radius, pointing outward at the value.
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.fillStyle = nc;
+    ctx.beginPath(); ctx.moveTo(r - len, -nw); ctx.lineTo(r - len, nw); ctx.lineTo(r, 0); ctx.closePath(); ctx.fill();
     ctx.restore();
     return;
   }

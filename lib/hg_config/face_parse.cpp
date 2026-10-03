@@ -43,6 +43,7 @@ const Name kNeedles[] = {
     {"tapered_cap", uint8_t(NeedleStyle::TaperedCap)},
     {"none", uint8_t(NeedleStyle::None)},
     {"marker", uint8_t(NeedleStyle::Marker)},
+    {"marker_out", uint8_t(NeedleStyle::MarkerOut)},
 };
 const Name kBarStyles[] = {
     {"horizontal", uint8_t(BarStyle::Horizontal)},
@@ -366,7 +367,7 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.needleWidth = uint8_t(readInt(obj, "needleWidth", 6, 1, 20, ctx));
             // A marker is short by default: an arrow from the rim pointing at the value.
             w.needleLen = int16_t(readInt(obj, "needleLen",
-                                          w.needle == NeedleStyle::Marker ? 28 : (w.r > 34 ? w.r - 24 : 10), 10, w.r, ctx));
+                                          (w.needle == NeedleStyle::Marker || w.needle == NeedleStyle::MarkerOut) ? 28 : (w.r > 34 ? w.r - 24 : 10), 10, w.r, ctx));
             w.zoneWidth = uint8_t(readInt(obj, "zoneWidth", 6, 1, 40, ctx));
             readZones(obj, w, ctx);
             break;

@@ -30,7 +30,8 @@ typedef uint32_t Color;  // 0xRRGGBB
 
 enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
-enum class NeedleStyle : uint8_t { Line, Tapered, TaperedCap, None, Marker };  // Marker: arrow on the rim pointing inward
+// Marker: arrow at radius r pointing inward; MarkerOut: arrow inside r pointing outward.
+enum class NeedleStyle : uint8_t { Line, Tapered, TaperedCap, None, Marker, MarkerOut };
 enum class BarStyle : uint8_t { Horizontal, Vertical };
 enum class Align : uint8_t { Left, Center, Right };
 enum class UnitPos : uint8_t { Right, Below };

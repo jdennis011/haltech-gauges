@@ -164,7 +164,7 @@ input[type=range]{width:110px}
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
-          <div class="muted" style="font-size:13px;margin:4px 0 6px">Rows are the draw order: later rows draw on top. Drag a row by its title to reorder.</div>
+          <div class="muted" style="font-size:13px;margin:4px 0 6px">Rows are the draw order: later rows draw on top. Drag a row by its title, or use its arrows, to reorder.</div>
           <div id="widget-list"></div>
         </div>
         <div class="sub">
@@ -216,7 +216,7 @@ function el(tag, attrs, ...children) {
   }
   return e;
 }
-const btn = (label, onclick, disabled, cls) => el('button', { class: 'btn' + (cls ? ' ' + cls : ''), onclick, disabled: disabled ? '' : null }, label);
+const btn = (label, onclick, disabled, cls, title) => el('button', { class: 'btn' + (cls ? ' ' + cls : ''), onclick, disabled: disabled ? '' : null, title: title || null }, label);
 const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2); };
 
 const state = {
@@ -889,6 +889,8 @@ function renderWidgetTable() {
       el('span', { class: 'grip' }, '≡'),
       el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')),
       el('span', { class: 'spacer' }),
+      btn('▲', () => reorderWidget(i, i - 1), i === 0, 'small', 'Move up: drawn earlier, further back'),
+      btn('▼', () => reorderWidget(i, i + 1), i === widgets.length - 1, 'small', 'Move down: drawn later, further forward'),
       btn('remove', () => removeWidget(i), false, 'small'));
     root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : ''),
       ondragover: ev => { if (dragFrom < 0) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; ev.currentTarget.classList.add('dropTarget'); },

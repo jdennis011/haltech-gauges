@@ -5,6 +5,9 @@
 extern "C" {
 extern const uint8_t hg_font_sans_start[], hg_font_sans_end[];
 extern const uint8_t hg_font_condensed_start[], hg_font_condensed_end[];
+extern const uint8_t hg_font_carter_start[], hg_font_carter_end[];
+extern const uint8_t hg_font_racing_start[], hg_font_racing_end[];
+extern const uint8_t hg_font_trade_start[], hg_font_trade_end[];
 extern const uint8_t hg_font_digital_start[], hg_font_digital_end[];
 extern const uint8_t hg_font_mono_start[], hg_font_mono_end[];
 extern const uint8_t hg_font_display_start[], hg_font_display_end[];
@@ -25,6 +28,9 @@ Source sourceFor(Font family) {
         case Font::Digital: return {hg_font_digital_start, hg_font_digital_end};
         case Font::Mono: return {hg_font_mono_start, hg_font_mono_end};
         case Font::Display: return {hg_font_display_start, hg_font_display_end};
+        case Font::Carter: return {hg_font_carter_start, hg_font_carter_end};
+        case Font::Racing: return {hg_font_racing_start, hg_font_racing_end};
+        case Font::Trade: return {hg_font_trade_start, hg_font_trade_end};
         case Font::Sans: break;
     }
     return {hg_font_sans_start, hg_font_sans_end};

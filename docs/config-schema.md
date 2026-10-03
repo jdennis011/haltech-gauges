@@ -51,7 +51,8 @@ newer configs still load on older firmware as long as `schema` matches.
 | Volume | `L`, `gal` |
 
 - **Fonts**: `sans` (Fira Sans), `condensed` (Barlow Condensed), `digital` (DSEG7, 7-segment),
-  `mono` (Share Tech Mono), `display` (Russo One). Characters a family lacks are drawn in `sans`.
+  `mono` (Share Tech Mono), `display` (Russo One), `carter` (Carter One), `racing` (Racing Sans One),
+  `trade` (Trade Winds). Characters a family lacks are drawn in `sans`.
   The hub's editor lists them, drawn with the real files, and offers them per widget.
 - **Theme**: a preset name (`white`, `red`, `amber`, `green`, `cyan`, `nfs`) or an object giving any of the six
   roles as hex colours.

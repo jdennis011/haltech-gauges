@@ -34,7 +34,8 @@ const Name kWidgetTypes[] = {
 const Name kFonts[] = {
     {"sans", uint8_t(Font::Sans)},       {"condensed", uint8_t(Font::Condensed)},
     {"digital", uint8_t(Font::Digital)}, {"mono", uint8_t(Font::Mono)},
-    {"display", uint8_t(Font::Display)},
+    {"display", uint8_t(Font::Display)}, {"carter", uint8_t(Font::Carter)},
+    {"racing", uint8_t(Font::Racing)},   {"trade", uint8_t(Font::Trade)},
 };
 const Name kNeedles[] = {
     {"line", uint8_t(NeedleStyle::Line)},

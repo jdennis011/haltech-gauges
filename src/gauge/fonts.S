@@ -17,3 +17,6 @@ hg_font_\name\()_end:
     font digital, "assets/fonts/digital.ttf"
     font mono, "assets/fonts/mono.ttf"
     font display, "assets/fonts/display.ttf"
+    font carter, "assets/fonts/carter.ttf"
+    font racing, "assets/fonts/racing.ttf"
+    font trade, "assets/fonts/trade.ttf"

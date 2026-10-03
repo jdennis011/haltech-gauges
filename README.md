@@ -61,6 +61,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/bom.md`, `docs/bom-pcbway.md` | Shopping lists by store, and a PCBWay-ready BOM |
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
+| `docs/startup-animation.md` | Planned key-on intro that runs across the gauges in order |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA) and the PCBWay BOMs |
 
@@ -68,5 +69,5 @@ Haltech's CAN protocol document is not included; `docs/ref/README.md` says where
 
 ## Fonts
 
-The five bundled fonts are under the SIL Open Font License; each has its licence file
+The eight bundled fonts are under the SIL Open Font License; each has its licence file
 next to it in `assets/fonts`.

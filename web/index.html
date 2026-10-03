@@ -885,8 +885,11 @@ const DEFAULT_FONTS = [
   { key: 'digital', family: 'DSEG7 Classic', style: 'Seven-segment digits. Letters are approximate; best for numbers.' },
   { key: 'mono', family: 'Share Tech Mono', style: 'Monospaced, so digits do not jump about as values change.' },
   { key: 'display', family: 'Russo One', style: 'Wide, heavy racing style for a headline number.' },
+  { key: 'carter', family: 'Carter One', style: 'Chunky rounded display face, friendly and bold.' },
+  { key: 'racing', family: 'Racing Sans One', style: 'Slanted motorsport lettering for titles and big numbers.' },
+  { key: 'trade', family: 'Trade Winds', style: 'Rough-edged, weathered display face for a vintage look.' },
 ];
-const FONT_FALLBACK = { sans: 'Arial,sans-serif', condensed: '"Arial Narrow",sans-serif', digital: 'monospace', mono: 'monospace', display: 'Impact,sans-serif' };
+const FONT_FALLBACK = { sans: 'Arial,sans-serif', condensed: '"Arial Narrow",sans-serif', digital: 'monospace', mono: 'monospace', display: 'Impact,sans-serif', carter: 'Impact,sans-serif', racing: 'Impact,sans-serif', trade: 'Impact,sans-serif' };
 const FONTS = {};
 function setFonts(list) {
   state.fonts = list;

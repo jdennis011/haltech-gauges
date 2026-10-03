@@ -43,8 +43,8 @@ changes every widget that uses that role.
 ## What the styles cannot do yet
 
 - No bitmaps: logos, cartoons and background images are not part of the config format.
-- No italic text: the gauge draws from the five bundled font files, none of which has an
-  italic. An italic Barlow Condensed could be added to `assets/fonts` later.
+- No true italic text: the gauge draws from the eight bundled font files. Racing Sans One
+  is slanted by design, which covers most of that need.
 - No icons: the oil-can or temperature symbols on some gauges are drawn as text labels.
 - Gradients along an arc are drawn as a solid colour; zones give a colour change at a
   value instead.

@@ -3,5 +3,8 @@
   {"key": "condensed", "family": "Barlow Condensed", "style": "Narrow, DIN-like. Fits more on a dial's tick labels."},
   {"key": "digital", "family": "DSEG7 Classic", "style": "Seven-segment digits. Letters are approximate; best for numbers."},
   {"key": "mono", "family": "Share Tech Mono", "style": "Monospaced, so digits do not jump about as values change."},
-  {"key": "display", "family": "Russo One", "style": "Wide, heavy racing style for a headline number."}
+  {"key": "display", "family": "Russo One", "style": "Wide, heavy racing style for a headline number."},
+  {"key": "carter", "family": "Carter One", "style": "Chunky rounded display face, friendly and bold."},
+  {"key": "racing", "family": "Racing Sans One", "style": "Slanted motorsport lettering for titles and big numbers."},
+  {"key": "trade", "family": "Trade Winds", "style": "Rough-edged, weathered display face for a vintage look."}
 ]

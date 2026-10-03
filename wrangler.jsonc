@@ -1,0 +1,13 @@
+{
+  // Cloudflare Worker that serves the online copy of the page (see docs/designer-plan.md).
+  // Build first (npm run build), which fills ./dist; then wrangler deploy.
+  "name": "haltech-gauges",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "observability": { "enabled": true }
+}

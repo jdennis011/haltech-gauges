@@ -47,6 +47,8 @@ canvas{width:100%;max-width:466px;aspect-ratio:1;display:block;margin:0 auto;bor
 .gcard canvas{width:170px;flex:none;margin:0}
 .gcard .nocfg{width:170px;height:170px;flex:none;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
 .gcard .title{font-size:16px;font-weight:600}
+.gcard .face > .row{min-width:0;flex:1}
+.gcard select{max-width:100%}
 .msg{min-height:22px;font-size:14px;margin:6px 0}
 label.inline{display:inline-flex;gap:6px;align-items:center}
 input[type=range]{width:110px}
@@ -169,7 +171,8 @@ window.addEventListener('error', e => {
   document.body.prepend(b);
 });
 
-const MOCK = location.protocol === 'file:' || /[?&]mock\b/.test(location.search);
+const ONLINE = document.documentElement.dataset.online === '1';  // the copy on Cloudflare: no hub
+const MOCK = ONLINE || location.protocol === 'file:' || /[?&]mock\b/.test(location.search);
 const $ = (s, root) => (root || document).querySelector(s);
 const $$ = (s, root) => Array.from((root || document).querySelectorAll(s));
 
@@ -537,7 +540,7 @@ function loadFonts() { fontsWanted = true; startFonts(); }
 async function startFonts() {
   if (fontsStarted || !fontsWanted || !metaSettled || !state.fonts.length) return;
   fontsStarted = true;
-  if (MOCK) return;
+  if (MOCK && !ONLINE) return;  // from a file there is nothing to fetch; online the worker serves them
   for (const f of state.fonts) {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
@@ -1233,17 +1236,53 @@ const mock = {
   },
   status() {
     const t = Math.floor((Date.now() - this.t0) / 1000);
-    return { t: 'status', uptime_s: t, fw: '0.2.0 (mock)', board: 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim, gauges_online: 1,
+    return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim, gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
   },
   live() {
     if (!this.sim) return {};
     const t = Date.now(), load = 0.5 - 0.5 * Math.cos(t / 8000 * 2 * Math.PI), rpm = 800 + 6200 * load;
-    return { rpm, manifold_pressure: 30 + 220 * load, throttle_position: 100 * load, coolant_temp: 88, oil_temp: 95, oil_pressure: 180 + rpm / 20,
-      wideband_1: 1 - 0.2 * load, target_lambda: 0.9, vehicle_speed: rpm / 60, check_engine_light: (t % 30000) < 5000 ? 1 : 0, oil_pressure_light: 0, battery_voltage: 13.8 };
+    const v = { rpm, manifold_pressure: 30 + 220 * load, throttle_position: 100 * load, coolant_temp: 88 + 4 * load, oil_temp: 95, oil_pressure: 180 + rpm / 20,
+      wideband_1: 1 - 0.2 * load, target_lambda: 0.9, vehicle_speed: rpm / 60, check_engine_light: (t % 30000) < 5000 ? 1 : 0, oil_pressure_light: 0,
+      battery_voltage: 13.8, gear: 1 + Math.floor(load * 5.99) };
+    // Every other channel the hub knows gets a slow sweep over a plausible range for its unit.
+    if (state.meta) {
+      const RANGE = { rpm: [800, 7000], '%': [0, 100], kPa: [100, 250], 'km/h': [0, 180], V: [13.2, 14.4], A: [0, 20], ms: [1, 12], Hz: [0, 100], s: [0, 60], L: [0, 60], m: [0, 1000] };
+      state.meta.channels.forEach((c, i) => {
+        if (v[c.n] != null) return;
+        const sym = state.meta.units[c.u].s;
+        if (!sym) { v[c.n] = Math.floor(t / 7000 + i) % 5 === 0 ? 1 : 0; return; }
+        const r = sym.charCodeAt(0) === 955 ? [0.85, 1.05] : (RANGE[sym] || (sym.indexOf('C') >= 0 ? [60, 110] : [0, 100]));
+        const p = 0.5 - 0.5 * Math.cos(t / (6000 + 97 * (i % 13)) * 2 * Math.PI + i);
+        v[c.n] = r[0] + (r[1] - r[0]) * p;
+      });
+    }
+    return v;
   },
   async req(method, path, body, raw) {
+    // Online, the worker serves these as static files behind the hub's paths.
+    if (ONLINE && (path === '/api/templates' || path.startsWith('/api/templates/') || path === '/api/channels/meta' || path === '/api/fonts')) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(method + ' ' + path + ': HTTP ' + r.status);
+      return r.json();
+    }
+    const result = await this.handle(method, path, body, raw);
+    if (method !== 'GET') this.save();
+    return result;
+  },
+  // Demo state survives a reload in this browser.
+  save() {
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim })); }
+    catch (e) { /* no storage */ }
+  },
+  load() {
+    try {
+      const s = JSON.parse(localStorage.getItem('hg-demo'));
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; }
+    } catch (e) { /* ignore */ }
+  },
+  async handle(method, path, body, raw) {
     const seg = path.split('/').filter(Boolean);
     const parse = () => raw ? JSON.parse(body) : body;
     if (path === '/api/channels/meta') return this.meta;
@@ -1282,7 +1321,8 @@ const mock = {
     throw new Error('mock: ' + method + ' ' + path);
   },
   start() {
-    setChip('ws', 'mock data', 'on');
+    this.load();
+    setChip('ws', ONLINE ? 'online demo, no hub' : 'mock data', 'on');
     const push = () => { onMessage(this.status()); onMessage({ t: 'gauges', gauges: this.gauges() }); };
     push();
     setInterval(push, 1000);

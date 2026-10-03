@@ -3,3 +3,6 @@
 src/hub/web_assets.h
 # Haltech documents are not redistributed; see docs/ref/README.md
 docs/ref/*.pdf
+dist/
+node_modules/
+.wrangler/

@@ -1,0 +1,14 @@
+{
+  "name": "haltech-gauges-site",
+  "private": true,
+  "type": "module",
+  "description": "Online copy of the Haltech gauges page, served by a Cloudflare Worker",
+  "scripts": {
+    "build": "node scripts/build_site.mjs",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

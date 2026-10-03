@@ -30,6 +30,24 @@ pio test -e native        # host unit tests (scripts/test.ps1 finds a g++ on Win
 The hub's web page, templates and fonts are embedded into the firmware by
 `scripts/embed_web.py` before each hub build.
 
+## Online copy
+
+The same page runs on Cloudflare without a hub, in demo mode: every template, font and
+channel is there, previews animate, and what you make stays in your browser. Export a
+config there and import it on your hub's page.
+
+```
+npm install          # once: wrangler
+npm run build        # assembles ./dist from web/, assets/ and web/data/channels.json
+npm run dev          # serves it at http://127.0.0.1:8787
+npm run deploy       # publishes the Worker (wrangler login first)
+```
+
+`worker/index.js` serves the built files and answers the hub's data paths from static
+files. `scripts/gen_channels.ps1` regenerates `web/data/channels.json` from the firmware's
+channel tables; run it when `haltech_channels.def` or `units.cpp` change. Cloudflare's
+Workers Builds can run `npm run build` and deploy on every push to `main`.
+
 ## Documents
 
 | | |
@@ -41,6 +59,7 @@ The hub's web page, templates and fonts are embedded into the firmware by
 | `docs/bom.md`, `docs/bom-pcbway.md` | Shopping lists by store, and a PCBWay-ready BOM |
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
+| `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA) and the PCBWay BOMs |
 
 Haltech's CAN protocol document is not included; `docs/ref/README.md` says where to get it.

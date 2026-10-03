@@ -62,7 +62,7 @@ input[type=range]{width:110px}
 .wrow.sel{border-left-color:var(--blue);background:#17222f}
 .wrow .wtitle{cursor:pointer}
 #preview{touch-action:none}
-.wrow .wtitle{font-weight:600;margin-bottom:6px}
+.wrow .wtitle{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .wrow label{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--dim)}
 .wrow select,.wrow input{padding:4px 8px;font-size:13px;color:var(--fg)}
@@ -144,6 +144,7 @@ input[type=range]{width:110px}
         <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
         <div class="sub">
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
+            <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
           <div id="widget-list"></div>
         </div>
@@ -836,9 +837,48 @@ function renderWidgetTable() {
       ctl.append(el('label', {}, label ? label : '', control));
     }
     root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : '') },
-      el('div', { class: 'wtitle', onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')), ctl));
+      el('div', { class: 'wtitle' },
+        el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')),
+        el('span', { class: 'spacer' }),
+        btn('remove', () => removeWidget(i), false, 'small')), ctl));
   });
   if (!widgets.length) root.append(el('div', { class: 'muted' }, 'This face has no widgets.'));
+}
+
+// New widgets start from these, placed where they will be seen.
+const WIDGET_DEFAULTS = {
+  dial: { type: 'dial', channel: 'rpm', min: 0, max: 8000, labelScale: 1000 },
+  ring: { type: 'ring', channel: 'coolant_temp', unit: 'C', min: 40, max: 130, thickness: 20 },
+  bar: { type: 'bar', channel: 'throttle_position', min: 0, max: 100, y: 380, w: 200, h: 18 },
+  number: { type: 'number', channel: 'rpm', size: 72 },
+  label: { type: 'label', text: 'LABEL', y: 150, size: 24 },
+  light: { type: 'light', channel: 'check_engine_light', y: 400, r: 12, text: 'CEL' },
+  rim: { type: 'rim', channel: 'rpm', from: 7200 },
+};
+const MAX_WIDGETS = 16;  // the parser's limit per face
+$('#add-type').append(...Object.keys(WIDGET_DEFAULTS).map(k => el('option', { value: k }, k)));
+
+$('#btn-add-widget').addEventListener('click', () => {
+  if (!state.previewCfg) { setMsg('Open or create a config first.', 'bad'); return; }
+  if (currentWidgets().length >= MAX_WIDGETS) { setMsg('A face holds at most ' + MAX_WIDGETS + ' widgets.', 'bad'); return; }
+  const type = $('#add-type').value;
+  let index = -1;
+  editConfig(cfg => {
+    if (!cfg.faces || !cfg.faces.length) cfg.faces = [{ name: 'Face 1', widgets: [] }];
+    const face = cfg.faces[state.faceIndex] || cfg.faces[0];
+    face.widgets = face.widgets || [];
+    face.widgets.push(Object.assign({}, WIDGET_DEFAULTS[type]));
+    index = face.widgets.length - 1;
+  });
+  if (index >= 0) selectWidget(index);
+});
+
+function removeWidget(i) {
+  editConfig(cfg => {
+    const face = (cfg.faces || [])[state.faceIndex];
+    if (face && face.widgets) face.widgets.splice(i, 1);
+  });
+  selectWidget(-1);
 }
 
 // Applies a change to the config in the editor and refreshes the preview.

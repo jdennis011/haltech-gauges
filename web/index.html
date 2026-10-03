@@ -757,14 +757,17 @@ function renderFontList() {
 
 // What the panel offers per widget type: [key, kind, label, options].
 const ALIGNS = ['left', 'center', 'right'];
+const ANGLE_HINT = "Degrees clockwise from 3 o'clock: 90 is 6 o'clock, 180 is 9, 270 is 12.";
 const PANEL_FIELDS = {
   dial:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
-           ['start', 'number', 'Start'], ['sweep', 'number', 'Sweep'],
+           ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
+           ['sweep', 'number', 'Sweep', null, 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.'],
            ['color', 'color', 'Colour', 'fg'], ['needleColor', 'color', 'Needle', 'accent'],
-           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
+           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none', 'marker']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
            ['labelFont', 'font', 'Labels'], ['labelSize', 'size', 'Size']],
   ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
-           ['start', 'number', 'Start'], ['sweep', 'number', 'Sweep'],
+           ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
+           ['sweep', 'number', 'Sweep', null, 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.'],
            ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'number', 'Segments']],
   bar:    [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
            ['style', 'select', 'Style', ['horizontal', 'vertical']], ['rotate', 'number', 'Rotate'],
@@ -831,19 +834,26 @@ function renderWidgetTable() {
     const ctl = el('div', { class: 'ctl' });
     const numeric = (key, extra) => el('input', Object.assign({ type: 'number', value: w[key] == null ? '' : w[key],
       onchange: ev => setWidgetFields(i, { [key]: ev.target.value === '' ? '' : +ev.target.value }) }, extra || {}));
-    for (const [key, kind, label, opts] of PANEL_FIELDS[w.type] || []) {
+    for (const [key, kind, label, opts, hint] of PANEL_FIELDS[w.type] || []) {
       let control;
       if (kind === 'channel') control = channelSelect(w, i);
       else if (kind === 'unit') control = unitSelect(w, i);
       else if (kind === 'font') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) }, ...fontOptions(w[key], true));
       else if (kind === 'size') control = numeric(key, { min: 8, max: 200, placeholder: DEFAULT_SIZES[w.type] });
       else if (kind === 'number') control = numeric(key, { step: 'any' });
+      else if (kind === 'end') {
+        // The finish angle, kept as a sweep in the JSON.
+        const start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
+        control = el('input', { type: 'number', step: 'any', value: (start + sweep) % 360,
+          onchange: ev => { let s = ((+ev.target.value - start) % 360 + 360) % 360; if (s === 0) s = 360; setWidgetFields(i, { sweep: s }); } });
+      }
       else if (kind === 'bool') control = el('input', { type: 'checkbox', checked: (w[key] == null ? opts : w[key]) ? '' : null, onchange: ev => setWidgetFields(i, { [key]: ev.target.checked }) });
       else if (kind === 'color') control = colorControl(w, i, key, opts);
       else if (kind === 'select') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) },
         el('option', { value: '' }, 'default'), ...opts.map(o => el('option', { value: o, selected: o === w[key] ? '' : null }, o)));
       else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) });
-      ctl.append(el('label', {}, label ? label : '', control));
+      if (hint) control.title = hint;
+      ctl.append(el('label', { title: hint || null }, label ? label : '', control));
     }
     root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : '') },
       el('div', { class: 'wtitle' },
@@ -1159,9 +1169,17 @@ function drawDial(ctx, w, th, t) {
     }
   }
   const a = rad(start + sweep * (v - min) / (max - min));
-  const len = w.needleLen == null ? r - 24 : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
-  const nc = color(w.needleColor, th, th.accent), style = w.needle || 'tapered';
+  const style = w.needle || 'tapered';
+  const len = w.needleLen == null ? (style === 'marker' ? 28 : r - 24) : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
+  const nc = color(w.needleColor, th, th.accent);
   if (style === 'none') return;
+  if (style === 'marker') {
+    // An arrow sitting on the rim, pointing inward at the value.
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.fillStyle = nc;
+    ctx.beginPath(); ctx.moveTo(r + 1, -nw); ctx.lineTo(r + 1, nw); ctx.lineTo(r - len, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    return;
+  }
   if (style === 'line') {
     ctx.beginPath(); ctx.strokeStyle = nc; ctx.lineWidth = nw; ctx.lineCap = 'round';
     ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); ctx.stroke();

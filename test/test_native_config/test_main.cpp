@@ -251,6 +251,10 @@ void test_nfs_options() {
         R"({"type":"dial","channel":"rpm","min":0,"max":8000,"needle":"none","labels":false,"tickShape":"triangle"})"), c).ok);
     TEST_ASSERT_EQUAL(int(TickShape::Triangle), int(c.faces[0].widgets[0].tickShape));
 
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"dial","channel":"vehicle_speed","min":0,"max":200,"needle":"marker"})"), c).ok);
+    TEST_ASSERT_EQUAL(int(NeedleStyle::Marker), int(c.faces[0].widgets[0].needle));
+    TEST_ASSERT_EQUAL(28, c.faces[0].widgets[0].needleLen);
+
     TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"number","channel":"gear","format":"gear","showUnit":false})"), c).ok);
     TEST_ASSERT_EQUAL(int(NumberFormat::Gear), int(c.faces[0].widgets[0].format));
 

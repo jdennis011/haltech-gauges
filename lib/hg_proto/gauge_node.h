@@ -47,6 +47,16 @@ public:
     bool upload(const uint8_t* data, uint32_t size, uint32_t nowMs);
     bool uploading() const { return sender_.busy(); }
 
+    // Asks the hub to apply a setting to this gauge (recorded) or to all gauges.
+    bool request(Cmd cmd, uint8_t arg, bool all) {
+        if (!hubPresent_) return false;
+        Request rq;
+        rq.cmd = cmd;
+        rq.arg = arg;
+        rq.all = all;
+        return send(pack(rq, node_));
+    }
+
 private:
     bool send(const CanFrame& frame) { return link_.send(frame, link_.ctx); }
 

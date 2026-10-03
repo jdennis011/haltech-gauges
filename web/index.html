@@ -99,6 +99,13 @@ input[type=range]{width:110px}
     <span class="muted">Each card shows what that gauge displays. Planned gauges exist only on the hub, for laying out and assigning configs before the hardware arrives; link them to the real gauge later.</span>
     <span class="spacer"></span>
     <button class="btn" id="btn-add-gauge">Add a planned gauge</button>
+    <div class="row" style="width:100%;margin-top:6px">
+      <strong>All gauges</strong>
+      <label class="inline">Brightness <input type="range" id="all-brightness" min="10" max="255" value="200"></label>
+      <button class="btn small" id="all-screens-off">Screens off</button>
+      <button class="btn small" id="all-screens-on">Screens on</button>
+      <span class="muted" id="all-note"></span>
+    </div>
   </div>
   <div id="gauges" class="grid"></div>
 </section>
@@ -288,6 +295,11 @@ function renderStatus() {
   setChip('bus', 'gauge bus ' + busState(s.bus.state), s.bus.state === 1 ? 'on' : 'bad');
   setChip('gauges', s.gauges_online + (s.gauges_online === 1 ? ' gauge' : ' gauges') + ' online', s.gauges_online ? 'on' : '');
   setChip('sim', s.simulator ? (s.sim && s.sim.paused ? 'simulator PAUSED' : 'simulator ON') : 'simulator off', s.simulator ? 'on' : '');
+  const d = s.displays || {};
+  if (document.activeElement !== $('#all-brightness')) $('#all-brightness').value = d.brightness >= 0 ? d.brightness : 200;
+  $('#all-screens-off').classList.toggle('primary', !!d.off);
+  $('#all-screens-on').classList.toggle('primary', d.off === false);
+  $('#all-note').textContent = d.off ? 'every screen is off' : (d.brightness >= 0 ? 'brightness ' + d.brightness + ' everywhere' : 'each gauge keeps its own brightness');
   renderSettings();
 }
 
@@ -445,12 +457,21 @@ function renderGauges() {
               el('input', { type: 'range', min: 10, max: 255, value: 200, disabled: off ? '' : null,
                 onchange: ev => act(g, 'brightness', { level: +ev.target.value }) })),
             g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
+            btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
+            btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),
             btn('Reboot', () => { if (confirm('Reboot ' + gaugeTitle(g) + '?')) act(g, 'reboot'); }, off, 'small'),
             g.id ? btn('Unlink', () => { if (confirm('Forget the name and planned entry for this gauge? Its config assignment stays.')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small') : null));
     root.append(card);
   }
   drawCards();
 }
+
+async function allGauges(action, body) {
+  try { await api.post('/api/gauges/all/' + action, body); } catch (e) { alert(e.message); }
+}
+$('#all-brightness').addEventListener('change', ev => allGauges('brightness', { level: +ev.target.value }));
+$('#all-screens-off').addEventListener('click', () => allGauges('display', { on: false }));
+$('#all-screens-on').addEventListener('click', () => allGauges('display', { on: true }));
 
 $('#btn-add-gauge').addEventListener('click', () => {
   const label = prompt('Name for the planned gauge (e.g. "Left pod")', '');
@@ -1596,6 +1617,7 @@ document.addEventListener('keydown', ev => {
 const mock = {
   configs: {}, assignments: {}, sim: true, t0: Date.now(),
   simState: { paused: false, speed: 1, overrides: [] }, simClock: 0, simLast: Date.now(),
+  displays: { brightness: -1, off: false },
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -1645,7 +1667,7 @@ const mock = {
   status() {
     const t = Math.floor((Date.now() - this.t0) / 1000);
     return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim,
-      sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, gauges_online: 1,
+      sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, displays: this.displays, gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
   },
@@ -1741,6 +1763,11 @@ const mock = {
       if (body.label != null) v.label = body.label;
       if (body.face != null) v.face = body.face;
       if (body.mac != null) { const old = v.mac; v.mac = body.mac || '02:00:00:00:00:0' + v.id; if (this.assignments[old]) { this.assignments[v.mac] = this.assignments[old]; delete this.assignments[old]; } }
+      return { ok: true };
+    }
+    if (seg[1] === 'gauges' && seg[2] === 'all') {
+      if (seg[3] === 'brightness') this.displays.brightness = +body.level;
+      if (seg[3] === 'display') this.displays.off = !body.on;
       return { ok: true };
     }
     if (path === '/api/wifi' || seg[1] === 'gauges') return { ok: true };

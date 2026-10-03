@@ -62,6 +62,10 @@ public:
         XferReceiver::Handler upload;
         // The roster or a gauge's state changed. May be null.
         void (*changed)(void* ctx);
+        // A gauge has just come online (before it has said hello). May be null.
+        void (*online)(const Gauge& gauge, void* ctx);
+        // A gauge asks for a setting to be applied, to itself or to all. May be null.
+        void (*request)(const Gauge& gauge, const Request& request, void* ctx);
         void* ctx;
     };
 

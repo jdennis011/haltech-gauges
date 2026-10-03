@@ -19,7 +19,7 @@ address it was given.
 
 | Tab | What it does |
 |---|---|
-| Gauges | One card per gauge, real or planned, with a live preview of the config it is assigned, drawn at the face it is on. Real gauges show online state, MAC, firmware, supply voltage, and buttons for identify, face change, brightness and reboot. The assignment dropdown is the "desired state": the hub pushes that config whenever the gauge's stored one differs. |
+| Gauges | One card per gauge, real or planned, with a live preview of the config it is assigned, drawn at the face it is on. Real gauges show online state, MAC, firmware, supply voltage, and buttons for identify, face change, brightness, screen off and on, and reboot. An **All gauges** strip sets brightness for every gauge (remembered by the hub and applied to any gauge that connects) and turns every screen off or on. The assignment dropdown is the "desired state": the hub pushes that config whenever the gauge's stored one differs. |
 | Live data | Every Haltech channel with its current value, updated three times a second. Data comes from the ECU bus (C6 hub) or from the simulator. The **Simulator** card pauses the values, runs them slower or faster (0.1x to 4x), and holds any channel at a value or sweeps it between limits of your own, which is how a face is laid out against a particular reading. |
 | Configs | The library of stored configs. Start from a template (`docs/templates.md` describes the fifteen built in) or import a file, edit the JSON with a live preview of the selected face, **Validate** (runs the gauge's own parser on the hub), **Save**, **Download**, and **Try on gauge**, which shows a config on a gauge without storing it. Widgets can be dragged on the preview to move them; a click selects one (dashed outline, highlighted in the panel below), arrow keys nudge it by a pixel or ten with shift, and positions snap to the face centre. Dragging one of the four corner handles rotates a text, number, light or bar widget about its position, or turns the start angle of a dial or ring, snapping to 15 degree steps. **Add widget** puts a new dial, ring, bar, number, label, light or rim on the face with sensible defaults, selected and ready to drag; each row has a remove button. Under the preview, **Widget styles** lists the widgets on the selected face, each with pickers for its channel, unit and range, its text, colours (a theme role or a custom colour), rotation, text alignment, whether a number shows its unit, and its font and size, so changing what a face shows needs no JSON editing (one dropdown also sets every font in the config), and **Fonts on the hub** shows each bundled family drawn with the gauge's own font file. |
 | Settings | Hub, access point and home-network details; memory and bus counters. |
@@ -62,6 +62,10 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | POST `/api/gauges/{node}/identify` `{"seconds":5}` | Gauge shows its id |
 | POST `/api/gauges/{node}/face` `{"index":0}` | Switch face |
 | POST `/api/gauges/{node}/brightness` `{"level":200}` | 10-255 |
+| POST `/api/gauges/{node}/display` `{"on":false}` | Screen off or on |
+| POST `/api/gauges/all/brightness` `{"level":200}` | Every gauge; remembered and re-applied to newcomers |
+| POST `/api/gauges/all/display` `{"on":false}` | Every screen off or on (not kept across a hub restart) |
+| POST `/api/gauges/all/identify` | |
 | POST `/api/gauges/{node}/reboot` | |
 | POST `/api/gauges/{node}/try` (body: a config) | Show without storing |
 | POST `/api/gauges/{node}/endtry` | Back to the stored config |

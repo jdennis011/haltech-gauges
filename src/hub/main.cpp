@@ -6,6 +6,7 @@
 
 #include "can_ports.h"
 #include "channel_store.h"
+#include "display_control.h"
 #include "haltech.h"
 #include "hub_config.h"
 #include "hub_manager.h"
@@ -261,11 +262,14 @@ void setup() {
     if (!gaugePort.begin()) Serial.println("Gauge CAN start failed");
     if (!library_store::begin()) Serial.println("Config storage failed to mount");
     virtual_gauges::begin();
+    display_control::begin();
 
     HubManager::Handler handler = {};
     handler.desired = library_store::desired;
     handler.upload = {refuseUpload, ignoreUpload, nullptr, nullptr};
     handler.changed = onRosterChanged;
+    handler.online = display_control::onOnline;
+    handler.request = display_control::onRequest;
     hubManager.init({managementSend, nullptr}, handler, millis());
 
     wifi_ap::begin();

@@ -62,6 +62,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
 | `docs/startup-animation.md` | Planned key-on intro that runs across the gauges in order |
+| `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all; hub side done |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA) and the PCBWay BOMs |
 

@@ -114,6 +114,7 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
     if (!g->online) {
         g->online = true;
         notify();
+        if (handler_.online) handler_.online(*g, handler_.ctx);
     }
 
     switch (msg) {
@@ -154,6 +155,11 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
                 helloRequestNode_ = node;
             }
             if (changed) notify();
+            break;
+        }
+        case Msg::Command: {
+            Request rq;
+            if (unpack(frame, rq) && handler_.request) handler_.request(*g, rq, handler_.ctx);
             break;
         }
         case Msg::CommandAck:

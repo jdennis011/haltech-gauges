@@ -60,6 +60,7 @@ enum class Cmd : uint8_t {
     Reboot = 4,
     SendConfig = 5,     // gauge uploads its stored config to the hub
     EndTry = 6,         // drop a RAM-only "try" config and go back to the stored one
+    SetDisplay = 7,     // arg = 0 screen off (panel asleep), 1 on
 };
 
 enum class XferKind : uint8_t {
@@ -119,6 +120,14 @@ struct CommandAck {
     bool ok = false;
 };
 
+// A gauge asking the hub to apply a setting, from its pull-down menu: to
+// itself (recorded) or to every gauge. Carried as Msg::Command, gauge to hub.
+struct Request {
+    Cmd cmd = Cmd::SetBrightness;
+    uint8_t arg = 0;
+    bool all = false;
+};
+
 struct XferBegin {
     uint8_t session = 0;
     XferKind kind = XferKind::Config;
@@ -151,6 +160,7 @@ CanFrame pack(const Info& m, uint32_t node);
 CanFrame pack(const Status& m, uint32_t node);
 CanFrame pack(const Command& m, uint32_t node);
 CanFrame pack(const CommandAck& m, uint32_t node);
+CanFrame pack(const Request& m, uint32_t node);
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node);
 CanFrame pack(const XferEnd& m, Dir dir, uint32_t node);
 CanFrame pack(const XferAck& m, Dir dir, uint32_t node);
@@ -163,6 +173,7 @@ CanFrame packXferData(Dir dir, uint32_t node, uint8_t seq, const uint8_t* payloa
 // Each returns false if the frame is too short for the message.
 bool unpack(const CanFrame& f, Beacon& m);
 bool unpack(const CanFrame& f, Hello& m);
+bool unpack(const CanFrame& f, Request& m);
 bool unpack(const CanFrame& f, Info& m);
 bool unpack(const CanFrame& f, Status& m);
 bool unpack(const CanFrame& f, Command& m);

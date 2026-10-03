@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "channel_store.h"
+#include "display_control.h"
 #include "face_model.h"
 #include "haltech.h"
 #include "hub_config.h"
@@ -230,6 +231,9 @@ void buildStatus(JsonObject o) {
     sim["paused"] = simulator::paused();
     sim["speed"] = simulator::speed();
     sim["overrides"] = simulator::overrideCount();
+    JsonObject displays = o["displays"].to<JsonObject>();
+    displays["brightness"] = display_control::allBrightness();
+    displays["off"] = display_control::displaysOff();
     o["gauges_online"] = s.gaugesOnline;
 
     JsonObject ecu = o["ecu"].to<JsonObject>();
@@ -517,9 +521,24 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
     if (!parseBody(r, body)) return;
     hub::Lock lock;
     HubManager& m = hub::manager();
+    if (segment(r->url(), 2) == "all") {
+        // Every gauge at once; brightness is remembered and re-applied to newcomers.
+        if (action == "brightness") {
+            display_control::setAllBrightness(body["level"] | 200);
+        } else if (action == "display") {
+            display_control::setDisplaysOff(!(body["on"] | true));
+        } else if (action == "identify") {
+            display_control::sendAll(proto::Cmd::Identify, uint8_t(body["seconds"] | 5));
+        } else {
+            return sendError(r, 404, "unknown action for all gauges");
+        }
+        return sendOk(r);
+    }
     if (!m.find(node)) return sendError(r, 404, "unknown gauge");
     bool ok;
-    if (action == "identify") {
+    if (action == "display") {
+        ok = m.command(node, proto::Cmd::SetDisplay, (body["on"] | true) ? 1 : 0);
+    } else if (action == "identify") {
         ok = m.command(node, proto::Cmd::Identify, uint8_t(body["seconds"] | 5));
     } else if (action == "face") {
         ok = m.command(node, proto::Cmd::SetFace, uint8_t(body["index"] | 0));

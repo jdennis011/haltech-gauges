@@ -111,6 +111,22 @@ CanFrame pack(const Command& m, uint32_t node) {
     return f;
 }
 
+CanFrame pack(const Request& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Command, Dir::GaugeToHub, node, 3);
+    f.data[0] = uint8_t(m.cmd);
+    f.data[1] = m.arg;
+    f.data[2] = m.all ? 1 : 0;
+    return f;
+}
+
+bool unpack(const CanFrame& f, Request& m) {
+    if (f.len < 3) return false;
+    m.cmd = Cmd(f.data[0]);
+    m.arg = f.data[1];
+    m.all = f.data[2] != 0;
+    return true;
+}
+
 bool unpack(const CanFrame& f, Command& m) {
     if (f.len < 2) return false;
     m.cmd = Cmd(f.data[0]);

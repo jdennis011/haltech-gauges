@@ -233,6 +233,26 @@ void assertDelivered(Rig& rig, const std::vector<uint8_t>& payload) {
 
 }  // namespace
 
+void test_request_round_trip() {
+    Request rq;
+    rq.cmd = Cmd::SetBrightness;
+    rq.arg = 180;
+    rq.all = true;
+    const CanFrame f = pack(rq, 0x040506);
+    TEST_ASSERT_EQUAL(int(Dir::GaugeToHub), int(idDir(f.id)));
+    TEST_ASSERT_EQUAL(int(Msg::Command), int(idMsg(f.id)));
+    Request rq2;
+    TEST_ASSERT_TRUE(unpack(f, rq2));
+    TEST_ASSERT_EQUAL(int(Cmd::SetBrightness), int(rq2.cmd));
+    TEST_ASSERT_EQUAL(180, rq2.arg);
+    TEST_ASSERT_TRUE(rq2.all);
+    // A plain two-byte command is not a request.
+    Command c;
+    c.cmd = Cmd::SetDisplay;
+    c.arg = 0;
+    TEST_ASSERT_FALSE(unpack(pack(c, 0x040506), rq2));
+}
+
 void test_xfer_small_payload() {
     Rig rig;
     auto payload = makePayload(10);
@@ -413,6 +433,7 @@ int main(int, char**) {
     RUN_TEST(test_crc32_known_vector);
     RUN_TEST(test_id_fields_round_trip);
     RUN_TEST(test_messages_round_trip);
+    RUN_TEST(test_request_round_trip);
     RUN_TEST(test_xfer_small_payload);
     RUN_TEST(test_xfer_edge_sizes);
     RUN_TEST(test_xfer_4k_config_is_fast_on_a_clean_link);

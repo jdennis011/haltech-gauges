@@ -149,7 +149,7 @@ input[type=range]{width:110px}
           <button class="btn" id="btn-endtry">End try</button>
         </div>
         <canvas id="preview" width="466" height="466"></canvas>
-        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
+        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it, or drag a corner handle to rotate it (on a dial or ring, to turn the scale); arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
         <div class="sub">
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
@@ -1399,21 +1399,47 @@ function widgetBounds(ctx, w, t) {
   if (w.type === 'bar') {
     const horiz = (w.style || 'horizontal') === 'horizontal';
     const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
-    return w.rotate ? { kind: 'rect', cx, cy, w: Math.max(W, H), h: Math.max(W, H) } : { kind: 'rect', cx, cy, w: W, h: H };
+    return { kind: 'rect', cx, cy, w: W, h: H, rotate: w.rotate || 0, px: cx, py: cy };
   }
   if (w.type === 'light' && (w.shape || 'dot') !== 'text') {
     const r = w.r == null ? 14 : w.r, cap = w.text ? (w.size || 18) + 6 : 0;
-    return { kind: 'rect', cx, cy: cy + cap / 2, w: 2 * r + 8, h: 2 * r + 8 + cap };
+    return rotated({ kind: 'rect', cx, cy: cy + cap / 2, w: 2 * r + 8, h: 2 * r + 8 + cap }, w.rotate || 0, cx, cy);
   }
   // Text: number, label, light caption.
   const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : (w.size || 24);
   const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
   ctx.font = size + 'px ' + fontStack(w.font);
-  let width = Math.max(ctx.measureText(text).width, size * 0.6), height = size * 1.1;
-  if (w.rotate) { const m = Math.max(width, height); width = m; height = m; }
+  const width = Math.max(ctx.measureText(text).width, size * 0.6), height = size * 1.1;
   const align = w.align || 'center';
   const left = align === 'left' ? cx : align === 'right' ? cx - width : cx - width / 2;
-  return { kind: 'rect', cx: left + width / 2, cy, w: width, h: height };
+  return rotated({ kind: 'rect', cx: left + width / 2, cy, w: width, h: height }, w.rotate || 0, cx, cy);
+}
+
+// A box rotated about the widget's own position (px, py): its centre moves with it.
+function rotated(b, angle, px, py) {
+  b.rotate = angle; b.px = px; b.py = py;
+  if (!angle) return b;
+  const c = Math.cos(rad(angle)), s = Math.sin(rad(angle)), dx = b.cx - px, dy = b.cy - py;
+  b.cx = px + dx * c - dy * s;
+  b.cy = py + dx * s + dy * c;
+  return b;
+}
+
+// What dragging a corner handle turns: the widget's rotation, or an arc's start.
+const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', dial: 'start', ring: 'start' };
+
+// The four corner handles of a selection box, in canvas coordinates.
+function handleCorners(b) {
+  let hw, hh, angle = 0;
+  if (b.kind === 'ring') { hw = hh = b.r + 6; } else { hw = b.w / 2 + 6; hh = b.h / 2 + 6; angle = rad(b.rotate || 0); }
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => ({ x: b.cx + x * c - y * s, y: b.cy + x * s + y * c }));
+}
+
+function hitHandle(ctx, px, py, t) {
+  const w = currentWidgets()[selected];
+  if (!w || !ROTATE_KEY[w.type]) return false;
+  return handleCorners(widgetBounds(ctx, w, t)).some(h => Math.hypot(px - h.x, py - h.y) <= 9);
 }
 
 function hitWidget(ctx, px, py, t) {
@@ -1423,8 +1449,11 @@ function hitWidget(ctx, px, py, t) {
     if (b.kind === 'ring') {
       const d = Math.hypot(px - b.cx, py - b.cy);
       if (d >= b.inner - 4 && d <= b.r + 4) return i;
-    } else if (Math.abs(px - b.cx) <= b.w / 2 + 4 && Math.abs(py - b.cy) <= b.h / 2 + 4) {
-      return i;
+    } else {
+      // Into the box's own frame, so a rotated box still tests as a rectangle.
+      const c = Math.cos(rad(b.rotate || 0)), s = Math.sin(rad(b.rotate || 0)), dx = px - b.cx, dy = py - b.cy;
+      const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+      if (Math.abs(lx) <= b.w / 2 + 4 && Math.abs(ly) <= b.h / 2 + 4) return i;
     }
   }
   return -1;
@@ -1438,9 +1467,34 @@ function drawSelection(ctx, w, t) {
     ctx.beginPath(); ctx.arc(b.cx, b.cy, b.r + 2, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(b.cx, b.cy, Math.max(2, b.inner - 2), 0, Math.PI * 2); ctx.stroke();
   } else {
-    ctx.strokeRect(b.cx - b.w / 2 - 4, b.cy - b.h / 2 - 4, b.w + 8, b.h + 8);
+    ctx.translate(b.cx, b.cy); ctx.rotate(rad(b.rotate || 0));
+    ctx.strokeRect(-b.w / 2 - 4, -b.h / 2 - 4, b.w + 8, b.h + 8);
   }
   ctx.restore();
+  if (!ROTATE_KEY[w.type]) return;
+  // Corner handles: drag one to rotate.
+  ctx.save();
+  ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = '#0a84ff'; ctx.fillStyle = '#ffffff';
+  for (const h of handleCorners(b)) { ctx.beginPath(); ctx.rect(h.x - 5, h.y - 5, 10, 10); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+}
+
+// Rotation of the selected widget, as a drag of a corner handle.
+function startRotate(w, b, p) {
+  const key = ROTATE_KEY[w.type];
+  const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
+  drag = { rotate: key, px, py, a0: Math.atan2(p.y - py, p.x - px) * 180 / Math.PI, base: w[key] == null ? (key === 'start' ? 135 : 0) : w[key], moved: false };
+}
+
+function applyRotate(w, p) {
+  const a = Math.atan2(p.y - drag.py, p.x - drag.px) * 180 / Math.PI;
+  let v = drag.base + (a - drag.a0);
+  const snapped = Math.round(v / 15) * 15;
+  if (Math.abs(v - snapped) < 4) v = snapped;
+  if (drag.rotate === 'start') v = ((Math.round(v) % 360) + 360) % 360;
+  else { v = Math.round(v); while (v > 180) v -= 360; while (v <= -180) v += 360; }
+  w[drag.rotate] = v;
+  drag.moved = true;
 }
 
 function canvasPoint(ev) {
@@ -1472,6 +1526,13 @@ const snap = v => Math.abs(v - 233) < 6 ? 233 : Math.max(0, Math.min(466, Math.r
 $('#preview').addEventListener('pointerdown', ev => {
   if (!state.previewCfg) return;
   const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
+  if (hitHandle(ctx, p.x, p.y, performance.now())) {
+    const w = currentWidgets()[selected];
+    startRotate(w, widgetBounds(ctx, w, performance.now()), p);
+    try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic event */ }
+    ev.preventDefault();
+    return;
+  }
   const i = hitWidget(ctx, p.x, p.y, performance.now());
   selectWidget(i);
   if (i < 0) return;
@@ -1484,9 +1545,13 @@ $('#preview').addEventListener('pointerdown', ev => {
 $('#preview').addEventListener('pointermove', ev => {
   if (!state.previewCfg) return;
   const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
-  if (!drag) { ev.target.style.cursor = hitWidget(ctx, p.x, p.y, performance.now()) >= 0 ? 'move' : 'default'; return; }
+  if (!drag) {
+    ev.target.style.cursor = hitHandle(ctx, p.x, p.y, performance.now()) ? 'grab' : hitWidget(ctx, p.x, p.y, performance.now()) >= 0 ? 'move' : 'default';
+    return;
+  }
   const w = currentWidgets()[selected];
   if (!w) return;
+  if (drag.rotate) { applyRotate(w, p); return; }
   w.x = snap(p.x - drag.ox); w.y = snap(p.y - drag.oy);   // live object: the preview redraws it
   drag.moved = true;
 });
@@ -1494,9 +1559,11 @@ $('#preview').addEventListener('pointermove', ev => {
 function endDrag() {
   if (!drag) return;
   const w = currentWidgets()[selected];
-  const moved = drag.moved;
+  const moved = drag.moved, key = drag.rotate;
   drag = null;
-  if (moved && w) moveWidget(selected, w.x, w.y);
+  if (!moved || !w) return;
+  if (key) { setWidgetFields(selected, { [key]: w[key] }); selectWidget(selected); }
+  else moveWidget(selected, w.x, w.y);
 }
 $('#preview').addEventListener('pointerup', endDrag);
 $('#preview').addEventListener('pointercancel', endDrag);

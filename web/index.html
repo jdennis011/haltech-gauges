@@ -503,7 +503,7 @@ async function loadConfigs() {
 function renderConfigs() {
   const tbody = $('#config-table tbody');
   tbody.innerHTML = '';
-  $('#config-count').textContent = state.configs.length + ' stored';
+  $('#config-count').textContent = state.configs.length + (ONLINE ? ' stored in this browser' : ' stored');
   const sel = $('#template-select');
   sel.innerHTML = '';
   for (const t of state.templates) sel.append(el('option', { value: t.name }, t.title || t.name));
@@ -518,7 +518,9 @@ function renderConfigs() {
       el('td', {}, btn('Edit', () => openStored(c.name)))));
   }
   if (!state.configs.length) {
-    tbody.append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'Nothing stored yet. Start from a template, or import a JSON file.')));
+    tbody.append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, ONLINE
+      ? 'Nothing stored yet. Start from a template, or import a file. Saved configs and planned gauges stay in this browser; Download one to keep it or to import it on a hub.'
+      : 'Nothing stored yet. Start from a template, or import a JSON file.')));
   }
 }
 
@@ -1463,6 +1465,7 @@ const mock = {
       this.virtual.push({ id, label: body.label || 'Gauge ' + id, mac: body.mac || '02:00:00:00:00:0' + id, face: 0 });
       return { ok: true, id };
     }
+    if (path === '/api/virtual') return this.virtual;
     if (seg[1] === 'virtual') {
       const v = this.virtual.find(x => x.id === +seg[2]);
       if (!v) throw new Error('no such planned gauge');
@@ -1476,7 +1479,6 @@ const mock = {
     throw new Error('mock: ' + method + ' ' + path);
   },
   start() {
-    this.load();
     setChip('ws', ONLINE ? 'online demo, no hub' : 'mock data', 'on');
     const push = () => { onMessage(this.status()); onMessage({ t: 'gauges', gauges: this.gauges() }); };
     push();
@@ -1508,6 +1510,7 @@ async function loadMeta(attempts) {
 }
 
 async function init() {
+  if (MOCK) mock.load();  // what this browser kept, before anything asks for it
   let saved = null;
   try { saved = localStorage.getItem('tab'); } catch (e) { /* private mode */ }
   // #live, #configs and so on open that tab directly.

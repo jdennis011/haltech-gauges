@@ -58,7 +58,10 @@ input[type=range]{width:110px}
 .fontrow .about{display:block;font-size:13px;margin-top:4px}
 .fontrow .fam{font-weight:600;font-size:14px}
 .fontrow .key{font-family:ui-monospace,Consolas,monospace;color:var(--dim)}
-.wrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.wrow{padding:8px 0 8px 6px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
+.wrow.sel{border-left-color:var(--blue);background:#17222f}
+.wrow .wtitle{cursor:pointer}
+#preview{touch-action:none}
 .wrow .wtitle{font-weight:600;margin-bottom:6px}
 .wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .wrow label{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--dim)}
@@ -135,7 +138,7 @@ input[type=range]{width:110px}
           <button class="btn" id="btn-endtry">End try</button>
         </div>
         <canvas id="preview" width="466" height="466"></canvas>
-        <p class="muted" style="text-align:center;font-size:13px">Preview uses live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
+        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
         <div class="sub">
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
@@ -563,6 +566,7 @@ function openEditor(name, cfg, isNew) {
   $('#edit-text').value = JSON.stringify(cfg, null, 2);
   $('#editor').style.display = '';
   state.faceIndex = 0;
+  selected = -1;
   renderFontList();
   parseEditor();
   setMsg(isNew ? 'New config, not saved yet.' : '');
@@ -595,7 +599,7 @@ $('#edit-text').addEventListener('input', () => {
   clearTimeout(editTimer);
   editTimer = setTimeout(() => { if (parseEditor()) setMsg(''); }, 250);
 });
-$('#face-select').addEventListener('change', ev => { state.faceIndex = +ev.target.value; renderWidgetTable(); });
+$('#face-select').addEventListener('change', ev => { state.faceIndex = +ev.target.value; selected = -1; renderWidgetTable(); });
 
 function currentName() {
   const name = $('#edit-name').value.trim();
@@ -790,7 +794,8 @@ function renderWidgetTable() {
       else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) });
       ctl.append(el('label', {}, label ? label : '', control));
     }
-    root.append(el('div', { class: 'wrow' }, el('div', { class: 'wtitle' }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')), ctl));
+    root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : '') },
+      el('div', { class: 'wtitle', onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')), ctl));
   });
   if (!widgets.length) root.append(el('div', { class: 'muted' }, 'This face has no widgets.'));
 }
@@ -1181,10 +1186,157 @@ function drawFace(canvas, cfg, faceIdx, t) {
 function tick(now) {
   if (state.previewCfg && $('#editor').style.display !== 'none' && $('#tab-configs').classList.contains('active')) {
     drawFace($('#preview'), state.previewCfg, state.faceIndex, now);
+    const w = currentWidgets()[selected];
+    if (w) drawSelection($('#preview').getContext('2d'), w, now);
   }
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
+
+
+// ----------------------------------------------------------- drag to move
+// Widgets on the preview can be picked up and moved; the JSON and the panel
+// follow. Arrow keys nudge the selected widget (shift: 10 px). Positions snap
+// to the face centre when close.
+
+let selected = -1;   // index of the selected widget on the current face
+let drag = null;     // { ox, oy, moved } while the pointer is down on a widget
+
+function currentWidgets() {
+  const cfg = state.previewCfg;
+  const face = cfg ? (cfg.faces || [])[state.faceIndex] : null;
+  return face ? face.widgets || [] : [];
+}
+
+// A rough outline of where a widget is drawn, for hit tests and the selection box.
+function widgetBounds(ctx, w, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  if (w.type === 'dial') {
+    const r = w.r == null ? 220 : w.r;
+    const band = (w.zoneWidth == null ? 6 : w.zoneWidth) + (w.ticks === false ? 4 : (w.tickLen == null ? 16 : w.tickLen))
+      + (w.labels === false ? 0 : (w.labelSize == null ? 22 : w.labelSize) * 1.4);
+    return { kind: 'ring', cx, cy, r, inner: Math.max(0, r - band) };
+  }
+  if (w.type === 'ring') { const r = w.r == null ? 225 : w.r; return { kind: 'ring', cx, cy, r, inner: r - (w.thickness == null ? 20 : w.thickness) }; }
+  if (w.type === 'rim') { const r = w.r == null ? 233 : w.r; return { kind: 'ring', cx, cy, r, inner: r - (w.thickness == null ? 12 : w.thickness) }; }
+  if (w.type === 'bar') {
+    const horiz = (w.style || 'horizontal') === 'horizontal';
+    return { kind: 'rect', cx, cy, w: w.w == null ? (horiz ? 260 : 28) : w.w, h: w.h == null ? (horiz ? 28 : 260) : w.h };
+  }
+  if (w.type === 'light' && (w.shape || 'dot') !== 'text') {
+    const r = w.r == null ? 14 : w.r, cap = w.text ? (w.size || 18) + 6 : 0;
+    return { kind: 'rect', cx, cy: cy + cap / 2, w: 2 * r + 8, h: 2 * r + 8 + cap };
+  }
+  // Text: number, label, light caption.
+  const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : (w.size || 24);
+  const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
+  ctx.font = size + 'px ' + fontStack(w.font);
+  let width = Math.max(ctx.measureText(text).width, size * 0.6), height = size * 1.1;
+  if (w.rotate) { const m = Math.max(width, height); width = m; height = m; }
+  const align = w.align || 'center';
+  const left = align === 'left' ? cx : align === 'right' ? cx - width : cx - width / 2;
+  return { kind: 'rect', cx: left + width / 2, cy, w: width, h: height };
+}
+
+function hitWidget(ctx, px, py, t) {
+  const widgets = currentWidgets();
+  for (let i = widgets.length - 1; i >= 0; i--) {
+    const b = widgetBounds(ctx, widgets[i], t);
+    if (b.kind === 'ring') {
+      const d = Math.hypot(px - b.cx, py - b.cy);
+      if (d >= b.inner - 4 && d <= b.r + 4) return i;
+    } else if (Math.abs(px - b.cx) <= b.w / 2 + 4 && Math.abs(py - b.cy) <= b.h / 2 + 4) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function drawSelection(ctx, w, t) {
+  const b = widgetBounds(ctx, w, t);
+  ctx.save();
+  ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = '#0a84ff';
+  if (b.kind === 'ring') {
+    ctx.beginPath(); ctx.arc(b.cx, b.cy, b.r + 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(b.cx, b.cy, Math.max(2, b.inner - 2), 0, Math.PI * 2); ctx.stroke();
+  } else {
+    ctx.strokeRect(b.cx - b.w / 2 - 4, b.cy - b.h / 2 - 4, b.w + 8, b.h + 8);
+  }
+  ctx.restore();
+}
+
+function canvasPoint(ev) {
+  const r = $('#preview').getBoundingClientRect();
+  return { x: (ev.clientX - r.left) * 466 / r.width, y: (ev.clientY - r.top) * 466 / r.height };
+}
+
+function selectWidget(i) {
+  selected = i;
+  $$('#widget-list .wrow').forEach((row, k) => row.classList.toggle('sel', k === i));
+  if (i >= 0) {
+    const w = currentWidgets()[i];
+    if (w) setMsg('Selected ' + (i + 1) + '. ' + w.type + ' at ' + (w.x == null ? 233 : w.x) + ', ' + (w.y == null ? 233 : w.y) + '. Drag it, or nudge with the arrow keys.');
+  }
+}
+
+function moveWidget(i, x, y) {
+  editConfig(cfg => {
+    const face = (cfg.faces || [])[state.faceIndex];
+    const w = face && face.widgets ? face.widgets[i] : null;
+    if (!w) return;
+    w.x = x; w.y = y;
+  });
+  selectWidget(i);
+}
+
+const snap = v => Math.abs(v - 233) < 6 ? 233 : Math.max(0, Math.min(466, Math.round(v)));
+
+$('#preview').addEventListener('pointerdown', ev => {
+  if (!state.previewCfg) return;
+  const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
+  const i = hitWidget(ctx, p.x, p.y, performance.now());
+  selectWidget(i);
+  if (i < 0) return;
+  const w = currentWidgets()[i];
+  drag = { ox: p.x - (w.x == null ? 233 : w.x), oy: p.y - (w.y == null ? 233 : w.y), moved: false };
+  try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic event */ }
+  ev.preventDefault();
+});
+
+$('#preview').addEventListener('pointermove', ev => {
+  if (!state.previewCfg) return;
+  const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
+  if (!drag) { ev.target.style.cursor = hitWidget(ctx, p.x, p.y, performance.now()) >= 0 ? 'move' : 'default'; return; }
+  const w = currentWidgets()[selected];
+  if (!w) return;
+  w.x = snap(p.x - drag.ox); w.y = snap(p.y - drag.oy);   // live object: the preview redraws it
+  drag.moved = true;
+});
+
+function endDrag() {
+  if (!drag) return;
+  const w = currentWidgets()[selected];
+  const moved = drag.moved;
+  drag = null;
+  if (moved && w) moveWidget(selected, w.x, w.y);
+}
+$('#preview').addEventListener('pointerup', endDrag);
+$('#preview').addEventListener('pointercancel', endDrag);
+
+document.addEventListener('keydown', ev => {
+  if (selected < 0 || !state.previewCfg) return;
+  const tag = (ev.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (!$('#tab-configs').classList.contains('active')) return;
+  const step = ev.shiftKey ? 10 : 1;
+  const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+  if (ev.key === 'Escape') { selectWidget(-1); setMsg(''); return; }
+  if (!d) return;
+  const w = currentWidgets()[selected];
+  if (!w) return;
+  moveWidget(selected, Math.max(0, Math.min(466, (w.x == null ? 233 : w.x) + d[0])), Math.max(0, Math.min(466, (w.y == null ? 233 : w.y) + d[1])));
+  ev.preventDefault();
+});
 
 // ------------------------------------------------------------------ mock
 // Lets the page run from a file for layout work: file:///…/index.html

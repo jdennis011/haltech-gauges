@@ -186,6 +186,12 @@ const writeIndex = (env, user, idx) => env.HG.put(key(user, 'index'), JSON.strin
 const isSynthetic = mac => /^02:00:00:00:00:/.test(mac || '');
 const syntheticMac = id => '02:00:00:00:00:' + id.toString(16).toUpperCase().padStart(2, '0');
 
+// An alert rule as the page sends it: known keys of the right type only.
+const ALERT_KEYS = { name: 'string', enabled: 'boolean', channel: 'string', unit: 'string', when: 'string', value: 'number', low: 'number', high: 'number',
+  for: 'number', hold: 'number', message: 'string', color: 'string', face: 'number', restore: 'boolean', gauge: 'string' };
+const cleanAlert = r => Object.fromEntries(Object.entries(r && typeof r === 'object' ? r : {})
+  .filter(([k, v]) => ALERT_KEYS[k] === typeof v && (typeof v !== 'string' || v.length <= 64)));
+
 async function userApi(request, env, path, user) {
   const seg = path.split('/').filter(Boolean);
   const area = seg[1];
@@ -291,7 +297,17 @@ async function userApi(request, env, path, user) {
     return json({ ok: true });
   }
 
-  // ---- settings: the simulator's speed and overrides follow the account
+  // ---- settings: the alerts, and the simulator's speed and overrides, follow the account
+  if (area === 'settings' && name === 'alerts') {
+    if (method === 'GET') return json(idx.settings && idx.settings.alerts ? idx.settings.alerts : null);
+    if (method !== 'PUT') return json({ ok: false, error: 'method' }, 405);
+    let body;
+    try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'bad request' }, 400); }
+    if (!Array.isArray(body) || body.length > 16) return json({ ok: false, error: 'alerts must be a list of at most 16' }, 400);
+    idx.settings = { ...(idx.settings || {}), alerts: body.map(cleanAlert) };
+    await writeIndex(env, user, idx);
+    return json({ ok: true });
+  }
   if (area === 'settings') {
     if (name !== 'sim') return json({ ok: false, error: 'not found' }, 404);
     if (method === 'GET') return json(idx.settings && idx.settings.sim ? idx.settings.sim : null);

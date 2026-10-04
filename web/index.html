@@ -82,6 +82,9 @@ input[type=range]{width:110px}
 .wrow input.long{width:260px;font-family:ui-monospace,Consolas,monospace}
 .wrow input[type=color]{width:36px;height:26px;padding:1px 2px;border-radius:6px}
 .wrow input[type=checkbox]{width:16px;height:16px;margin:0}
+.wrow.firing{border-left-color:var(--bad);background:#2a1717}
+.wrow input.aname{width:200px;font-weight:600}
+.wrow input.amsg{width:250px}
 .live-val{font-family:ui-monospace,Consolas,monospace;text-align:right}
 .stale{color:var(--dim)}
 .spacer{flex:1}
@@ -103,6 +106,7 @@ input[type=range]{width:110px}
 <nav>
   <button data-tab="gauges" class="active">Gauges</button>
   <button data-tab="live">Live data</button>
+  <button data-tab="alerts">Alerts</button>
   <button data-tab="configs">Configs</button>
   <button data-tab="settings">Settings</button>
 </nav>
@@ -147,6 +151,17 @@ input[type=range]{width:110px}
   </div>
   <div class="card row"><input type="text" id="live-filter" placeholder="Filter channels…"><span class="muted" id="live-note"></span></div>
   <div class="card"><table id="live-table"><thead><tr><th>Channel</th><th>Name</th><th class="live-val">Value</th><th>Unit</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="tab-alerts">
+  <div class="card">
+    <div class="row"><strong>Alerts</strong><span class="muted" id="alert-note"></span><span class="spacer"></span>
+      <select id="alert-preset" title="A starting point for the new alert"></select>
+      <button class="btn small primary" id="btn-add-alert">Add alert</button></div>
+    <div class="muted" style="font-size:13px;margin:6px 0">The hub checks these against the live data ten times a second. While an alert's condition holds, the gauges show its message, switch to its face, or both, and go back when it ends. Where two alerts apply to the same gauge, the one higher in the list wins. Changes are saved as you make them.</div>
+    <div class="msg" id="alert-msg"></div>
+    <div id="alert-list"></div>
+  </div>
 </section>
 
 <section id="tab-configs">
@@ -249,6 +264,7 @@ const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
   editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [], user: null,
+  alerts: [], alertStates: [],
 };
 
 // Signed in to the online copy: these paths go to the account's storage.
@@ -309,6 +325,7 @@ function showTab(name) {
   try { localStorage.setItem('tab', name); } catch (e) { /* private mode */ }
   if (name === 'configs') loadConfigs();
   if (name === 'live') { loadSim(); loadRecordings(); }
+  if (name === 'alerts') loadAlerts();
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -360,6 +377,7 @@ function onMessage(m) {
   if (m.t === 'status') { state.status = m; renderStatus(); }
   else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGaugesIfIdle(); renderTryGauges(); }
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
+  else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
 }
 
 // ---------------------------------------------------------------- gauges
@@ -410,7 +428,10 @@ function drawCards() {
   const now = performance.now();
   for (const p of cardPreviews) {
     const cfg = cachedConfig(p.name);
-    if (cfg) drawFace(p.canvas, cfg, Math.min(p.face, (cfg.faces || []).length - 1), now);
+    if (!cfg) continue;
+    const a = alertFor(p.mac);
+    drawFace(p.canvas, cfg, Math.min(a.face != null ? a.face : p.face, (cfg.faces || []).length - 1), now);
+    if (a.message) drawAlertBanner(p.canvas, a.message, a.color);
   }
 }
 setInterval(drawCards, 250);
@@ -482,7 +503,7 @@ function renderGauges() {
          g.config_crc ? 'config ' + g.config_crc : null].filter(Boolean).join(' · ');
 
     const canvas = g.assigned ? el('canvas', { width: 466, height: 466 }) : null;
-    if (canvas) cardPreviews.push({ canvas, name: g.assigned, face: g.face || 0 });
+    if (canvas) cardPreviews.push({ canvas, name: g.assigned, face: g.face || 0, mac: g.mac });
     const preview = canvas || el('div', { class: 'nocfg' }, 'no config assigned');
 
     const card = el('div', { class: 'card gcard' },
@@ -775,11 +796,11 @@ $('#file-import').addEventListener('change', ev => {
 // so a hub's whole setup can be kept, moved or restored.
 
 async function buildBackup() {
-  const [list, gauges, assignments] = await Promise.all([api.get('/api/configs'), api.get('/api/virtual'), api.get('/api/assignments')]);
+  const [list, gauges, assignments, alerts] = await Promise.all([api.get('/api/configs'), api.get('/api/virtual'), api.get('/api/assignments'), api.get('/api/alerts')]);
   const configs = {};
   for (const c of list) configs[c.name] = await api.get('/api/configs/' + c.name);
   return { kind: 'haltech-gauges-backup', schema: 1, exported: new Date().toISOString(),
-    hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments };
+    hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments, alerts: alerts.rules || [] };
 }
 
 async function exportAll() {
@@ -801,7 +822,8 @@ async function importAll(file) {
   try { bundle = JSON.parse(await file.text()); } catch (e) { alert('Not a JSON file: ' + e.message); return; }
   if (!bundle || bundle.kind !== 'haltech-gauges-backup' || !bundle.configs) { alert('That is not an export from this page. For a single config, use Import file.'); return; }
   const names = Object.keys(bundle.configs), gauges = bundle.gauges || [], assignments = bundle.assignments || {};
-  if (!confirm('Import ' + names.length + ' config(s), ' + gauges.length + ' planned gauge(s) and ' + Object.keys(assignments).length + ' assignment(s)?\nConfigs with the same name are replaced; planned gauges are matched by MAC or name.')) return;
+  const alerts = Array.isArray(bundle.alerts) ? bundle.alerts : null;
+  if (!confirm('Import ' + names.length + ' config(s), ' + gauges.length + ' planned gauge(s), ' + Object.keys(assignments).length + ' assignment(s)' + (alerts ? ' and ' + alerts.length + ' alert(s)' : '') + '?\nConfigs with the same name are replaced; planned gauges are matched by MAC or name' + (alerts ? '; the alerts replace the ones here' : '') + '.')) return;
   const errors = [], done = { configs: 0, gauges: 0, assignments: 0 };
   for (const name of names) {
     try { await api.put('/api/configs/' + name, JSON.stringify(bundle.configs[name]), true); forgetConfig(name); done.configs++; }
@@ -831,8 +853,14 @@ async function importAll(file) {
     try { await api.put('/api/assignments/' + (macMap[mac] || mac), { name }); done.assignments++; }
     catch (e) { errors.push('assignment ' + mac + ': ' + e.message); }
   }
+  if (alerts) {
+    // An alert aimed at one planned gauge follows that gauge to its MAC here.
+    const rules = alerts.map(r => macMap[r.gauge] ? Object.assign({}, r, { gauge: macMap[r.gauge] }) : r);
+    try { await api.put('/api/alerts', rules); state.alerts = rules; renderAlerts(); }
+    catch (e) { errors.push('alerts: ' + e.message); }
+  }
   await loadConfigs();
-  alert('Imported ' + done.configs + ' config(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s).' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
+  alert('Imported ' + done.configs + ' config(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s)' + (alerts ? ', and the alerts' : '') + '.' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
 }
 
 $('#btn-export-all').addEventListener('click', exportAll);
@@ -1241,6 +1269,242 @@ $('#all-fonts').addEventListener('change', ev => {
   ev.target.value = '';
 });
 
+
+// ---------------------------------------------------------------- alerts
+// Rules the hub checks against the live data: while one holds, the gauges show
+// its message, switch to its face, or both. docs/alerts.md has the format.
+
+const ALERT_WHEN = [['above', 'goes above'], ['below', 'goes below'], ['outside', 'is outside'], ['inside', 'is inside'],
+  ['on', 'is on'], ['off', 'is off'], ['changes', 'changes']];
+const MAX_ALERTS = 16;
+const ALERT_RED = '#FF3B30';
+// Starting points; every value can be changed once the alert is in the list.
+const ALERT_PRESETS = {
+  'Coolant hot': { channel: 'coolant_temp', unit: 'C', when: 'above', value: 105, for: 1, message: 'COOLANT HOT' },
+  'Oil pressure low': { channel: 'oil_pressure', unit: 'kPa', when: 'below', value: 100, for: 0.5, message: 'OIL PRESSURE' },
+  'Lambda out of range': { channel: 'wideband_1', unit: 'lambda', when: 'outside', low: 0.75, high: 1.15, for: 1, message: 'CHECK MIXTURE' },
+  'Check engine light': { channel: 'check_engine_light', when: 'on', message: 'CHECK ENGINE' },
+  'Battery low': { channel: 'battery_voltage', when: 'below', value: 12, for: 5, message: 'BATTERY LOW', color: '#FFCC00' },
+  'Shift': { channel: 'rpm', when: 'above', value: 7000, hold: 0.5, message: 'SHIFT', color: '#FFCC00' },
+};
+
+function setAlertMsg(text, cls) {
+  const m = $('#alert-msg');
+  m.textContent = text || '';
+  m.className = 'msg' + (cls ? ' ' + cls : '');
+}
+
+async function loadAlerts() {
+  try {
+    const r = await api.get('/api/alerts');
+    state.alerts = r.rules || [];
+    state.alertStates = r.states || [];
+  } catch (e) { setAlertMsg('Could not load the alerts: ' + e.message, 'bad'); }
+  renderAlerts();
+  await pullCloudAlerts();
+}
+
+// Sends the whole list to the hub, which checks every rule before taking any.
+// Saves run one after another so a later change is never overtaken.
+let alertSave = Promise.resolve();
+function saveAlerts(rerender) {
+  if (rerender) renderAlerts();
+  const rules = JSON.parse(JSON.stringify(state.alerts));
+  alertSave = alertSave.then(async () => {
+    try {
+      await api.put('/api/alerts', rules);
+      setAlertMsg('Saved.', 'ok');
+      if (signedIn()) api.put('/api/settings/alerts', rules).catch(() => { /* the next change retries */ });
+    } catch (e) { setAlertMsg('Not saved: ' + e.message, 'bad'); }
+  });
+  return alertSave;
+}
+
+// Changes properties of one alert; '' or null removes a property.
+function setAlert(i, changes, rerender) {
+  const r = state.alerts[i];
+  if (!r) return;
+  for (const [k, v] of Object.entries(changes)) { if (v === '' || v == null) delete r[k]; else r[k] = v; }
+  saveAlerts(rerender);
+}
+
+// On the account's first signed-in visit to a browser, its alerts replace this browser's.
+let cloudAlertsPulled = false;
+async function pullCloudAlerts() {
+  if (!signedIn() || cloudAlertsPulled) return;
+  cloudAlertsPulled = true;
+  try {
+    const rules = await api.get('/api/settings/alerts');
+    if (!Array.isArray(rules)) {
+      if (state.alerts.length) await api.put('/api/settings/alerts', state.alerts);
+      return;
+    }
+    await api.put('/api/alerts', rules);
+    state.alerts = rules;
+    renderAlerts();
+  } catch (e) { /* keep this browser's alerts */ }
+}
+
+// The limits a rule needs for a kind of condition, keeping what it already has.
+function whenChanges(r, when) {
+  const s = state.alertStates[state.alerts.indexOf(r)], now = s && s.value != null ? +(+s.value).toFixed(2) : 0;
+  if (when === 'above' || when === 'below') return { when, value: r.value != null ? r.value : r.high != null ? r.high : now, low: '', high: '' };
+  if (when === 'outside' || when === 'inside') {
+    const low = r.low != null ? r.low : r.value != null ? r.value : now;
+    return { when, low, high: r.high != null && r.high > low ? r.high : low + 1, value: '' };
+  }
+  return { when, value: '', low: '', high: '' };
+}
+
+// A change of unit carries the limits across: 105 C becomes 221 F.
+function unitChanges(r, unit) {
+  const from = unitFor(r), to = unitFor({ channel: r.channel, unit });
+  const changes = { unit };
+  if (!from || !to || from === to) return changes;
+  for (const k of ['value', 'low', 'high']) {
+    if (r[k] != null) changes[k] = +(((r[k] - from.a) / from.m) * to.m + to.a).toFixed(3);
+  }
+  return changes;
+}
+
+function alertReading(r, s) {
+  if (!s || s.value == null) return 'no data';
+  if (r.when === 'on' || r.when === 'off') return s.value > 0.5 ? 'on' : 'off';
+  const u = unitFor(r);
+  return fmt(+s.value) + (u && u.s ? ' ' + u.s : '');
+}
+
+// The state chips and row highlights, refreshed as the hub reports, without rebuilding the rows.
+function renderAlertStates() {
+  $$('#alert-list .wrow').forEach((row, i) => {
+    const r = state.alerts[i], s = state.alertStates[i], chip = row.querySelector('.chip');
+    if (!r || !chip) return;
+    const off = r.enabled === false, firing = !off && !!(s && s.active);
+    chip.className = 'chip' + (off ? '' : firing ? ' bad' : ' on');
+    chip.textContent = off ? 'switched off' : (firing ? 'IN FORCE' : 'watching') + ' \u00b7 now ' + alertReading(r, s) + (s && s.count ? ' \u00b7 fired ' + s.count + (s.count === 1 ? ' time' : ' times') : '');
+    row.classList.toggle('firing', firing);
+  });
+}
+
+function renderAlerts() {
+  const root = $('#alert-list');
+  if (!root) return;
+  root.innerHTML = '';
+  $('#alert-note').textContent = state.alerts.length + ' of ' + MAX_ALERTS;
+  $('#btn-add-alert').disabled = state.alerts.length >= MAX_ALERTS;
+  const chans = state.meta ? state.meta.channels.slice().sort((a, b) => a.l.localeCompare(b.l)) : [];
+  const gauges = state.gauges.filter(g => g.mac);
+  state.alerts.forEach((r, i) => {
+    const num = (key, extra) => el('input', Object.assign({ type: 'number', step: 'any', value: r[key] == null ? '' : r[key],
+      onchange: ev => setAlert(i, { [key]: ev.target.value === '' ? '' : +ev.target.value }) }, extra || {}));
+    const m = state.metaByName[r.channel];
+    const units = m && state.meta ? state.meta.units[m.u].o.filter(o => o.n) : [];
+    const when = r.when || 'above';
+
+    const condition = [
+      el('label', {}, 'When', el('select', { class: 'chan', onchange: ev => setAlert(i, { channel: ev.target.value, unit: '' }, true) },
+        chans.some(c => c.n === r.channel) ? null : el('option', { value: r.channel || '', selected: '' }, r.channel || 'choose a channel'),
+        ...chans.map(c => el('option', { value: c.n, selected: c.n === r.channel ? '' : null }, c.l)))),
+      el('select', { onchange: ev => setAlert(i, whenChanges(r, ev.target.value), true) },
+        ...ALERT_WHEN.map(([v, label]) => el('option', { value: v, selected: v === when ? '' : null }, label))),
+    ];
+    if (when === 'above' || when === 'below') condition.push(num('value'));
+    else if (when === 'outside' || when === 'inside') condition.push(num('low'), el('span', { class: 'muted' }, 'to'), num('high'));
+    if (units.length > 1 && when !== 'on' && when !== 'off' && when !== 'changes') {
+      condition.push(el('select', { title: 'The unit the limits are in', onchange: ev => setAlert(i, unitChanges(r, ev.target.value), true) },
+        ...units.map((o, k) => el('option', { value: o.n, selected: (r.unit ? o.n === r.unit : k === 0) ? '' : null }, o.s && o.s !== o.n ? o.n + ' (' + o.s + ')' : o.n))));
+    }
+    if (when !== 'changes') {
+      condition.push(el('label', { title: 'How long the condition must hold before the alert fires; 0 fires at once. Rides out a spike or a noisy sensor.' },
+        'for', num('for', { min: 0, max: 600, placeholder: 0 }), 's'));
+    }
+
+    const action = [
+      el('label', { title: 'Shown across the middle of the face while the alert is in force. Up to 32 characters; leave empty for no message.' }, 'Show',
+        el('input', { type: 'text', class: 'amsg', maxlength: 32, value: r.message || '', placeholder: 'no message', onchange: ev => setAlert(i, { message: ev.target.value.trim() }) })),
+      el('input', { type: 'color', value: hex6(r.color || ALERT_RED), title: 'Message colour', onchange: ev => setAlert(i, { color: ev.target.value.toUpperCase() }) }),
+      el('label', { title: 'The face the gauge changes to while the alert is in force' }, 'Switch to',
+        el('select', { onchange: ev => setAlert(i, { face: ev.target.value === '' ? '' : +ev.target.value }, true) },
+          el('option', { value: '' }, 'no face change'),
+          ...[0, 1, 2, 3, 4, 5, 6, 7].map(f => el('option', { value: f, selected: r.face === f ? '' : null }, 'face ' + (f + 1))))),
+      r.face != null ? el('label', { title: 'Go back to the face that was showing when the alert ends' }, 'then back',
+        el('input', { type: 'checkbox', checked: r.restore === false ? null : '', onchange: ev => setAlert(i, { restore: ev.target.checked }) })) : null,
+      el('label', {}, 'on', el('select', { onchange: ev => setAlert(i, { gauge: ev.target.value }) },
+        el('option', { value: 'all' }, 'all gauges'),
+        r.gauge && r.gauge !== 'all' && !gauges.some(g => g.mac === r.gauge) ? el('option', { value: r.gauge, selected: '' }, r.gauge) : null,
+        ...gauges.map(g => el('option', { value: g.mac, selected: g.mac === r.gauge ? '' : null }, gaugeTitle(g))))),
+      el('label', { title: when === 'changes' ? 'How long each change is shown' : 'How long the alert stays in force after the condition stops holding' },
+        when === 'changes' ? 'for' : 'hold', num('hold', { min: 0, max: 600, placeholder: 3 }), 's'),
+    ];
+
+    const title = el('div', { class: 'wtitle', style: 'cursor:default' },
+      el('input', { type: 'checkbox', title: 'Watch for this alert', checked: r.enabled === false ? null : '', onchange: ev => setAlert(i, { enabled: ev.target.checked }) }),
+      el('input', { type: 'text', class: 'aname', maxlength: 24, value: r.name || '', placeholder: 'Alert ' + (i + 1), onchange: ev => setAlert(i, { name: ev.target.value.trim() }) }),
+      el('span', { class: 'chip' }, ''),
+      el('span', { class: 'spacer' }),
+      btn('Test', () => testAlert(i), false, 'small', 'Put this alert in force for five seconds to see what it does'),
+      btn('\u25B2', () => moveAlert(i, i - 1), i === 0, 'small', 'Move up: wins over the alerts below it'),
+      btn('\u25BC', () => moveAlert(i, i + 1), i === state.alerts.length - 1, 'small', 'Move down'),
+      btn('remove', () => { state.alerts.splice(i, 1); saveAlerts(true); }, false, 'small'));
+    root.append(el('div', { class: 'wrow' }, title, el('div', { class: 'ctl' }, ...condition), el('div', { class: 'ctl', style: 'margin-top:6px' }, ...action)));
+  });
+  if (!state.alerts.length) root.append(el('div', { class: 'muted' }, 'No alerts yet. Pick a starting point above and press Add alert.'));
+  renderAlertStates();
+}
+
+function moveAlert(from, to) {
+  const [r] = state.alerts.splice(from, 1);
+  state.alerts.splice(to, 0, r);
+  saveAlerts(true);
+}
+
+async function testAlert(i) {
+  try {
+    await alertSave;
+    await api.post('/api/alerts/test', { index: i, seconds: 5 });
+    setAlertMsg('"' + (state.alerts[i].name || 'Alert ' + (i + 1)) + '" is in force for five seconds: watch the gauges, or the previews on the Gauges tab.');
+  } catch (e) { setAlertMsg(e.message, 'bad'); }
+}
+
+$('#alert-preset').append(...Object.keys(ALERT_PRESETS).map(k => el('option', { value: k }, k)));
+$('#btn-add-alert').addEventListener('click', () => {
+  if (state.alerts.length >= MAX_ALERTS) return;
+  const name = $('#alert-preset').value;
+  const preset = Object.assign({}, ALERT_PRESETS[name]);
+  // A hub that does not know the preset's channel gets the rule on RPM, to be changed.
+  if (state.meta && !state.metaByName[preset.channel]) { preset.channel = 'rpm'; delete preset.unit; }
+  state.alerts.push(Object.assign({ name, enabled: true, for: 0, hold: 3, color: ALERT_RED, gauge: 'all' }, preset));
+  saveAlerts(true);
+});
+
+// What the alerts in force ask of one gauge: the first with a message, and the first with a face.
+function alertFor(mac) {
+  const out = { message: '', color: ALERT_RED, face: null };
+  state.alerts.forEach((r, i) => {
+    const s = state.alertStates[i];
+    if (!s || !s.active || r.enabled === false) return;
+    if (r.gauge && r.gauge !== 'all' && r.gauge !== mac) return;
+    if (!out.message && r.message) { out.message = r.message; out.color = r.color || ALERT_RED; }
+    if (out.face == null && r.face != null) out.face = r.face;
+  });
+  return out;
+}
+
+// The message as a gauge shows it: a band across the middle of the face.
+function drawAlertBanner(canvas, text, col) {
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.beginPath(); ctx.arc(233, 233, 233, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 173, 466, 120);
+  ctx.fillStyle = col; ctx.fillRect(0, 173, 466, 5); ctx.fillRect(0, 288, 466, 5);
+  let size = 56;
+  ctx.font = '700 ' + size + 'px ' + fontStack('condensed');
+  const width = ctx.measureText(text).width;
+  if (width > 410) { size = Math.max(18, Math.floor(size * 410 / width)); ctx.font = '700 ' + size + 'px ' + fontStack('condensed'); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 233, 235);
+  ctx.restore();
+}
 
 // ------------------------------------------------------------- simulator
 // Pause, speed and per-channel overrides, mirrored from the hub's /api/simulator.
@@ -2255,6 +2519,7 @@ async function onGoogle(resp) {
 async function signOut() {
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* cookie may already be gone */ }
   cloudSimPulled = false;
+  cloudAlertsPulled = false;
   await loadUser();
   await loadConfigs();
   await loadRecordings();
@@ -2280,6 +2545,7 @@ async function afterSignIn() {
   await loadConfigs();
   await loadRecordings();
   await pullCloudSim();
+  await pullCloudAlerts();
 }
 
 // The demo's gauge cards read planned gauges and assignments from the account
@@ -2300,6 +2566,7 @@ const mock = {
   simState: { paused: false, speed: 1, overrides: [] }, simClock: 0, simLast: Date.now(),
   displays: { brightness: -1, off: false },
   recordings: {}, library: {}, playback: null,
+  alerts: [], alertRun: [],
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -2406,6 +2673,52 @@ const mock = {
     for (const o of this.simState.overrides) v[o.channel] = o.hold != null ? o.hold : o.min + (o.max - o.min) * load;
     return v;
   },
+  // The hub's alert check, for the demo: the same rules and timing.
+  alertStates() {
+    return this.alerts.map((r, i) => { const s = this.alertRun[i] || {}; return { active: !!s.active, count: s.count || 0, value: s.value == null ? null : s.value }; });
+  },
+  alertProblem(list) {
+    if (!Array.isArray(list)) return 'alerts must be a list';
+    if (list.length > 16) return 'more than 16 alerts';
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i] || {}, head = 'alert ' + (i + 1) + (r.name ? ' (' + r.name + ')' : '') + ': ';
+      if (!r.channel) return head + "'channel' is required";
+      if (!ALERT_WHEN.some(w => w[0] === r.when)) return head + "'when' must be one of above, below, outside, inside, on, off, changes";
+      if ((r.when === 'above' || r.when === 'below') && typeof r.value !== 'number') return head + "'value' must be a number";
+      if ((r.when === 'outside' || r.when === 'inside') && !(typeof r.low === 'number' && typeof r.high === 'number')) return head + "'low' and 'high' must be numbers";
+      if ((r.when === 'outside' || r.when === 'inside') && !(r.low < r.high)) return head + "'low' must be less than 'high'";
+      if (!r.message && r.face == null) return head + "needs a 'message' to show or a 'face' to switch to";
+    }
+    return null;
+  },
+  checkAlerts(values) {
+    const now = Date.now();
+    this.alerts.forEach((r, i) => {
+      const s = this.alertRun[i] || (this.alertRun[i] = { active: false, count: 0 });
+      let v = values[r.channel];
+      if (v != null) { const u = unitFor(r); if (u) v = v * u.m + u.a; }
+      s.value = v == null ? null : v;
+      const delay = (r.for || 0) * 1000, hold = (r.hold == null ? 3 : r.hold) * 1000;
+      if (r.enabled === false) { s.active = s.pending = false; s.last = null; }
+      else if (r.when === 'changes') {
+        if (v != null && s.last != null && Math.abs(v - s.last) > 1e-6) { if (!s.active) s.count++; s.active = true; s.lastTrue = now; }
+        else if (s.active && now - s.lastTrue >= hold) s.active = false;
+        s.last = v == null ? null : v;
+      } else {
+        const holds = v != null && (r.when === 'above' ? v > r.value : r.when === 'below' ? v < r.value : r.when === 'outside' ? (v < r.low || v > r.high)
+          : r.when === 'inside' ? (v >= r.low && v <= r.high) : r.when === 'on' ? v > 0.5 : v <= 0.5);
+        if (holds) {
+          if (!s.pending) { s.pending = true; s.since = now; }
+          if (now - s.since >= delay) { if (!s.active) s.count++; s.active = true; s.lastTrue = now; }
+          else if (s.active && now - s.lastTrue >= hold) s.active = false;
+        } else { s.pending = false; if (s.active && now - s.lastTrue >= hold) s.active = false; }
+      }
+      if (s.testUntil) {
+        if (now < s.testUntil) s.active = true;
+        else { s.testUntil = 0; if (!s.pending) s.active = false; }
+      }
+    });
+  },
   async req(method, path, body, raw) {
     // Online, the worker serves these as static files behind the hub's paths.
     if (ONLINE && (path === '/api/templates' || path.startsWith('/api/templates/') || path === '/api/channels/meta' || path === '/api/fonts')) {
@@ -2419,13 +2732,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings })); }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts })); }
     catch (e) { /* no storage */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -2488,6 +2801,21 @@ const mock = {
       }
       if (method === 'DELETE') { if (this.playback && this.playback.name === name) this.playback = null; delete this.recordings[name]; return { ok: true }; }
     }
+    if (path === '/api/alerts/test') {
+      if (!this.alerts[body.index]) throw new Error('no such alert');
+      (this.alertRun[body.index] || (this.alertRun[body.index] = { active: false, count: 0 })).testUntil = Date.now() + (body.seconds || 5) * 1000;
+      return { ok: true };
+    }
+    if (path === '/api/alerts') {
+      if (method === 'PUT') {
+        const list = parse(), problem = this.alertProblem(list);
+        if (problem) throw new Error(problem);
+        this.alerts = list;
+        this.alertRun = [];
+        return { ok: true };
+      }
+      return { rules: JSON.parse(JSON.stringify(this.alerts)), states: this.alertStates(), max: 16 };
+    }
     if (path === '/api/record') throw new Error('this is the online copy: there is no hub to record from');
     if (path === '/api/playback') {
       if (body.action === 'start') {
@@ -2512,7 +2840,12 @@ const mock = {
     const push = () => { onMessage(this.status()); onMessage({ t: 'gauges', gauges: this.gauges() }); };
     push();
     setInterval(push, 1000);
-    setInterval(() => onMessage({ t: 'live', v: this.live() }), 333);
+    setInterval(() => {
+      const v = this.live();
+      onMessage({ t: 'live', v });
+      this.checkAlerts(v);
+      onMessage({ t: 'alerts', states: this.alertStates() });
+    }, 333);
   },
 };
 
@@ -2527,6 +2860,7 @@ async function loadMeta(attempts) {
       state.meta = await api.get('/api/channels/meta');
       state.metaByName = Object.fromEntries(state.meta.channels.map(c => [c.n, c]));
       buildLiveTable();
+      renderAlerts();
       if (state.previewCfg) renderWidgetTable();
       loadSim();
       break;
@@ -2546,10 +2880,11 @@ async function init() {
   try { saved = localStorage.getItem('tab'); } catch (e) { /* private mode */ }
   // #live, #configs and so on open that tab directly.
   const linked = location.hash.replace('#', '').replace('-demo', '');
-  showTab(['gauges', 'live', 'configs', 'settings'].includes(linked) ? linked : (saved || 'gauges'));
+  showTab(['gauges', 'live', 'alerts', 'configs', 'settings'].includes(linked) ? linked : (saved || 'gauges'));
   try { setFonts(await api.get('/api/fonts')); } catch (e) { setFonts(DEFAULT_FONTS); }
   const metaReady = loadMeta(6);
   await loadConfigs();
+  await loadAlerts();
   connect();
   await metaReady;
   if (MOCK && location.hash === '#configs-demo') openEditor('demo', mock.templates['classic-tach'], true);

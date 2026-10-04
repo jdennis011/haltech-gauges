@@ -20,6 +20,9 @@ public:
         void (*status)(Status& out, void* ctx);
         // Incoming configs.
         XferReceiver::Handler transfer;
+        // The message to show over the face changed; `show` is false when
+        // there is none any more. May be null.
+        void (*alert)(const Alert& alert, void* ctx);
         void* ctx;
     };
 
@@ -81,6 +84,7 @@ private:
 
     XferReceiver receiver_;
     XferSender sender_;
+    AlertReceiver alerts_;
 };
 
 }  // namespace proto

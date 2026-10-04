@@ -4,6 +4,7 @@
 
 #include <atomic>
 
+#include "alert_monitor.h"
 #include "can_ports.h"
 #include "channel_store.h"
 #include "display_control.h"
@@ -106,6 +107,7 @@ void gaugeBusTask(void*) {
         onlineCount = online;
         gaugesOnline = online > 0;
         simulator::poll(now, liveStore, gaugesOnline ? &gaugePort : nullptr);
+        alert_monitor::poll(now, liveStore);
     }
 }
 
@@ -266,6 +268,7 @@ void setup() {
     virtual_gauges::begin();
     display_control::begin();
     recorder::begin();
+    alert_monitor::begin();
 
     HubManager::Handler handler = {};
     handler.desired = library_store::desired;

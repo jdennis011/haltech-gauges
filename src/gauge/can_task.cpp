@@ -29,6 +29,10 @@ std::atomic<uint32_t> identifyUntil{0};
 std::atomic<int> brightnessRequest{-1};
 std::atomic<bool> reboot{false};
 
+// Written by the CAN task, read by the UI loop.
+portMUX_TYPE alertMux = portMUX_INITIALIZER_UNLOCKED;
+proto::Alert alertNow;
+
 const char* kPrefsNamespace = "gauge";
 const char* kNodeKey = "node";
 
@@ -58,6 +62,17 @@ bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
         default:
             // Faces and stored configs arrive with the face builder.
             return false;
+    }
+}
+
+void onAlert(const proto::Alert& alert, void*) {
+    portENTER_CRITICAL(&alertMux);
+    alertNow = alert;
+    portEXIT_CRITICAL(&alertMux);
+    if (alert.show) {
+        Serial.printf("Alert: %s\n", alert.text);
+    } else {
+        Serial.println("Alert cleared");
     }
 }
 
@@ -161,6 +176,7 @@ void begin() {
     proto::GaugeNode::Handler handler = {};
     handler.command = onCommand;
     handler.status = onStatus;
+    handler.alert = onAlert;
     handler.transfer = {refuseTransfer, ignoreTransfer, nullptr, nullptr};
     node.init({canSend, nullptr}, mac, id, info, cfg::kSchemaVersion, handler);
 
@@ -175,5 +191,16 @@ void setVbusMillivolts(uint16_t millivolts) { vbus = millivolts; }
 uint32_t identifyUntilMs() { return identifyUntil; }
 int takeBrightnessRequest() { return brightnessRequest.exchange(-1); }
 bool rebootRequested() { return reboot; }
+
+bool alertMessage(char* text, uint32_t& color) {
+    portENTER_CRITICAL(&alertMux);
+    const bool show = alertNow.show;
+    if (show) {
+        memcpy(text, alertNow.text, sizeof(alertNow.text));
+        color = alertNow.color;
+    }
+    portEXIT_CRITICAL(&alertMux);
+    return show;
+}
 
 }  // namespace can_task

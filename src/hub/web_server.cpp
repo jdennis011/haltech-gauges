@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "alert_monitor.h"
 #include "channel_store.h"
 #include "display_control.h"
 #include "face_model.h"
@@ -54,6 +55,8 @@ uint32_t lastStatusMs = 0;
 uint32_t lastGaugesMs = 0;
 uint32_t lastLiveMs = 0;
 uint32_t sentRosterVersion = 0;
+uint32_t lastAlertsMs = 0;
+uint32_t sentAlertVersion = 0;
 uint32_t skippedPushes = 0;
 
 // ------------------------------------------------------------ request helpers
@@ -368,6 +371,14 @@ void gaugesMessage(String& out) {
     JsonDocument doc;
     doc["t"] = "gauges";
     buildGauges(doc["gauges"].to<JsonArray>());
+    serializeJson(doc, out);
+}
+
+// Which alerts are in force, as {"t":"alerts","states":[{"active":true,"count":2,"value":106.2},...]}.
+void alertsMessage(String& out) {
+    JsonDocument doc;
+    doc["t"] = "alerts";
+    alert_monitor::statesJson(doc["states"].to<JsonArray>());
     serializeJson(doc, out);
 }
 
@@ -859,6 +870,33 @@ void handleSimulator(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
+// GET gives the alert rules and their states. PUT replaces the rules with the
+// list in the body, refusing the lot if any rule is wrong.
+void handleAlerts(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_PUT) {
+        const Body* b = bodyOf(r);
+        if (!b || b->len == 0) return sendError(r, 400, "send the list of alerts as the request body");
+        std::string error;
+        if (!alert_monitor::setRules(b->data, b->len, error)) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    JsonDocument doc;
+    alert_monitor::rulesJson(doc["rules"].to<JsonArray>());
+    alert_monitor::statesJson(doc["states"].to<JsonArray>());
+    doc["max"] = alert_monitor::kMaxRules;
+    sendJson(r, doc);
+}
+
+// POST {index, seconds?}: puts one alert in force for a few seconds to see what it does.
+void handleAlertTest(AsyncWebServerRequest* r) {
+    JsonDocument body;
+    if (!parseBody(r, body)) return;
+    if (!alert_monitor::test(size_t(body["index"] | -1), uint32_t(body["seconds"] | 5))) {
+        return sendError(r, 404, "no such alert");
+    }
+    sendOk(r);
+}
+
 void handleWifi(AsyncWebServerRequest* r) {
     switch (r->method()) {
         case HTTP_GET: {
@@ -899,6 +937,8 @@ void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType type,
     gaugesMessage(s);
     client->text(s);
     liveMessage(s);
+    client->text(s);
+    alertsMessage(s);
     client->text(s);
 }
 
@@ -946,6 +986,8 @@ void begin() {
     server.on("/api/record", HTTP_POST, handleRecord, nullptr, collectBody);
     server.on("/api/playback", HTTP_POST, handlePlayback, nullptr, collectBody);
     server.on("/api/simulator", HTTP_GET | HTTP_POST, handleSimulator, nullptr, collectBody);
+    server.on("/api/alerts/test", HTTP_POST, handleAlertTest, nullptr, collectBody);
+    server.on("/api/alerts", HTTP_GET | HTTP_PUT, handleAlerts, nullptr, collectBody);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.onNotFound(handleNotFound);
 
@@ -957,7 +999,17 @@ void loop() {
     ws.cleanupClients(kMaxWsClients);
     if (ws.count() == 0) {
         sentRosterVersion = hub::rosterVersion();
+        sentAlertVersion = alert_monitor::version();
         return;
+    }
+    // Promptly when an alert fires or ends; otherwise once a second, for the readings.
+    const uint32_t alertVersion = alert_monitor::version();
+    if ((alertVersion != sentAlertVersion && now - lastAlertsMs >= 100) ||
+        (alert_monitor::ruleCount() && now - lastAlertsMs >= 1000)) {
+        lastAlertsMs = now;
+        String s;
+        alertsMessage(s);
+        if (pushAll(s)) sentAlertVersion = alertVersion;
     }
     if (now - lastStatusMs >= 1000) {
         lastStatusMs = now;

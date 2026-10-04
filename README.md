@@ -67,6 +67,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/web-ui.md` | The hub's page and its REST and WebSocket API |
 | `docs/config-schema.md` | The face config format |
 | `docs/templates.md` | The built-in templates, with a gallery |
+| `docs/alerts.md` | Alerts: rules on the hub that put a message on the gauges or switch their face when a channel meets a condition |
 | `docs/electrical-spec.md` | Hub carrier and gauge adapter: circuits, parts, connectors |
 | `docs/bom.md`, `docs/bom-pcbway.md` | Shopping lists by store, and a PCBWay-ready BOM |
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |

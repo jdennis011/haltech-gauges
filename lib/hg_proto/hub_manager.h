@@ -81,6 +81,10 @@ public:
 
     // Sends a command. The gauge's answer appears in its roster entry.
     bool command(uint32_t node, Cmd cmd, uint8_t arg);
+    // Shows a message over a gauge's face, or takes it down. Repeat it every
+    // kAlertRepeatMs while it applies; the gauge drops it when the repeats stop.
+    // False if the gauge is offline or the bus could not take every frame.
+    bool alert(uint32_t node, const Alert& alert, uint8_t seq);
     // Shows a config on a gauge without storing it. `data` must stay valid
     // until pushBusy() is false. Returns false if a transfer is already running.
     bool tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs);

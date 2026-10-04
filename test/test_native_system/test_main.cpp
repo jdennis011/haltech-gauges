@@ -8,8 +8,11 @@
 #include <array>
 #include <deque>
 #include <map>
+#include <string>
 #include <vector>
 
+#include "alert_dispatch.h"
+#include "alert_rules.h"
 #include "channel_store.h"
 #include "crc32.h"
 #include "gauge_node.h"
@@ -88,6 +91,9 @@ struct SimGauge {
     int transfersOffered = 0;
     int rejectCount = 0;
     bool rejectConfigs = false;
+    bool alertShown = false;
+    std::string alertText;
+    int alertChanges = 0;
 
     static bool onCommand(Cmd cmd, uint8_t arg, void* ctx) {
         SimGauge* g = static_cast<SimGauge*>(ctx);
@@ -98,6 +104,12 @@ struct SimGauge {
             case Cmd::SendConfig: return g->node.upload(g->stored.data(), uint32_t(g->stored.size()), *g->now);
             default: return false;
         }
+    }
+    static void onAlert(const Alert& a, void* ctx) {
+        SimGauge* g = static_cast<SimGauge*>(ctx);
+        g->alertShown = a.show;
+        g->alertText = a.text;
+        g->alertChanges++;
     }
     static void onStatus(Status& s, void* ctx) {
         SimGauge* g = static_cast<SimGauge*>(ctx);
@@ -140,6 +152,7 @@ struct SimGauge {
         h.command = onCommand;
         h.status = onStatus;
         h.transfer = {onAccept, onComplete, nullptr, this};
+        h.alert = onAlert;
         h.ctx = this;
         Info info;
         info.fwMajor = 1;
@@ -446,6 +459,142 @@ void test_commands_reach_the_gauge_and_are_acknowledged() {
     TEST_ASSERT_FALSE(w.hub.mgr.command(0x999999, Cmd::Identify, 1));  // unknown gauge
 }
 
+void test_alert_message_stays_up_only_while_the_hub_repeats_it() {
+    World w;
+    w.run(1500);
+    const uint32_t node = w.g1.node.node();
+
+    Alert a;
+    a.show = true;
+    a.color = 0xFFCC00;
+    strcpy(a.text, "COOLANT HOT");
+    TEST_ASSERT_TRUE(w.hub.mgr.alert(node, a, 1));
+    w.run(20);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL_STRING("COOLANT HOT", w.g1.alertText.c_str());
+    TEST_ASSERT_FALSE(w.g2.alertShown);
+
+    // Repeated every second it stays up, and is not reported again.
+    for (int i = 0; i < 5; i++) {
+        w.run(kAlertRepeatMs);
+        TEST_ASSERT_TRUE(w.hub.mgr.alert(node, a, 1));
+    }
+    w.run(20);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL(1, w.g1.alertChanges);
+
+    // The hub stops repeating it (or its clear is lost): the gauge takes it down itself.
+    w.run(3100);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
+
+    // A clear takes effect at once.
+    TEST_ASSERT_TRUE(w.hub.mgr.alert(node, a, 2));
+    w.run(20);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_TRUE(w.hub.mgr.alert(node, Alert(), 2));
+    w.run(20);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
+
+    TEST_ASSERT_FALSE(w.hub.mgr.alert(0x999999, a, 3));  // unknown gauge
+}
+
+namespace {
+
+// The hub's alert check running alongside the bus: rules, live data, and the
+// dispatcher that carries them out, stepped a millisecond at a time.
+struct AlertRig {
+    World& w;
+    alerts::Engine engine;
+    alerts::Dispatcher dispatcher;
+    ChannelStore store;
+
+    AlertRig(World& world, const char* json) : w(world) {
+        std::vector<alerts::Rule> rules;
+        const alerts::ParseResult r = alerts::parseRules(reinterpret_cast<const uint8_t*>(json), strlen(json), rules);
+        TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+        engine.setRules(rules);
+    }
+    void run(ChannelId id, float value, uint32_t ms) {
+        for (uint32_t i = 0; i < ms; i++) {
+            w.now++;
+            if (w.now % 100 == 0) {
+                store.set(id, value, true, w.now);
+                engine.evaluate(store, w.now);
+                dispatcher.run(engine, w.hub.mgr, w.now);
+            }
+            w.hub.step();
+            w.g1.step();
+            w.g2.step();
+        }
+    }
+};
+
+}  // namespace
+
+void test_alert_rules_are_carried_out_on_the_gauges() {
+    World w;
+    w.run(1500);
+    w.g1.activeFace = 1;
+    w.g2.activeFace = 0;
+    w.run(1500);  // the hub hears which face each is on
+
+    // Coolant: a message on every gauge, and gauge 1 switches to face 2 and back.
+    AlertRig rig(w, R"([
+      {"channel":"coolant_temp","when":"above","value":105,"hold":1,"message":"COOLANT HOT"},
+      {"channel":"coolant_temp","when":"above","value":105,"hold":1,"face":2,"gauge":"24:6F:28:11:22:33"}
+    ])");
+    rig.run(CH_coolant_temp, 90, 500);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL(1, w.g1.activeFace);
+
+    rig.run(CH_coolant_temp, 110, 300);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_TRUE(w.g2.alertShown);
+    TEST_ASSERT_EQUAL_STRING("COOLANT HOT", w.g2.alertText.c_str());
+    TEST_ASSERT_EQUAL(2, w.g1.activeFace);
+    TEST_ASSERT_EQUAL(0, w.g2.activeFace);
+
+    // It stays up for as long as the condition holds, without being re-announced.
+    rig.run(CH_coolant_temp, 110, 6000);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL(1, w.g1.alertChanges);
+
+    // A gauge that resets in the middle of it gets the message again.
+    w.g2.boot();
+    w.g2.alertShown = false;
+    rig.run(CH_coolant_temp, 110, 2500);
+    TEST_ASSERT_TRUE(w.g2.alertShown);
+
+    // The alert ends: the message comes down and gauge 1 goes back to its face.
+    rig.run(CH_coolant_temp, 90, 1500);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
+    TEST_ASSERT_FALSE(w.g2.alertShown);
+    TEST_ASSERT_EQUAL(1, w.g1.activeFace);
+}
+
+void test_higher_alert_takes_over_the_message() {
+    World w;
+    w.run(1500);
+    AlertRig rig(w, R"([
+      {"channel":"rpm","when":"above","value":7000,"hold":0,"message":"SHIFT","restore":false,"face":3},
+      {"channel":"rpm","when":"above","value":3000,"hold":0,"message":"ON BOOST"}
+    ])");
+    rig.run(CH_rpm, 4000, 300);
+    TEST_ASSERT_EQUAL_STRING("ON BOOST", w.g1.alertText.c_str());
+    rig.run(CH_rpm, 7500, 300);
+    TEST_ASSERT_EQUAL_STRING("SHIFT", w.g1.alertText.c_str());
+    TEST_ASSERT_EQUAL(3, w.g1.activeFace);
+    // Back under the shift point: the lower alert's message returns, and with
+    // "restore" off the gauge stays on the face it was sent to.
+    rig.run(CH_rpm, 4000, 300);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL_STRING("ON BOOST", w.g1.alertText.c_str());
+    TEST_ASSERT_EQUAL(3, w.g1.activeFace);
+    rig.run(CH_rpm, 1000, 300);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL(3, w.g1.activeFace);
+}
+
 void test_try_config_is_shown_but_not_stored() {
     World w;
     const Bytes a = makeConfig("stored config");
@@ -575,6 +724,9 @@ int main(int, char**) {
     RUN_TEST(test_unplug_during_push_recovers);
     RUN_TEST(test_duplicate_node_ids_are_resolved);
     RUN_TEST(test_commands_reach_the_gauge_and_are_acknowledged);
+    RUN_TEST(test_alert_message_stays_up_only_while_the_hub_repeats_it);
+    RUN_TEST(test_alert_rules_are_carried_out_on_the_gauges);
+    RUN_TEST(test_higher_alert_takes_over_the_message);
     RUN_TEST(test_try_config_is_shown_but_not_stored);
     RUN_TEST(test_refused_config_is_not_retried_until_the_gauge_changes);
     RUN_TEST(test_config_newer_than_gauge_firmware_is_not_sent);

@@ -253,6 +253,83 @@ void test_request_round_trip() {
     TEST_ASSERT_FALSE(unpack(pack(c, 0x040506), rq2));
 }
 
+void test_alert_round_trip() {
+    Alert a;
+    a.show = true;
+    a.color = 0x12AB34;
+    strcpy(a.text, "COOLANT HOT: PULL OVER NOW 12345");  // the full 32 characters
+    CanFrame frames[kAlertMaxFrames];
+    size_t count = packAlert(a, 5, 0x040506, frames);
+    TEST_ASSERT_EQUAL(6, count);
+    for (size_t i = 0; i < count; i++) {
+        TEST_ASSERT_TRUE(frames[i].extended);
+        TEST_ASSERT_EQUAL(int(Msg::Alert), int(idMsg(frames[i].id)));
+        TEST_ASSERT_EQUAL(int(Dir::HubToGauge), int(idDir(frames[i].id)));
+        TEST_ASSERT_EQUAL_HEX32(0x040506, idNode(frames[i].id));
+    }
+
+    AlertReceiver rx;
+    TEST_ASSERT_FALSE(rx.current().show);
+    for (size_t i = 0; i + 1 < count; i++) TEST_ASSERT_FALSE(rx.onFrame(frames[i], 1000));
+    TEST_ASSERT_TRUE(rx.onFrame(frames[count - 1], 1000));
+    TEST_ASSERT_TRUE(rx.current().show);
+    TEST_ASSERT_EQUAL_STRING(a.text, rx.current().text);
+    TEST_ASSERT_EQUAL_HEX32(0x12AB34, rx.current().color);
+    // The repeats that keep it up are not a change.
+    for (size_t i = 0; i < count; i++) TEST_ASSERT_FALSE(rx.onFrame(frames[i], 1500));
+
+    // A different, shorter message replaces it.
+    Alert b;
+    b.show = true;
+    strcpy(b.text, "SHIFT");
+    count = packAlert(b, 6, 0x040506, frames);
+    TEST_ASSERT_EQUAL(2, count);
+    TEST_ASSERT_FALSE(rx.onFrame(frames[0], 2000));
+    TEST_ASSERT_TRUE(rx.onFrame(frames[1], 2000));
+    TEST_ASSERT_EQUAL_STRING("SHIFT", rx.current().text);
+
+    // A clear is one frame and takes it down at once.
+    Alert clear;
+    count = packAlert(clear, 6, 0x040506, frames);
+    TEST_ASSERT_EQUAL(1, count);
+    TEST_ASSERT_TRUE(rx.onFrame(frames[0], 2100));
+    TEST_ASSERT_FALSE(rx.current().show);
+    TEST_ASSERT_FALSE(rx.onFrame(frames[0], 2200));
+}
+
+void test_alert_survives_lost_frames_and_times_out() {
+    Alert a;
+    a.show = true;
+    strcpy(a.text, "OIL PRESSURE LOW");  // three frames of text
+    CanFrame frames[kAlertMaxFrames];
+    const size_t count = packAlert(a, 1, 0x040506, frames);
+    TEST_ASSERT_EQUAL(4, count);
+
+    // The middle text frame is lost: nothing shows until a repeat fills it in.
+    AlertReceiver rx;
+    rx.onFrame(frames[0], 0);
+    rx.onFrame(frames[1], 0);
+    rx.onFrame(frames[3], 0);
+    TEST_ASSERT_FALSE(rx.current().show);
+    TEST_ASSERT_FALSE(rx.onFrame(frames[0], 1000));
+    TEST_ASSERT_FALSE(rx.onFrame(frames[1], 1000));
+    TEST_ASSERT_TRUE(rx.onFrame(frames[2], 1000));
+    TEST_ASSERT_EQUAL_STRING("OIL PRESSURE LOW", rx.current().text);
+
+    // Repeats keep it up; three seconds after the last one it comes down.
+    TEST_ASSERT_FALSE(rx.poll(3900));
+    for (size_t i = 0; i < count; i++) rx.onFrame(frames[i], 3900);
+    TEST_ASSERT_FALSE(rx.poll(6800));
+    TEST_ASSERT_TRUE(rx.poll(6900));
+    TEST_ASSERT_FALSE(rx.current().show);
+    TEST_ASSERT_FALSE(rx.poll(7000));
+
+    // Text frames of a message whose header never arrived show nothing.
+    AlertReceiver deaf;
+    for (size_t i = 1; i < count; i++) TEST_ASSERT_FALSE(deaf.onFrame(frames[i], 0));
+    TEST_ASSERT_FALSE(deaf.current().show);
+}
+
 void test_xfer_small_payload() {
     Rig rig;
     auto payload = makePayload(10);
@@ -434,6 +511,8 @@ int main(int, char**) {
     RUN_TEST(test_id_fields_round_trip);
     RUN_TEST(test_messages_round_trip);
     RUN_TEST(test_request_round_trip);
+    RUN_TEST(test_alert_round_trip);
+    RUN_TEST(test_alert_survives_lost_frames_and_times_out);
     RUN_TEST(test_xfer_small_payload);
     RUN_TEST(test_xfer_edge_sizes);
     RUN_TEST(test_xfer_4k_config_is_fast_on_a_clean_link);

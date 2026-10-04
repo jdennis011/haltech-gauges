@@ -85,6 +85,17 @@ bool HubManager::command(uint32_t node, Cmd cmd, uint8_t arg) {
     return true;
 }
 
+bool HubManager::alert(uint32_t node, const Alert& alert, uint8_t seq) {
+    const Gauge* g = find(node);
+    if (!g || !g->online) return false;
+    CanFrame frames[kAlertMaxFrames];
+    const size_t count = packAlert(alert, seq, node, frames);
+    for (size_t i = 0; i < count; i++) {
+        if (!send(frames[i])) return false;
+    }
+    return true;
+}
+
 bool HubManager::tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs) {
     const Gauge* g = find(node);
     if (!g || !g->online || sender_.busy()) return false;

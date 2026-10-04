@@ -26,4 +26,8 @@ uint32_t identifyUntilMs();
 int takeBrightnessRequest();
 bool rebootRequested();
 
+// The alert message the hub wants shown over the face. False when there is
+// none; otherwise fills `text` (at least 33 bytes) and `color` (0xRRGGBB).
+bool alertMessage(char* text, uint32_t& color);
+
 }  // namespace can_task

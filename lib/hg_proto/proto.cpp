@@ -148,6 +148,85 @@ bool unpack(const CanFrame& f, CommandAck& m) {
     return true;
 }
 
+// Header: seq << 4, flags (bit 0 = show), text length, colour (3 bytes), time
+// to live in seconds. Text frames: seq << 4 | index (1..5), then up to 7 bytes.
+size_t packAlert(const Alert& m, uint8_t seq, uint32_t node, CanFrame out[kAlertMaxFrames]) {
+    size_t length = 0;
+    while (m.show && length < kAlertMaxText && m.text[length]) length++;
+
+    out[0] = makeFrame(Msg::Alert, Dir::HubToGauge, node, 7);
+    out[0].data[0] = uint8_t(seq << 4);
+    out[0].data[1] = m.show ? 1 : 0;
+    out[0].data[2] = uint8_t(length);
+    put24(out[0].data + 3, m.color);
+    out[0].data[6] = m.ttlSeconds;
+
+    size_t count = 1;
+    for (size_t pos = 0; pos < length; pos += 7) {
+        const size_t n = length - pos < 7 ? length - pos : 7;
+        out[count] = makeFrame(Msg::Alert, Dir::HubToGauge, node, uint8_t(1 + n));
+        out[count].data[0] = uint8_t((seq << 4) | count);
+        memcpy(out[count].data + 1, m.text + pos, n);
+        count++;
+    }
+    return count;
+}
+
+bool AlertReceiver::onFrame(const CanFrame& f, uint32_t nowMs) {
+    if (f.len < 1) return false;
+    const uint8_t seq = f.data[0] >> 4;
+    const uint8_t index = f.data[0] & 0x0F;
+    if (seq != seq_) {  // a different message: start again
+        seq_ = seq;
+        haveHeader_ = false;
+        chunks_ = 0;
+    }
+
+    if (index == 0) {
+        if (f.len < 7) return false;
+        const uint8_t length = f.data[2] > kAlertMaxText ? uint8_t(kAlertMaxText) : f.data[2];
+        if (haveHeader_ && length != length_) chunks_ = 0;
+        haveHeader_ = true;
+        length_ = length;
+        pending_.show = (f.data[1] & 1) != 0;
+        pending_.color = get24(f.data + 3);
+        pending_.ttlSeconds = f.data[6];
+        if (!pending_.show) {
+            const bool wasShowing = current_.show;
+            current_ = Alert();
+            chunks_ = 0;
+            return wasShowing;
+        }
+    } else {
+        const size_t pos = size_t(index - 1) * 7;
+        if (index > 5 || pos >= kAlertMaxText) return false;
+        size_t n = f.len - 1;
+        if (pos + n > kAlertMaxText) n = kAlertMaxText - pos;
+        memcpy(pending_.text + pos, f.data + 1, n);
+        chunks_ |= uint8_t(1u << (index - 1));
+    }
+
+    if (!haveHeader_ || !pending_.show) return false;
+    const uint8_t needed = uint8_t((1u << ((length_ + 6) / 7)) - 1);
+    if ((chunks_ & needed) != needed) return false;
+    pending_.text[length_] = 0;
+    refreshedMs_ = nowMs;
+    const bool changed = !current_.show || current_.color != pending_.color ||
+                         strcmp(current_.text, pending_.text) != 0;
+    current_ = pending_;
+    return changed;
+}
+
+bool AlertReceiver::poll(uint32_t nowMs) {
+    if (!current_.show || current_.ttlSeconds == 0) return false;
+    if (uint32_t(nowMs - refreshedMs_) < uint32_t(current_.ttlSeconds) * 1000) return false;
+    current_ = Alert();
+    seq_ = 0xFF;
+    haveHeader_ = false;
+    chunks_ = 0;
+    return true;
+}
+
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node) {
     CanFrame f = makeFrame(Msg::XferBegin, dir, node, 6);
     f.data[0] = m.session;

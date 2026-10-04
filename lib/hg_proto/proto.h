@@ -12,6 +12,7 @@
 // A gauge's node id is the low 24 bits of its MAC unless it has re-rolled one
 // after seeing a duplicate. Multi-byte fields are big-endian.
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "can_frame.h"
@@ -36,6 +37,7 @@ enum class Msg : uint8_t {
     Status = 3,
     Command = 4,
     CommandAck = 5,
+    Alert = 6,  // hub to gauge: a message to show over the face, in up to six frames
     XferBegin = 8,
     XferData = 9,
     XferEnd = 10,
@@ -128,6 +130,21 @@ struct Request {
     bool all = false;
 };
 
+// A message the hub asks a gauge to show over its face while an alert is in
+// force, or the order to take it down. It goes out as a header frame and up
+// to five frames of text, and is repeated for as long as it applies: a gauge
+// drops the message when the repeats stop, so a lost "clear" cannot leave it up.
+constexpr size_t kAlertMaxText = 32;
+constexpr size_t kAlertMaxFrames = 6;
+constexpr uint32_t kAlertRepeatMs = 1000;
+
+struct Alert {
+    bool show = false;          // false takes the message down
+    uint32_t color = 0xFF3B30;  // 0xRRGGBB
+    uint8_t ttlSeconds = 3;     // how long the message outlives the last repeat; 0 = until cleared
+    char text[kAlertMaxText + 1] = {};
+};
+
 struct XferBegin {
     uint8_t session = 0;
     XferKind kind = XferKind::Config;
@@ -161,6 +178,9 @@ CanFrame pack(const Status& m, uint32_t node);
 CanFrame pack(const Command& m, uint32_t node);
 CanFrame pack(const CommandAck& m, uint32_t node);
 CanFrame pack(const Request& m, uint32_t node);
+// Fills `out` with the frames of one alert and returns how many. `seq` (0..15)
+// tells one message from the next.
+size_t packAlert(const Alert& m, uint8_t seq, uint32_t node, CanFrame out[kAlertMaxFrames]);
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node);
 CanFrame pack(const XferEnd& m, Dir dir, uint32_t node);
 CanFrame pack(const XferAck& m, Dir dir, uint32_t node);
@@ -182,6 +202,28 @@ bool unpack(const CanFrame& f, XferBegin& m);
 bool unpack(const CanFrame& f, XferEnd& m);
 bool unpack(const CanFrame& f, XferAck& m);
 bool unpack(const CanFrame& f, XferAbort& m);
+
+// Puts an alert back together on the gauge from its frames.
+class AlertReceiver {
+public:
+    // Takes a Msg::Alert frame. True if what should be on screen changed.
+    bool onFrame(const CanFrame& frame, uint32_t nowMs);
+    // True if the message has just timed out.
+    bool poll(uint32_t nowMs);
+    // The message to show; `show` is false when there is none.
+    const Alert& current() const { return current_; }
+
+private:
+    Alert current_;
+    uint32_t refreshedMs_ = 0;
+
+    // The message being received.
+    Alert pending_;
+    uint8_t seq_ = 0xFF;
+    bool haveHeader_ = false;
+    uint8_t length_ = 0;
+    uint8_t chunks_ = 0;  // bit k-1 is set once text frame k has arrived
+};
 
 }  // namespace proto
 }  // namespace hg

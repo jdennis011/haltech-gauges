@@ -25,6 +25,7 @@ void GaugeNode::init(const XferLink& link, const uint8_t mac[6], uint32_t node, 
     hubPresent_ = false;
     helloPending_ = infoPending_ = ackPending_ = statusDue_ = false;
     conflict_ = false;
+    alerts_ = AlertReceiver();
     receiver_.init(link, node, Dir::HubToGauge, handler.transfer);
 }
 
@@ -99,12 +100,18 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
             sender_.onFrame(frame, nowMs);
             break;
 
+        case Msg::Alert:
+            if (alerts_.onFrame(frame, nowMs) && handler_.alert) handler_.alert(alerts_.current(), handler_.ctx);
+            break;
+
         default:
             break;
     }
 }
 
 void GaugeNode::poll(uint32_t nowMs) {
+    // An alert the hub has stopped repeating comes down, hub or no hub.
+    if (alerts_.poll(nowMs) && handler_.alert) handler_.alert(alerts_.current(), handler_.ctx);
     hubPresent_ = haveBeacon_ && uint32_t(nowMs - lastBeaconMs_) < kBeaconTimeoutMs;
     if (!hubPresent_) return;
 

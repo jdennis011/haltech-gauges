@@ -148,8 +148,9 @@ async function sessionUser(request, env) {
 async function verifyGoogleIdToken(token, clientId) {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('malformed token');
-  const header = JSON.parse(fromUtf8(b64urlDecode(parts[0])));
-  const claims = JSON.parse(fromUtf8(b64urlDecode(parts[1])));
+  let header, claims;
+  try { header = JSON.parse(fromUtf8(b64urlDecode(parts[0]))); claims = JSON.parse(fromUtf8(b64urlDecode(parts[1]))); }
+  catch (e) { throw new Error('malformed token'); }
   if (header.alg !== 'RS256') throw new Error('unexpected algorithm');
   const jwks = await (await fetch('https://www.googleapis.com/oauth2/v3/certs', { cf: { cacheTtl: 3600, cacheEverything: true } })).json();
   const jwk = (jwks.keys || []).find(k => k.kid === header.kid);

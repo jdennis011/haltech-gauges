@@ -282,12 +282,13 @@ const api = {
 const configCache = {};
 const configPending = {};
 const configRetryAt = {};
+let gaugesDirty = false;  // the cards need redrawing when nothing on them has focus
 function cachedConfig(name) {
   if (!name) return null;
   if (configCache[name]) return configCache[name];
   if (!configPending[name] && !(configRetryAt[name] > Date.now())) {
     configPending[name] = api.get('/api/configs/' + name)
-      .then(c => { configCache[name] = c; })
+      .then(c => { configCache[name] = c; gaugesDirty = true; renderGaugesIfIdle(); })  // face lists on the cards come from the config
       .catch(() => { configRetryAt[name] = Date.now() + 3000; })
       .finally(() => { delete configPending[name]; });
   }
@@ -362,7 +363,6 @@ function onMessage(m) {
 // close a dropdown or drop a slider mid-drag, so the cards are only rebuilt
 // when something changed and no control on them has focus.
 let gaugesKey = '';
-let gaugesDirty = false;
 function renderGaugesIfIdle() {
   const key = JSON.stringify(state.gauges);
   if (key === gaugesKey && !gaugesDirty) return;
@@ -373,6 +373,7 @@ function renderGaugesIfIdle() {
   renderGauges();
 }
 $('#gauges').addEventListener('focusout', () => { if (gaugesDirty) setTimeout(renderGaugesIfIdle, 100); });
+setInterval(() => { if (gaugesDirty && !(document.activeElement && document.activeElement.matches('#gauges input[type=range]'))) { gaugesDirty = false; renderGauges(); } }, 2000);
 
 async function act(g, action, body) {
   try { await api.post('/api/gauges/' + g.node + '/' + action, body || {}); }
@@ -413,6 +414,7 @@ function assignSelect(g) {
   return el('select', {
     disabled: g.mac ? null : '',
     onchange: async ev => {
+      ev.target.blur();  // a committed choice; let the roster update redraw the card
       try { await api.put('/api/assignments/' + g.mac, { name: ev.target.value }); await loadConfigs(); }
       catch (e) { alert(e.message); }
     },
@@ -430,7 +432,7 @@ function faceControl(g) {
       options.push(el('option', { value: i, selected: i === g.face ? '' : null }, (i + 1) + ': ' + name));
     }
     return el('label', { class: 'inline' }, 'Face ',
-      el('select', { onchange: ev => planned('PUT', '/api/virtual/' + g.id, { face: +ev.target.value }) }, ...options));
+      el('select', { onchange: ev => { ev.target.blur(); planned('PUT', '/api/virtual/' + g.id, { face: +ev.target.value }); } }, ...options));
   }
   const off = !g.online;
   return el('span', { class: 'row' },

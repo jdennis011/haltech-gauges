@@ -19,6 +19,8 @@
 #include "hub_config.h"
 #include "hub_state.h"
 #include "library_store.h"
+#include "playback.h"
+#include "recorder.h"
 #include "simulator.h"
 #include "units.h"
 #include "virtual_gauges.h"
@@ -231,6 +233,8 @@ void buildStatus(JsonObject o) {
     sim["paused"] = simulator::paused();
     sim["speed"] = simulator::speed();
     sim["overrides"] = simulator::overrideCount();
+    recorder::statusJson(o["recording"].to<JsonObject>(), millis());
+    playback::statusJson(o["playback"].to<JsonObject>());
     JsonObject displays = o["displays"].to<JsonObject>();
     displays["brightness"] = display_control::allBrightness();
     displays["off"] = display_control::displaysOff();
@@ -726,6 +730,104 @@ void simulatorJson(JsonDocument& doc) {
 
 // GET returns the simulator's settings. POST changes any of them: enabled,
 // paused, speed, clear, and overrides as {channel: {hold: v} | {min, max} | null}.
+// ---- recordings: files streamed to and from the filesystem
+
+const size_t kMaxRecordingBytes = 1024 * 1024;
+const char* kRecUploadTemp = "/rec/.upload.tmp";
+struct UploadMark {  // malloc'd, so the server's free() of _tempObject is right
+    bool ok;
+    bool full;
+};
+File recUpload;
+
+void recordingBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t index, size_t total) {
+    if (index == 0) {
+        UploadMark* m = static_cast<UploadMark*>(malloc(sizeof(UploadMark)));
+        if (!m) return;
+        m->ok = false;
+        m->full = false;
+        r->_tempObject = m;
+        if (total > kMaxRecordingBytes || recUpload) return;
+        if (LittleFS.totalBytes() - LittleFS.usedBytes() < total + 16384) { m->full = true; return; }
+        recUpload = LittleFS.open(kRecUploadTemp, "w");
+        if (!recUpload) return;
+        m->ok = true;
+    }
+    UploadMark* m = static_cast<UploadMark*>(r->_tempObject);
+    if (!m || !m->ok) return;
+    if (recUpload.write(data, len) != len) {
+        m->ok = false;
+        m->full = true;
+        recUpload.close();
+        return;
+    }
+    if (index + len >= total) recUpload.close();
+}
+
+void handleRecordings(AsyncWebServerRequest* r) {
+    JsonDocument doc;
+    recorder::listJson(doc.to<JsonArray>());
+    sendJson(r, doc);
+}
+
+void handleRecording(AsyncWebServerRequest* r) {
+    const String name = segment(r->url(), 2);
+    if (r->method() == HTTP_PUT) {
+        UploadMark* m = static_cast<UploadMark*>(r->_tempObject);
+        if (recUpload) recUpload.close();
+        if (!m || !m->ok) {
+            LittleFS.remove(kRecUploadTemp);
+            return sendError(r, 400, m && m->full ? "not enough storage on the hub" : "upload refused: over 1 MB, or another upload is running");
+        }
+        std::string err;
+        if (!recorder::accept(kRecUploadTemp, name.c_str(), err)) return sendError(r, 400, err.c_str());
+        return sendOk(r);
+    }
+    if (!recorder::exists(name.c_str())) return sendError(r, 404, "no such recording");
+    if (r->method() == HTTP_DELETE) {
+        if (strcmp(playback::currentName(), name.c_str()) == 0) playback::stop();
+        if (!recorder::remove(name.c_str())) return sendError(r, 409, "that recording is in use");
+        return sendOk(r);
+    }
+    r->send(LittleFS, recorder::filePath(name.c_str()).c_str(), "application/json");
+}
+
+// POST {action: "start", name, seconds} or {action: "stop"}; answers with the recorder's state.
+void handleRecord(AsyncWebServerRequest* r) {
+    JsonDocument body;
+    if (!parseBody(r, body)) return;
+    const String action = body["action"] | "";
+    if (action == "start") {
+        std::string err;
+        if (!recorder::start(body["name"] | "", uint32_t(body["seconds"] | 60), err)) return sendError(r, 400, err.c_str());
+    } else if (action == "stop") {
+        recorder::stop();
+    } else {
+        return sendError(r, 400, "action is start or stop");
+    }
+    JsonDocument doc;
+    recorder::statusJson(doc.to<JsonObject>(), millis());
+    sendJson(r, doc);
+}
+
+// POST {action: "start", name, loop} or {action: "stop"}; answers with the playback state.
+void handlePlayback(AsyncWebServerRequest* r) {
+    JsonDocument body;
+    if (!parseBody(r, body)) return;
+    const String action = body["action"] | "";
+    if (action == "start") {
+        std::string err;
+        if (!playback::start(body["name"] | "", body["loop"] | false, err)) return sendError(r, 400, err.c_str());
+    } else if (action == "stop") {
+        playback::stop();
+    } else {
+        return sendError(r, 400, "action is start or stop");
+    }
+    JsonDocument doc;
+    playback::statusJson(doc.to<JsonObject>());
+    sendJson(r, doc);
+}
+
 void handleSimulator(AsyncWebServerRequest* r) {
     if (r->method() == HTTP_POST) {
         JsonDocument body;
@@ -838,6 +940,11 @@ void begin() {
     server.on("/api/fonts", HTTP_GET, handleFonts);
     server.on("/api/virtual/*", HTTP_PUT | HTTP_DELETE, handleVirtual, nullptr, collectBody);
     server.on("/api/virtual", HTTP_GET | HTTP_POST, handleVirtual, nullptr, collectBody);
+    server.on("/api/recordings/*", HTTP_GET | HTTP_DELETE, handleRecording);
+    server.on("/api/recordings/*", HTTP_PUT, handleRecording, nullptr, recordingBody);
+    server.on("/api/recordings", HTTP_GET, handleRecordings);
+    server.on("/api/record", HTTP_POST, handleRecord, nullptr, collectBody);
+    server.on("/api/playback", HTTP_POST, handlePlayback, nullptr, collectBody);
     server.on("/api/simulator", HTTP_GET | HTTP_POST, handleSimulator, nullptr, collectBody);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.onNotFound(handleNotFound);

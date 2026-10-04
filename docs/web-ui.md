@@ -40,6 +40,29 @@ carries the planned name. Until the hardware is seen, the card says "waiting
 for" that MAC. **Rename** on a real gauge's card does the same thing in one
 step. **Unlink** forgets the name but leaves the assignment in place.
 
+### Recordings
+
+The **Recordings** card on the Live data tab records the live channel values (from the
+ECU, or from the simulator on the bench) ten times a second for 30 seconds to 3
+minutes, keeping only the values that changed, so a minute of driving is a hundred or
+two kilobytes on the hub's filesystem. Play a recording and the simulator carries it
+to every gauge on the bus and to the previews, following the simulator's pause and
+speed, looping if asked; the simulator's overrides still apply on top. Download a
+recording to keep it, to open it in the online copy (Upload recording there, then
+Play), or to upload it to another hub. A recording is JSON, one row per line:
+
+```
+{"kind":"haltech-gauges-recording","schema":1,"name":"highway","rate_hz":10,"channels":["rpm",...],"rows":[
+[0,[0,2850,1,101.3,...]],
+[100,[0,2862]],
+...
+[59900,[]]
+],"duration_ms":60000}
+```
+
+Each row is the time in milliseconds and index-value pairs for the channels that
+changed, indexes into the header's channel list.
+
 The **simulator** chip at the top right makes the hub generate the full Haltech
 broadcast with moving values, for testing without the car. With a gauge on the
 bus it also sends the frames to the gauge. Frames keep going out while it is paused,
@@ -82,6 +105,10 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | POST `/api/virtual` `{"label":"x","mac":"…"}` | Add one; `mac` optional, else synthetic. Returns `{"ok":true,"id":n}` |
 | PUT `/api/virtual/{id}` `{"label","face","mac"}` | Change any of the three; `"mac":""` goes back to synthetic |
 | DELETE `/api/virtual/{id}` | Remove; clears a synthetic-MAC assignment |
+| GET `/api/recordings` | `[{name, bytes, duration_ms, recording}]` |
+| GET / PUT / DELETE `/api/recordings/{name}` | Download, upload (the file as the body, up to 1 MB, streamed to the filesystem) or delete one |
+| POST `/api/record` `{"action":"start","name":"x","seconds":60}` or `{"action":"stop"}` | Returns the recorder's state, also in `/api/status` as `recording` |
+| POST `/api/playback` `{"action":"start","name":"x","loop":true}` or `{"action":"stop"}` | Returns the playback state, also in `/api/status` as `playback` |
 | GET `/api/simulator` | `{enabled, paused, speed, overrides:[{channel, hold} or {channel, min, max}]}` |
 | POST `/api/simulator` | Any of `enabled`, `paused`, `speed` (0.05-10), `clear`, and `overrides` as `{"rpm": {"hold": 3000}, "coolant_temp": {"min": 80, "max": 110}, "gear": null}`; values in the channel's stored unit. Returns the settings |
 | GET / PUT / DELETE `/api/wifi` | Home-network credentials `{"ssid","password"}` |

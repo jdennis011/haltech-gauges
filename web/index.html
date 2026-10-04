@@ -114,6 +114,18 @@ input[type=range]{width:110px}
 </section>
 
 <section id="tab-live">
+  <div class="card" id="rec-card">
+    <div class="row"><strong>Recordings</strong><span class="muted" id="rec-note"></span><span class="spacer"></span>
+      <input type="text" id="rec-name" placeholder="name, e.g. highway" size="14" maxlength="32">
+      <label class="inline">for <select id="rec-secs"><option value="30">30 s</option><option value="60" selected>1 min</option><option value="120">2 min</option><option value="180">3 min</option></select></label>
+      <button class="btn small primary" id="rec-start">Record</button>
+      <label class="inline"><input type="checkbox" id="rec-loop" checked> loop</label>
+      <button class="btn small" id="rec-upload">Upload recording</button>
+      <input type="file" id="rec-file" accept=".json,application/json" style="display:none">
+    </div>
+    <div id="rec-list" style="margin-top:8px"></div>
+    <div class="muted" style="font-size:13px;margin-top:6px">A recording is the live channel values ten times a second, kept on the hub. Play one and the simulator carries it to the gauges and the previews; Download it to open it in the online copy or on another hub.</div>
+  </div>
   <div class="card" id="sim-card" style="display:none">
     <div class="row"><strong>Simulator</strong><span class="muted" id="sim-note"></span><span class="spacer"></span>
       <button class="btn small" id="sim-run">Pause</button>
@@ -225,7 +237,7 @@ const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 1
 const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
-  editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null,
+  editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [],
 };
 
 // ------------------------------------------------------------------- API
@@ -280,7 +292,7 @@ function showTab(name) {
   $$('main > section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   try { localStorage.setItem('tab', name); } catch (e) { /* private mode */ }
   if (name === 'configs') loadConfigs();
-  if (name === 'live') loadSim();
+  if (name === 'live') { loadSim(); loadRecordings(); }
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -307,6 +319,7 @@ function renderStatus() {
   $('#all-screens-off').classList.toggle('primary', !!d.off);
   $('#all-screens-on').classList.toggle('primary', d.off === false);
   $('#all-note').textContent = d.off ? 'every screen is off' : (d.brightness >= 0 ? 'brightness ' + d.brightness + ' everywhere' : 'each gauge keeps its own brightness');
+  renderRecordings();
   renderSettings();
 }
 
@@ -1140,6 +1153,90 @@ $('#sim-add').addEventListener('click', () => {
   simPost({ overrides: { [name]: { hold: live == null ? 0 : +live.toFixed(2) } } });
 });
 
+
+// ------------------------------------------------------------- recordings
+// Record the live data for a while, keep it on the hub, play it back.
+
+const mmss = ms => { const s = Math.floor((ms || 0) / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+let recListKey = '';
+
+async function loadRecordings() {
+  try { state.recordings = await api.get('/api/recordings'); } catch (e) { state.recordings = []; }
+  recListKey = '';
+  renderRecordings();
+}
+
+// The note and buttons follow the hub's status; the list is rebuilt only when it changes.
+function renderRecordings() {
+  const s = state.status || {}, rec = s.recording || {}, play = s.playback || {};
+  $('#rec-start').textContent = rec.active ? 'Stop recording' : 'Record';
+  $('#rec-start').disabled = ONLINE;
+  $('#rec-note').textContent = rec.active
+    ? 'recording "' + rec.name + '": ' + Math.floor(rec.elapsed_ms / 1000) + ' s of ' + rec.seconds + ', ' + Math.round((rec.bytes || 0) / 1024) + ' KB'
+    : play.active ? 'playing "' + play.name + '" ' + mmss(play.position_ms) + ' / ' + mmss(play.duration_ms) + (play.loop ? ', looping' : '')
+    : play.ended ? '"' + play.name + '" finished; its last values are held until you stop it'
+    : ONLINE ? 'no hub here to record from; upload a recording and play it' : '';
+  const key = JSON.stringify([state.recordings, play.active, play.ended, play.name, rec.active]);
+  if (key === recListKey) return;
+  recListKey = key;
+  const root = $('#rec-list');
+  root.innerHTML = '';
+  for (const r of state.recordings || []) {
+    const playing = (play.active || play.ended) && play.name === r.name;
+    root.append(el('div', { class: 'row', style: 'margin-bottom:6px' },
+      el('span', { class: 'mono', style: 'min-width:140px' }, r.name),
+      el('span', { class: 'muted', style: 'min-width:120px' }, r.recording ? 'recording now' : mmss(r.duration_ms) + ', ' + Math.round(r.bytes / 1024) + ' KB'),
+      playing ? btn('Stop', () => playbackPost({ action: 'stop' }), false, 'small primary')
+              : btn('Play', () => playbackPost({ action: 'start', name: r.name, loop: $('#rec-loop').checked }), r.recording, 'small'),
+      btn('Download', () => downloadRecording(r.name), r.recording, 'small'),
+      btn('Delete', () => { if (confirm('Delete recording "' + r.name + '"?')) api.del('/api/recordings/' + r.name).then(loadRecordings).catch(e => alert(e.message)); }, r.recording, 'small danger')));
+  }
+  if (!(state.recordings || []).length) root.append(el('div', { class: 'muted' }, 'No recordings yet.'));
+}
+
+async function playbackPost(body) {
+  try { await api.post('/api/playback', body); } catch (e) { alert(e.message); }
+  try { state.status = await api.get('/api/status'); } catch (e) { /* the next push updates it */ }
+  renderStatus();
+  renderRecordings();
+}
+
+async function downloadRecording(name) {
+  try {
+    const text = MOCK ? JSON.stringify(await api.get('/api/recordings/' + name)) : await (await fetch('/api/recordings/' + name)).text();
+    const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name + '.recording.json' });
+    document.body.append(a); a.click(); a.remove();
+  } catch (e) { alert('Download failed: ' + e.message); }
+}
+
+$('#rec-start').addEventListener('click', async () => {
+  const rec = (state.status || {}).recording || {};
+  try {
+    if (rec.active) { await api.post('/api/record', { action: 'stop' }); }
+    else {
+      const name = $('#rec-name').value.trim() || ('rec-' + new Date().toISOString().slice(11, 19).replace(/:/g, ''));
+      await api.post('/api/record', { action: 'start', name, seconds: +$('#rec-secs').value });
+    }
+    state.status = await api.get('/api/status');
+    renderStatus();
+    await loadRecordings();
+  } catch (e) { alert(e.message); }
+});
+$('#rec-upload').addEventListener('click', () => $('#rec-file').click());
+$('#rec-file').addEventListener('change', async ev => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    let name = file.name.replace(/\.recording\.json$|\.json$/i, '');
+    try { name = JSON.parse(text.slice(0, 400) + (text.length > 400 ? '"}' : '')).name || name; } catch (e) { /* the hub checks the file */ }
+    name = name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 32) || 'upload';
+    await api.put('/api/recordings/' + name, text, true);
+    await loadRecordings();
+  } catch (e) { alert('Upload failed: ' + e.message); }
+});
+
 // -------------------------------------------------------------- settings
 
 function rows(tbody, pairs) {
@@ -1768,6 +1865,7 @@ const mock = {
   configs: {}, assignments: {}, sim: true, t0: Date.now(),
   simState: { paused: false, speed: 1, overrides: [] }, simClock: 0, simLast: Date.now(),
   displays: { brightness: -1, off: false },
+  recordings: {}, playback: null,
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -1817,9 +1915,35 @@ const mock = {
   status() {
     const t = Math.floor((Date.now() - this.t0) / 1000);
     return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim,
-      sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, displays: this.displays, gauges_online: 1,
+      sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, displays: this.displays,
+      recording: { active: false }, playback: this.playbackStatus(), gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
+  },
+  playbackStatus() {
+    const p = this.playback;
+    if (!p) return { active: false };
+    const r = this.recordings[p.name] || { duration_ms: 0 };
+    return { active: !p.ended, name: p.name, position_ms: Math.min(this.simClock - p.base, r.duration_ms || 0), duration_ms: r.duration_ms || 0, loop: p.loop, ended: p.ended };
+  },
+  // Rows of the playing recording up to the simulator clock, as channel values.
+  played() {
+    const p = this.playback;
+    if (!p) return null;
+    const r = this.recordings[p.name];
+    if (!r) return null;
+    if (!p.ended) {
+      const pos = this.simClock - p.base;
+      while (p.cursor < r.rows.length && r.rows[p.cursor][0] <= pos) {
+        const vals = r.rows[p.cursor][1];
+        for (let i = 0; i + 1 < vals.length; i += 2) p.values[r.channels[vals[i]]] = vals[i + 1];
+        p.cursor++;
+      }
+      if (p.cursor >= r.rows.length) {
+        if (p.loop && r.duration_ms) { p.base += r.duration_ms; p.cursor = 0; } else { p.ended = true; }
+      }
+    }
+    return p.values;
   },
   live() {
     if (!this.sim) return {};
@@ -1842,6 +1966,8 @@ const mock = {
         v[c.n] = r[0] + (r[1] - r[0]) * p;
       });
     }
+    const played = this.played();
+    if (played) Object.assign(v, played);
     for (const o of this.simState.overrides) v[o.channel] = o.hold != null ? o.hold : o.min + (o.max - o.min) * load;
     return v;
   },
@@ -1858,13 +1984,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState })); }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings })); }
     catch (e) { /* no storage */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -1914,6 +2040,28 @@ const mock = {
       if (body.face != null) v.face = body.face;
       if (body.mac != null) { const old = v.mac; v.mac = body.mac || '02:00:00:00:00:0' + v.id; if (this.assignments[old]) { this.assignments[v.mac] = this.assignments[old]; delete this.assignments[old]; } }
       return { ok: true };
+    }
+    if (path === '/api/recordings') return Object.entries(this.recordings).map(([name, r]) => ({ name, bytes: JSON.stringify(r).length, duration_ms: r.duration_ms || 0 }));
+    if (seg[1] === 'recordings') {
+      const name = seg[2];
+      if (method === 'GET') { if (!this.recordings[name]) throw new Error('no such recording'); return this.recordings[name]; }
+      if (method === 'PUT') {
+        const r = parse();
+        if (!r || r.kind !== 'haltech-gauges-recording' || !r.channels || !r.rows) throw new Error('that file is not a recording');
+        this.recordings[name] = r;
+        return { ok: true };
+      }
+      if (method === 'DELETE') { if (this.playback && this.playback.name === name) this.playback = null; delete this.recordings[name]; return { ok: true }; }
+    }
+    if (path === '/api/record') throw new Error('this is the online copy: there is no hub to record from');
+    if (path === '/api/playback') {
+      if (body.action === 'start') {
+        const r = this.recordings[body.name];
+        if (!r) throw new Error('no such recording');
+        this.playback = { name: body.name, loop: !!body.loop, base: this.simClock, cursor: 0, values: {}, ended: false };
+        this.sim = true;
+      } else { this.playback = null; }
+      return this.playbackStatus();
     }
     if (seg[1] === 'gauges' && seg[2] === 'all') {
       if (seg[3] === 'brightness') this.displays.brightness = +body.level;

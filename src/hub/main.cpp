@@ -12,6 +12,8 @@
 #include "hub_manager.h"
 #include "hub_state.h"
 #include "library_store.h"
+#include "playback.h"
+#include "recorder.h"
 #include "simulator.h"
 #include "virtual_gauges.h"
 #include "web_server.h"
@@ -263,6 +265,7 @@ void setup() {
     if (!library_store::begin()) Serial.println("Config storage failed to mount");
     virtual_gauges::begin();
     display_control::begin();
+    recorder::begin();
 
     HubManager::Handler handler = {};
     handler.desired = library_store::desired;
@@ -293,6 +296,8 @@ void loop() {
     handleConsole();
     wifi_ap::loop();
     web_server::loop();
+    recorder::poll(millis(), liveStore);
+    playback::poll(millis());
     {
         hub::Lock lock;
         if (!hubManager.pushBusy()) library_store::collectGarbage();

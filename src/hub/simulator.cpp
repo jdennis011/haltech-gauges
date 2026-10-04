@@ -2,6 +2,8 @@
 
 #include <math.h>
 
+#include "playback.h"
+
 using namespace hg;
 
 namespace simulator {
@@ -99,6 +101,8 @@ float valueFor(ChannelId id, uint32_t nowMs) {
         if (overrides[i].hold) return overrides[i].value;
         return overrides[i].min + (overrides[i].max - overrides[i].min) * wave(nowMs, 8000);
     }
+    float played;
+    if (playback::value(id, played)) return played;
     return builtInValue(id, nowMs);
 }
 

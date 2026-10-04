@@ -29,6 +29,21 @@ for (const file of readdirSync(templateDir).filter(f => f.endsWith('.json')).sor
 }
 writeFileSync(join(dist, 'data', 'templates.json'), JSON.stringify(list));
 
+// Base recordings and their list, from the first line of each file.
+const recDir = join(root, 'assets', 'recordings');
+mkdirSync(join(dist, 'data', 'recordings'), { recursive: true });
+const recs = [];
+for (const file of readdirSync(recDir).filter(f => f.endsWith('.json')).sort()) {
+  const text = readFileSync(join(recDir, file), 'utf8');
+  const name = file.slice(0, -5);
+  let head = {};
+  try { head = JSON.parse(text.split('\n', 1)[0] + ']}'); } catch (e) { throw new Error(file + ': not a recording (bad header line)'); }
+  const tail = text.slice(-64).match(/"duration_ms":(\d+)/);
+  copyFileSync(join(recDir, file), join(dist, 'data', 'recordings', file));
+  recs.push({ name, title: head.name || name, description: head.description || '', duration_ms: tail ? +tail[1] : 0, bytes: text.length });
+}
+writeFileSync(join(dist, 'data', 'recordings.json'), JSON.stringify(recs));
+
 // Fonts and their manifest.
 const fontDir = join(root, 'assets', 'fonts');
 for (const file of readdirSync(fontDir).filter(f => f.endsWith('.ttf'))) {
@@ -44,4 +59,4 @@ try {
   throw new Error('web/data/channels.json is missing: run scripts/gen_channels.ps1 first');
 }
 
-console.log(`dist: page ${page.length} bytes, ${list.length} templates, ${readdirSync(join(dist, 'fonts')).length} fonts`);
+console.log(`dist: page ${page.length} bytes, ${list.length} templates, ${readdirSync(join(dist, 'fonts')).length} fonts, ${recs.length} library recordings`);

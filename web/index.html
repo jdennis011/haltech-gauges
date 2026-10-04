@@ -129,6 +129,7 @@ input[type=range]{width:110px}
       <input type="file" id="rec-file" accept=".json,application/json" style="display:none">
     </div>
     <div id="rec-list" style="margin-top:8px"></div>
+    <div class="row" id="lib-row" style="margin-top:8px;display:none"><span class="muted">Library</span><select id="lib-rec" class="chan"></select><button class="btn small" id="lib-play">Play</button><span class="muted" id="lib-note"></span></div>
     <div class="muted" style="font-size:13px;margin-top:6px">A recording is the live channel values ten times a second, kept on the hub. Play one and the simulator carries it to the gauges and the previews; Download it to open it in the online copy or on another hub.</div>
   </div>
   <div class="card" id="sim-card" style="display:none">
@@ -247,7 +248,7 @@ const state = {
 
 // Signed in to the online copy: these paths go to the account's storage.
 const signedIn = () => !!(ONLINE && state.user && state.user.signedIn);
-const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings)(\/|$)/.test(p);
+const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings|settings)(\/|$)/.test(p);
 
 // ------------------------------------------------------------------- API
 
@@ -1108,11 +1109,30 @@ $('#all-fonts').addEventListener('change', ev => {
 async function loadSim() {
   try { state.sim = await api.get('/api/simulator'); } catch (e) { state.sim = null; }
   renderSim();
+  await pullCloudSim();
+  await loadLibrary();
 }
 
-async function simPost(changes) {
+async function simPost(changes, pushToAccount = true) {
   try { state.sim = await api.post('/api/simulator', changes); } catch (e) { alert(e.message); }
   renderSim();
+  if (pushToAccount && signedIn() && state.sim) {
+    api.put('/api/settings/sim', { speed: state.sim.speed, overrides: state.sim.overrides }).catch(() => { /* next change retries */ });
+  }
+}
+
+// On sign-in (and on a signed-in page load), the account's simulator settings replace this browser's.
+let cloudSimPulled = false;
+async function pullCloudSim() {
+  if (!signedIn() || cloudSimPulled) return;
+  cloudSimPulled = true;
+  try {
+    const s = await api.get('/api/settings/sim');
+    if (!s) return;
+    const overrides = {};
+    for (const o of s.overrides || []) overrides[o.channel] = o.hold != null ? { hold: o.hold } : { min: o.min, max: o.max };
+    await simPost({ speed: s.speed, clear: true, overrides }, false);
+  } catch (e) { /* keep local settings */ }
 }
 
 const numInput = (value, onchange) => el('input', { type: 'number', step: 'any', value, style: 'width:96px', onchange: ev => onchange(+ev.target.value) });
@@ -1219,6 +1239,34 @@ async function downloadRecording(name) {
     document.body.append(a); a.click(); a.remove();
   } catch (e) { alert('Download failed: ' + e.message); }
 }
+
+// Base recordings published with the site: played straight away online, copied
+// onto a hub first from its page.
+const LIBRARY_BASE = ONLINE ? '' : 'https://oagauge.online';
+let library = [];
+async function loadLibrary() {
+  try {
+    const r = await fetch(LIBRARY_BASE + '/api/library/recordings');
+    library = r.ok ? await r.json() : [];
+  } catch (e) { library = []; }
+  const row = $('#lib-row'), sel = $('#lib-rec');
+  row.style.display = library.length ? '' : 'none';
+  sel.innerHTML = '';
+  for (const r of library) sel.append(el('option', { value: r.name, title: r.description || '' }, r.title + ' (' + mmss(r.duration_ms) + ')'));
+  $('#lib-play').textContent = ONLINE ? 'Play' : 'Copy to hub and play';
+  $('#lib-note').textContent = ONLINE ? '' : 'from oagauge.online';
+}
+$('#lib-play').addEventListener('click', async () => {
+  const name = $('#lib-rec').value;
+  if (!name) return;
+  try {
+    const text = await (await fetch(LIBRARY_BASE + '/api/library/recordings/' + name)).text();
+    if (ONLINE) mock.library[name] = JSON.parse(text);
+    else await api.put('/api/recordings/' + name, text, true);
+    await loadRecordings();
+    await playbackPost({ action: 'start', name, loop: $('#rec-loop').checked });
+  } catch (e) { alert('Could not play from the library: ' + e.message); }
+});
 
 $('#rec-start').addEventListener('click', async () => {
   const rec = (state.status || {}).recording || {};
@@ -1922,6 +1970,7 @@ async function onGoogle(resp) {
 
 async function signOut() {
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* cookie may already be gone */ }
+  cloudSimPulled = false;
   await loadUser();
   await loadConfigs();
   await loadRecordings();
@@ -1946,6 +1995,7 @@ async function afterSignIn() {
   } catch (e) { alert('Could not copy local work: ' + e.message); }
   await loadConfigs();
   await loadRecordings();
+  await pullCloudSim();
 }
 
 // The demo's gauge cards read planned gauges and assignments from the account
@@ -1965,7 +2015,7 @@ const mock = {
   configs: {}, assignments: {}, sim: true, t0: Date.now(),
   simState: { paused: false, speed: 1, overrides: [] }, simClock: 0, simLast: Date.now(),
   displays: { brightness: -1, off: false },
-  recordings: {}, playback: null,
+  recordings: {}, library: {}, playback: null,
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -2157,7 +2207,7 @@ const mock = {
     if (path === '/api/record') throw new Error('this is the online copy: there is no hub to record from');
     if (path === '/api/playback') {
       if (body.action === 'start') {
-        let r = this.recordings[body.name];
+        let r = this.recordings[body.name] || this.library[body.name];
         if (!r && signedIn()) { try { r = await api.get('/api/recordings/' + body.name); } catch (e) { r = null; } }
         if (!r) throw new Error('no such recording');
         this.playback = { name: body.name, loop: !!body.loop, base: this.simClock, cursor: 0, values: {}, ended: false, rec: r };

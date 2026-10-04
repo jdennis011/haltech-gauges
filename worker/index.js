@@ -13,6 +13,7 @@ const STATIC_API = {
   '/api/templates': '/data/templates.json',
   '/api/channels/meta': '/data/channels.json',
   '/api/fonts': '/data/fonts.json',
+  '/api/library/recordings': '/data/recordings.json',
 };
 
 const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -38,10 +39,15 @@ export default {
       const name = path.slice('/api/templates/'.length);
       if (NAME_RE.test(name)) target = '/data/templates/' + name + '.json';
     }
+    if (!target && path.startsWith('/api/library/recordings/')) {
+      const name = path.slice('/api/library/recordings/'.length);
+      if (NAME_RE.test(name)) target = '/data/recordings/' + name + '.json';
+    }
     if (target) {
       const res = await env.ASSETS.fetch(new URL(target, url));
       if (!res.ok) return json({ ok: false, error: 'not found' }, 404);
-      return new Response(res.body, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+      // Static data is public, and a hub's own page may fetch the library across origins.
+      return new Response(res.body, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', 'access-control-allow-origin': '*' } });
     }
 
     if (path === '/api/me' || path.startsWith('/api/auth/')) return auth(request, env, path);
@@ -183,7 +189,7 @@ const syntheticMac = id => '02:00:00:00:00:' + id.toString(16).toUpperCase().pad
 async function userApi(request, env, path, user) {
   const seg = path.split('/').filter(Boolean);
   const area = seg[1];
-  if (!['configs', 'assignments', 'virtual', 'recordings'].includes(area)) return null;
+  if (!['configs', 'assignments', 'virtual', 'recordings', 'settings'].includes(area)) return null;
   if (!user) return json({ ok: false, error: 'sign in to keep work in your account' }, 401);
   if (!env.HG) return json({ ok: false, error: 'storage is not set up on this site' }, 503);
   const method = request.method;
@@ -281,6 +287,22 @@ async function userApi(request, env, path, user) {
         entry.mac = mac;
       }
     }
+    await writeIndex(env, user, idx);
+    return json({ ok: true });
+  }
+
+  // ---- settings: the simulator's speed and overrides follow the account
+  if (area === 'settings') {
+    if (name !== 'sim') return json({ ok: false, error: 'not found' }, 404);
+    if (method === 'GET') return json(idx.settings && idx.settings.sim ? idx.settings.sim : null);
+    if (method !== 'PUT') return json({ ok: false, error: 'method' }, 405);
+    let body;
+    try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'bad request' }, 400); }
+    const speed = Math.max(0.05, Math.min(10, +body.speed || 1));
+    const overrides = (Array.isArray(body.overrides) ? body.overrides : []).slice(0, 16)
+      .filter(o => o && typeof o.channel === 'string' && o.channel.length <= 48)
+      .map(o => o.hold != null ? { channel: o.channel, hold: +o.hold } : { channel: o.channel, min: +o.min, max: +o.max });
+    idx.settings = { ...(idx.settings || {}), sim: { speed, overrides } };
     await writeIndex(env, user, idx);
     return json({ ok: true });
   }

@@ -49,7 +49,11 @@ two kilobytes on the hub's filesystem. Play a recording and the simulator carrie
 to every gauge on the bus and to the previews, following the simulator's pause and
 speed, looping if asked; the simulator's overrides still apply on top. Download a
 recording to keep it, to open it in the online copy (Upload recording there, then
-Play), or to upload it to another hub. A recording is JSON, one row per line:
+Play), or to upload it to another hub. The **Library** row lists base recordings
+published with the site (`assets/recordings` in the repo): the online copy plays them
+directly, and a hub's page copies one onto the hub and plays it. Signed in to the
+online copy, your own recordings and the simulator's speed and overrides are kept in
+your account. A recording is JSON, one row per line:
 
 ```
 {"kind":"haltech-gauges-recording","schema":1,"name":"highway","rate_hz":10,"channels":["rpm",...],"rows":[

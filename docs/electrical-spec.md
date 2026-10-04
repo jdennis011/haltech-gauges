@@ -65,6 +65,8 @@ and layout PDF. Top view, USB ports at the bottom, antenna at the top:
 | J3-7 | GPIO21 | Gauge transceiver RXD |
 | J3-5 | GPIO23 | ECU transceiver S (silent) pin, with a 10 k pull-down so it is in normal mode by default. Driven high, the hub keeps listening to the Haltech bus but can neither transmit nor acknowledge |
 | J1-2 | RST | Test point only |
+| J1-5 | GPIO6 | I2C SDA for the real-time clock (rev B on the board; rev A as a wired module, section 1.8) |
+| J1-6 | GPIO7 | I2C SCL for the real-time clock |
 
 Do not use GPIO4, 5, 8, 9, 15 (strapping), 12/13 (USB) or 16/17 (UART console).
 
@@ -175,6 +177,32 @@ Made from a DTM kit. Build the gender that mates with the end of the Haltech CAN
   node small and away from the CAN pairs.
 - Connectors on one edge so the enclosure has a single cable face.
 - All parts on the top side apart from the DevKit's header pins.
+
+### 1.8 Real-time clock
+
+The Haltech broadcast carries no time of day and neither ESP32 keeps time without power,
+so the hub carries a battery-backed clock, sets it from the internet when it joins the
+home network or from a phone's clock on the page, and sends the time to the gauges once
+a second on the private bus.
+
+**Rev A (the board as ordered):** a DS3231 breakout module wired in. Use the small
+"DS3231 for Raspberry Pi" type with a CR2032 holder and no charger; it carries its own
+pull-ups. VCC to the 3V3 test point, GND to the GND test point, SDA to GPIO6 and SCL to
+GPIO7, soldered to the DevKit socket pins where they come through the carrier. For a
+rechargeable cell, fit an ML2032 and charge it from 3V3 through a Schottky diode (BAT54)
+and 1 k to the holder's positive terminal. Do not use the ZS-042 module: its charger
+needs 5 V, and at 5 V the chip's data pins expect 3.5 V highs the C6 cannot give.
+
+**Rev B (built in):**
+
+| Ref | Part | Notes |
+|---|---|---|
+| U5 | DS3231SN (SOIC-16, +/-2 ppm) or DS3231M (SOIC-8, MEMS, +/-5 ppm, no crystal, cheaper and better stocked) | VCC from 3V3 with 100 nF; SDA, SCL to GPIO6, GPIO7 with 4.7 k pull-ups to 3V3; INT/SQW optional to a spare GPIO for a 1 Hz tick; 32K out unconnected |
+| BT1 | ML2032 in a 2032 holder (rechargeable), or a CR2032 (5-10 years, no charger) | To VBAT with 100 nF. Charger for the ML2032: BAT54 from 3V3, 1 k in series, to the cell |
+| alternative | 1 F to 5 F, 5.5 V supercapacitor on VBAT, charged through a diode from 3V3 | About a week of hold per farad; no cell to replace |
+
+Time of day is then a `clock` widget on the faces; the hub keeps the time zone as a
+setting.
 
 ## 2. Gauge adapter board
 

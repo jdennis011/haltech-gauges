@@ -30,6 +30,9 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // One name for the site: www goes to the bare domain.
+    if (url.hostname === 'www.oagauge.online') { url.hostname = 'oagauge.online'; return Response.redirect(url.toString(), 301); }
+
     let target = STATIC_API[path];
     if (!target && path.startsWith('/api/templates/')) {
       const name = path.slice('/api/templates/'.length);

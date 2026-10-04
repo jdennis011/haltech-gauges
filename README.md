@@ -32,7 +32,7 @@ The hub's web page, templates and fonts are embedded into the firmware by
 
 ## Online copy
 
-**https://haltech-gauges.jdennis011.workers.dev**
+**https://oagauge.online** (also at https://haltech-gauges.jdennis011.workers.dev)
 
 The same page runs on Cloudflare without a hub, in demo mode: every template, font and
 channel is there, previews animate, and what you make stays in your browser. Export a
@@ -53,7 +53,7 @@ the browser.
 
 To enable sign-in: in Google Cloud Console, APIs & Services, Credentials, create an
 OAuth client ID of type Web application with the site's addresses as authorised
-JavaScript origins (`https://oagauge.online` and the `workers.dev` address); put the
+JavaScript origins (`https://oagauge.online`, `https://www.oagauge.online` and the `workers.dev` address); put the
 client ID in `wrangler.jsonc` under `vars.GOOGLE_CLIENT_ID` and deploy. The session
 secret is a Worker secret (`wrangler secret put SESSION_SECRET`), and local runs read it
 from `.dev.vars`. `scripts/gen_channels.ps1` regenerates `web/data/channels.json` from the firmware's

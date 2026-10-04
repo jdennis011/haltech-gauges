@@ -9,6 +9,11 @@
     "binding": "ASSETS"
   },
   "workers_dev": true,
+  // The site's own name; Cloudflare makes the DNS records and certificates.
+  "routes": [
+    { "pattern": "oagauge.online", "custom_domain": true },
+    { "pattern": "www.oagauge.online", "custom_domain": true }
+  ],
   "observability": { "enabled": true },
   // Per-user storage for configs, planned gauges, assignments and recordings.
   "kv_namespaces": [

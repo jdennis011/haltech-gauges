@@ -83,7 +83,7 @@ build:
 
 | Copy | Where | What it can do |
 |---|---|---|
-| Online | Cloudflare, as a Worker serving static assets, at a `workers.dev` address until a domain is chosen. Cloudflare's Workers Builds deploys it from the GitHub repo on every push to `main`, and the README links to it | Design, preview with the built-in simulator, import and export `.gauge` files, share them. No hub needed |
+| Online | Cloudflare, as a Worker serving static assets, at https://oagauge.online (and its `workers.dev` address). Cloudflare's Workers Builds deploys it from the GitHub repo on every push to `main`, and the README links to it | Design, preview with the built-in simulator, import and export `.gauge` files, share them. No hub needed |
 | On the hub | The same build embedded in the firmware, as the page is today, served from the hub's own address | All of the above, plus live data in the preview, save to the hub's library, assign to a gauge, try on a gauge |
 
 The online copy cannot talk to a hub directly. It is served over HTTPS, and browsers
@@ -197,8 +197,7 @@ D4 and D5 a few days each, D7 ongoing.
 
 ## 7. Decisions made
 
-- **Hosting.** A Cloudflare Worker serving the static build at a `workers.dev` address,
-  no domain for now; source on GitHub, with Workers Builds deploying from it and the
+- **Hosting.** A Cloudflare Worker serving the static build at https://oagauge.online; source on GitHub, with Workers Builds deploying from it and the
   README linking to the worker. The hub carries the same build. Because the online copy
   is HTTPS and the hub is HTTP, the online copy is standalone (section 2).
 - **Pictures as PNG**, base64 inside the JSON. PNG keeps files small and the designer

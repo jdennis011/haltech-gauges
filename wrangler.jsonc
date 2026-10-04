@@ -9,5 +9,16 @@
     "binding": "ASSETS"
   },
   "workers_dev": true,
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Per-user storage for configs, planned gauges, assignments and recordings.
+  "kv_namespaces": [
+    { "binding": "HG", "id": "f3c869bcd2f242be8ea686a3ab35fd7c" }
+  ],
+  "vars": {
+    // The OAuth client ID from Google Cloud Console (APIs & Services > Credentials,
+    // OAuth client ID, Web application, with this site's origins as authorised
+    // JavaScript origins). Empty until set; the page then shows sign-in as not set up.
+    "GOOGLE_CLIENT_ID": ""
+  }
+  // SESSION_SECRET is a Worker secret (wrangler secret put SESSION_SECRET), never in this file.
 }

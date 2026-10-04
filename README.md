@@ -46,7 +46,17 @@ npm run deploy       # publishes the Worker (wrangler login first)
 ```
 
 `worker/index.js` serves the built files and answers the hub's data paths from static
-files. `scripts/gen_channels.ps1` regenerates `web/data/channels.json` from the firmware's
+files. It also handles **Sign in with Google** and keeps a signed-in user's configs,
+planned gauges, assignments and recordings in a KV namespace, behind the hub's own API
+paths, so work follows the account across devices. Signed out, the page keeps its work in
+the browser.
+
+To enable sign-in: in Google Cloud Console, APIs & Services, Credentials, create an
+OAuth client ID of type Web application with the site's addresses as authorised
+JavaScript origins (`https://oagauge.online` and the `workers.dev` address); put the
+client ID in `wrangler.jsonc` under `vars.GOOGLE_CLIENT_ID` and deploy. The session
+secret is a Worker secret (`wrangler secret put SESSION_SECRET`), and local runs read it
+from `.dev.vars`. `scripts/gen_channels.ps1` regenerates `web/data/channels.json` from the firmware's
 channel tables; run it when `haltech_channels.def` or `units.cpp` change. Cloudflare's
 Workers Builds can run `npm run build` and deploy on every push to `main`.
 

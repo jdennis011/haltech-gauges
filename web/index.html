@@ -15,6 +15,8 @@ header h1{font-size:18px;margin:0 10px 0 0}
 .chip.bad{background:#3b1f1f;color:var(--bad)}
 .chip.plan{background:#1f2a3b;color:#6cb2ff}
 button.chip{cursor:pointer}
+#auth{cursor:pointer}
+#gsi{min-height:32px}
 nav{display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
 nav button{background:none;border:0;color:var(--dim);padding:8px 14px;border-radius:8px;font-size:15px;cursor:pointer;white-space:nowrap}
 nav button.active{background:#2c2c2e;color:var(--fg)}
@@ -89,6 +91,9 @@ input[type=range]{width:110px}
   <span class="chip" id="chip-bus">gauge bus</span>
   <span class="chip" id="chip-gauges">0 gauges</span>
   <button class="chip" id="chip-sim" title="Generate Haltech data on the hub for testing">simulator off</button>
+  <span class="spacer"></span>
+  <span class="chip" id="auth" style="display:none"></span>
+  <div id="gsi" style="display:none"></div>
 </header>
 <nav>
   <button data-tab="gauges" class="active">Gauges</button>
@@ -237,14 +242,18 @@ const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 1
 const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
-  editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [],
+  editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [], user: null,
 };
+
+// Signed in to the online copy: these paths go to the account's storage.
+const signedIn = () => !!(ONLINE && state.user && state.user.signedIn);
+const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings)(\/|$)/.test(p);
 
 // ------------------------------------------------------------------- API
 
 const api = {
   async req(method, path, body, raw) {
-    if (MOCK) return mock.req(method, path, body, raw);
+    if (MOCK && !cloudRoute(path)) return mock.req(method, path, body, raw);
     const opt = { method, headers: {} };
     if (body !== undefined) {
       opt.body = raw ? body : JSON.stringify(body);
@@ -370,7 +379,7 @@ async function act(g, action, body) {
 }
 
 async function planned(method, path, body) {
-  try { await api.req(method, path, body); if (MOCK) renderGauges(); }
+  try { await api.req(method, path, body); if (MOCK) { await syncCloudMirror(); renderGauges(); } }
   catch (e) { alert(e.message); }
 }
 
@@ -568,13 +577,14 @@ async function loadConfigs() {
     return;
   }
   renderConfigs();
+  await syncCloudMirror();
   renderGauges();
 }
 
 function renderConfigs() {
   const tbody = $('#config-table tbody');
   tbody.innerHTML = '';
-  $('#config-count').textContent = state.configs.length + (ONLINE ? ' stored in this browser' : ' stored');
+  $('#config-count').textContent = state.configs.length + (ONLINE ? (signedIn() ? ' stored in your account' : ' stored in this browser') : ' stored');
   const sel = $('#template-select');
   sel.innerHTML = '';
   for (const t of state.templates) sel.append(el('option', { value: t.name }, t.title || t.name));
@@ -590,7 +600,8 @@ function renderConfigs() {
   }
   if (!state.configs.length) {
     tbody.append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, ONLINE
-      ? 'Nothing stored yet. Start from a template, or import a file. Saved configs and planned gauges stay in this browser; Download one to keep it or to import it on a hub.'
+      ? (signedIn() ? 'Nothing stored yet. Start from a template, or import a file. Saved configs and planned gauges are kept in your account and follow you to any device.'
+                    : 'Nothing stored yet. Start from a template, or import a file. Saved configs and planned gauges stay in this browser; sign in to keep them in your account, or Download one to keep it or to import it on a hub.')
       : 'Nothing stored yet. Start from a template, or import a JSON file.')));
   }
 }
@@ -1858,6 +1869,95 @@ document.addEventListener('keydown', ev => {
   ev.preventDefault();
 });
 
+
+// --------------------------------------------------------------- sign in
+// Online only. Google Identity Services gives the page an ID token; the Worker
+// verifies it and sets a session cookie. Signed in, the config, planned-gauge,
+// assignment and recording paths go to the account's storage instead of the
+// browser's demo state, so work follows you across devices.
+
+async function loadUser() {
+  if (!ONLINE) return;
+  try { state.user = await (await fetch('/api/me')).json(); } catch (e) { state.user = { signedIn: false, clientId: '' }; }
+  renderUser();
+}
+
+let googleLoaded = false;
+function renderUser() {
+  const u = state.user, chip = $('#auth'), g = $('#gsi');
+  if (!ONLINE || !u) { chip.style.display = 'none'; g.style.display = 'none'; return; }
+  if (u.signedIn) {
+    chip.style.display = ''; chip.className = 'chip on'; chip.textContent = (u.email || 'signed in') + ' \u00b7 sign out'; chip.onclick = signOut;
+    g.style.display = 'none';
+  } else if (!u.clientId) {
+    chip.style.display = ''; chip.className = 'chip'; chip.textContent = 'sign-in not set up yet'; chip.onclick = null;
+    chip.title = 'The site needs a Google OAuth client ID; see the README.';
+    g.style.display = 'none';
+  } else {
+    chip.style.display = 'none';
+    g.style.display = '';
+    if (!googleLoaded) {
+      googleLoaded = true;
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.onload = () => {
+        google.accounts.id.initialize({ client_id: u.clientId, callback: onGoogle });
+        google.accounts.id.renderButton(g, { theme: 'filled_black', size: 'medium', text: 'signin_with', shape: 'pill' });
+      };
+      document.head.append(s);
+    }
+  }
+}
+
+async function onGoogle(resp) {
+  try {
+    const r = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: resp.credential }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'sign-in failed');
+    await loadUser();
+    await afterSignIn();
+  } catch (e) { alert(e.message); }
+}
+
+async function signOut() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* cookie may already be gone */ }
+  await loadUser();
+  await loadConfigs();
+  await loadRecordings();
+}
+
+// A first sign-in on a browser with local work offers to move it into the account.
+async function afterSignIn() {
+  try {
+    const cloud = await api.get('/api/configs');
+    const local = Object.keys(mock.configs);
+    if (!cloud.length && (local.length || mock.virtual.length) &&
+        confirm('Copy the ' + local.length + ' config(s) and ' + mock.virtual.length + ' planned gauge(s) from this browser into your account?')) {
+      for (const name of local) await api.put('/api/configs/' + name, JSON.stringify(mock.configs[name]), true);
+      for (const v of mock.virtual) {
+        const r = await api.post('/api/virtual', isSynthetic(v.mac) ? { label: v.label } : { label: v.label, mac: v.mac });
+        const made = (await api.get('/api/virtual')).find(x => x.id === r.id);
+        if (!made) continue;
+        await api.put('/api/virtual/' + r.id, { face: v.face || 0 });
+        if (mock.assignments[v.mac] && mock.configs[mock.assignments[v.mac]]) await api.put('/api/assignments/' + made.mac, { name: mock.assignments[v.mac] });
+      }
+    }
+  } catch (e) { alert('Could not copy local work: ' + e.message); }
+  await loadConfigs();
+  await loadRecordings();
+}
+
+// The demo's gauge cards read planned gauges and assignments from the account
+// while signed in; this refreshes that copy after any change.
+async function syncCloudMirror() {
+  if (signedIn()) {
+    try { mock.cloudVirtual = await api.get('/api/virtual'); mock.cloudAssignments = await api.get('/api/assignments'); }
+    catch (e) { /* keep the last copy */ }
+  }
+  if (MOCK) { state.gauges = mock.gauges(); renderGaugesIfIdle(); }
+}
+
 // ------------------------------------------------------------------ mock
 // Lets the page run from a file for layout work: file:///…/index.html
 
@@ -1901,15 +2001,16 @@ const mock = {
     ],
   },
   gauges() {
+    const virt = signedIn() ? (this.cloudVirtual || []) : this.virtual, asg = signedIn() ? (this.cloudAssignments || {}) : this.assignments;
     const real = [
       { node: '112233', virtual: false, online: true, mac: 'A0:76:4E:11:22:33', fw: '0.1.0', face: 0, faces: 2, config_crc: 'MOCK0001', vbus_mv: 4900,
-        assigned: this.assignments['A0:76:4E:11:22:33'] || null, push: { failed: false, result: 'ok', active: false }, last_seen_s: 0, duplicate: false, trying: false, demo: false },
+        assigned: asg['A0:76:4E:11:22:33'] || null, push: { failed: false, result: 'ok', active: false }, last_seen_s: 0, duplicate: false, trying: false, demo: false },
       { node: '445566', virtual: false, online: false, mac: 'A0:76:4E:44:55:66', last_seen_s: 42, assigned: null, push: { failed: false, result: 'ok', active: false }, duplicate: false },
     ];
-    for (const g of real) { const v = this.virtual.find(x => x.mac === g.mac); if (v) { g.id = v.id; g.label = v.label; } }
-    const planned = this.virtual.filter(v => !real.some(g => g.mac === v.mac)).map(v => ({
+    for (const g of real) { const v = virt.find(x => x.mac === g.mac); if (v) { g.id = v.id; g.label = v.label; } }
+    const planned = virt.filter(v => !real.some(g => g.mac === v.mac)).map(v => ({
       node: 'V' + v.id, id: v.id, virtual: true, label: v.label, mac: v.mac, online: false, face: v.face,
-      assigned: this.assignments[v.mac] || null, push: { failed: false, result: 'n/a', active: false } }));
+      assigned: asg[v.mac] || null, push: { failed: false, result: 'n/a', active: false } }));
     return real.concat(planned);
   },
   status() {
@@ -1923,14 +2024,14 @@ const mock = {
   playbackStatus() {
     const p = this.playback;
     if (!p) return { active: false };
-    const r = this.recordings[p.name] || { duration_ms: 0 };
+    const r = p.rec || { duration_ms: 0 };
     return { active: !p.ended, name: p.name, position_ms: Math.min(this.simClock - p.base, r.duration_ms || 0), duration_ms: r.duration_ms || 0, loop: p.loop, ended: p.ended };
   },
   // Rows of the playing recording up to the simulator clock, as channel values.
   played() {
     const p = this.playback;
     if (!p) return null;
-    const r = this.recordings[p.name];
+    const r = p.rec;
     if (!r) return null;
     if (!p.ended) {
       const pos = this.simClock - p.base;
@@ -2056,9 +2157,10 @@ const mock = {
     if (path === '/api/record') throw new Error('this is the online copy: there is no hub to record from');
     if (path === '/api/playback') {
       if (body.action === 'start') {
-        const r = this.recordings[body.name];
+        let r = this.recordings[body.name];
+        if (!r && signedIn()) { try { r = await api.get('/api/recordings/' + body.name); } catch (e) { r = null; } }
         if (!r) throw new Error('no such recording');
-        this.playback = { name: body.name, loop: !!body.loop, base: this.simClock, cursor: 0, values: {}, ended: false };
+        this.playback = { name: body.name, loop: !!body.loop, base: this.simClock, cursor: 0, values: {}, ended: false, rec: r };
         this.sim = true;
       } else { this.playback = null; }
       return this.playbackStatus();
@@ -2105,6 +2207,7 @@ async function loadMeta(attempts) {
 
 async function init() {
   if (MOCK) mock.load();  // what this browser kept, before anything asks for it
+  await loadUser();
   let saved = null;
   try { saved = localStorage.getItem('tab'); } catch (e) { /* private mode */ }
   // #live, #configs and so on open that tab directly.

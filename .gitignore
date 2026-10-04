@@ -6,3 +6,4 @@ docs/ref/*.pdf
 dist/
 node_modules/
 .wrangler/
+.dev.vars

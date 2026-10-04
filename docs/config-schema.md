@@ -72,7 +72,8 @@ newer configs still load on older firmware as long as `schema` matches.
 ## Widgets
 
 Every widget takes `type`, `x`, `y`, `color` (default `fg`). Every widget except `label` needs
-`channel` and may take `unit`. Every widget except `light` may take
+`channel` and may take `unit`; for `shape` and `path` the channel is optional. Every widget except
+`light`, `shape` and `path` may take
 `warn: { "above": n }` or `{ "below": n }` with optional `color` (default `alert`) and `flash`,
 which recolours it past the threshold.
 
@@ -81,10 +82,13 @@ which recolours it past the threshold.
 | `dial` | `min`, `max` (required); `r` outer radius (220); `start` (135), `sweep` (270); `major` divisions (10), `minor` subdivisions (5); `tickLen` (16), `tickWidth` (3), `ticks` (true; false leaves only the labels), `tickShape`: `line`, `triangle` (`line`), `arcWidth` (0; a thin arc along the sweep where the ticks start); `labels` (true), `labelFont` (`sans`), `labelSize` (22), `labelScale` (1; use 1000 for RPM x1000); `needle`: `line`, `tapered`, `tapered_cap`, `none`, `marker` (`tapered`; `none` makes a labelled scale to pair with a ring; `marker` is an arrow with its base on radius `r` pointing inward at the value, `marker_out` one with its tip on `r` pointing outward, both `needleLen` long (28) and `needleWidth` half as wide at the base, for a set point or target); `needleColor` (`accent`), `needleWidth` (6), `needleLen` (r - 24); `zones`, `zoneWidth` (6) |
 | `ring` | `min`, `max` (required); `r` (225), `thickness` (20); `start`, `sweep`; `rounded` (true); `track` (true), `trackColor` (`dim`); `segments` (0 = solid), `gap` degrees (3); `zones` |
 | `bar` | `min`, `max` (required); `style`: `horizontal`, `vertical`; `w`, `h` (260 x 28, swapped when vertical); `track`, `trackColor`; `segments`, `gap` pixels (3); `cornerRadius` (4); `rotate` (0; degrees clockwise about the centre); `zones` |
-| `number` | `font` (`sans`), `size` (72), `decimals` (0); `rotate` (0; degrees clockwise); `format`: `plain`, `gear` (`plain`; `gear` shows N, R, P or the gear number); `pad` (0; minimum digits, zero-filled, e.g. 3 for `000`); `showUnit` (true), `unitSize` (size / 3), `unitPos`: `below`, `right`; `align`; `hold`: `none`, `max`, `min` |
+| `number` | `font` (`sans`), `size` (72), `decimals` (0); `rotate` (0; degrees clockwise); `format`: `plain`, `gear` (`plain`; `gear` shows N, R, P or the gear number); `pad` (0; minimum digits, zero-filled, e.g. 3 for `000`); `showUnit` (true), `unitSize` (size / 3), `unitPos`: `below`, `right`, `left`, `above` (`below`), `unitDx`, `unitDy` (0; nudge the unit from that position, pixels); `align`; `hold`: `none`, `max`, `min` |
 | `label` | `text` (required, up to 32 characters); `font`, `size` (24), `align`; `rotate` (0; degrees clockwise); `arc` (0; radius of a circle centred on `x`, `y` that the text follows, so 0 is straight text), `arcAngle` (270; where the middle of the text sits, degrees clockwise from 3 o'clock, so 270 is the top), `arcSide`: `auto`, `inside`, `outside` (`auto` faces the letters outward on the top half and inward on the bottom, so both read left to right) |
 | `light` | `r` half size (14); `shape`: `dot`, `ring`, `square`, `text` (shows `text` alone, only while lit); `rotate` (0); `color` when lit (`alert`), `offColor` (`dim`); `on`: `{ "above": n }` or `{ "below": n }` (default above 0.5, i.e. a status flag is set); `flash`; `text` caption |
 | `rim` | `from` (required); `mode`: `flash` (whole rim lights from `from` upward) or `fill` (fills between `from` and `to`, `to` required); `r` (233), `thickness` (12); `color` (`alert`) |
+
+| `shape` | `shape`: `rect`, `ellipse`, `line`, `triangle`, `polygon` (`rect`); `w`, `h` (100 x 60; a line's length is `w`); `cornerRadius` (0); `filled` (true), `color` fill, `strokeColor`, `strokeWidth` (0, or 3 when not filled), `opacity` (100), `rotate` (0); a polygon takes `points`, 3 to 16 x, y pairs relative to `x`, `y`. `channel` is optional: with one, the shape is drawn in `color` while `on` holds (as for a light) and in `offColor` otherwise, or not at all with `hideWhenOff`; `flash` |
+| `path` | `d` (required): SVG path data, up to 1024 characters, as copied from an icon's `<path d="...">`; `box` (24), the size of the path's own coordinate square; `size` (48), how large to draw it; `filled`, `color`, `strokeColor`, `strokeWidth`, `opacity`, `rotate`, and the optional `channel`, `on`, `offColor`, `hideWhenOff`, `flash` as for `shape`. A path with a channel is a vector warning icon |
 
 `zones` is a list of up to 6 `{ "from": a, "to": b, "color": c }` ranges. On a dial they are
 drawn as a coloured band on the rim (a redline). On a ring or bar the indicator takes the

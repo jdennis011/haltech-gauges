@@ -29,7 +29,8 @@ const Name kWidgetTypes[] = {
     {"dial", uint8_t(WidgetType::Dial)},     {"ring", uint8_t(WidgetType::Ring)},
     {"bar", uint8_t(WidgetType::Bar)},       {"number", uint8_t(WidgetType::Number)},
     {"label", uint8_t(WidgetType::Label)},   {"light", uint8_t(WidgetType::Light)},
-    {"rim", uint8_t(WidgetType::Rim)},
+    {"rim", uint8_t(WidgetType::Rim)},       {"shape", uint8_t(WidgetType::Shape)},
+    {"path", uint8_t(WidgetType::Path)},
 };
 const Name kFonts[] = {
     {"sans", uint8_t(Font::Sans)},       {"condensed", uint8_t(Font::Condensed)},
@@ -57,6 +58,13 @@ const Name kAligns[] = {
 const Name kUnitPositions[] = {
     {"right", uint8_t(UnitPos::Right)},
     {"below", uint8_t(UnitPos::Below)},
+    {"left", uint8_t(UnitPos::Left)},
+    {"above", uint8_t(UnitPos::Above)},
+};
+const Name kShapeKinds[] = {
+    {"rect", uint8_t(ShapeKind::Rect)},         {"ellipse", uint8_t(ShapeKind::Ellipse)},
+    {"line", uint8_t(ShapeKind::Line)},         {"triangle", uint8_t(ShapeKind::Triangle)},
+    {"polygon", uint8_t(ShapeKind::Polygon)},
 };
 const Name kHolds[] = {
     {"none", uint8_t(Hold::None)},
@@ -325,6 +333,68 @@ void readTextStyle(JsonObjectConst obj, Widget& w, uint16_t defaultSize, Ctx& ct
     w.align = Align(readEnum(obj, "align", kAligns, uint8_t(Align::Center), ctx));
 }
 
+// Fill and outline of a shape or path.
+void readFill(JsonObjectConst obj, Widget& w, Ctx& ctx) {
+    w.filled = readBool(obj, "filled", true, ctx);
+    w.strokeColor = readColor(obj, "strokeColor", w.color, ctx);
+    w.strokeWidth = uint8_t(readInt(obj, "strokeWidth", w.filled ? 0 : 3, 0, 40, ctx));
+    w.opacity = uint8_t(readInt(obj, "opacity", 100, 0, 100, ctx));
+    w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
+}
+
+// With a channel, a shape or path is lit while its "on" condition holds, as a light is.
+void readCondition(JsonObjectConst obj, Widget& w, Ctx& ctx) {
+    w.offColor = readColor(obj, "offColor", ctx.theme.dim, ctx);
+    w.hideWhenOff = readBool(obj, "hideWhenOff", false, ctx);
+    if (w.channel < 0) return;
+    w.warn.enabled = true;
+    w.warn.above = true;
+    w.warn.threshold = 0.5f;
+    readThreshold(obj, "on", w.warn, ctx);
+    w.warn.flash = readBool(obj, "flash", w.warn.flash, ctx);
+}
+
+void readPoints(JsonObjectConst obj, Widget& w, Ctx& ctx) {
+    JsonArrayConst a = obj["points"].as<JsonArrayConst>();
+    if (a.isNull() || a.size() < 6 || a.size() % 2 != 0 || a.size() > 2 * kMaxPolygonPoints) {
+        ctx.fail("'points' must list 3 to %u x, y pairs", unsigned(kMaxPolygonPoints));
+        return;
+    }
+    for (JsonVariantConst v : a) {
+        if (!v.is<float>()) {
+            ctx.fail("'points' must be numbers");
+            return;
+        }
+        const long n = v.as<long>();
+        if (n < -kScreenSize || n > kScreenSize) {
+            ctx.fail("'points' must be within %d of the centre", kScreenSize);
+            return;
+        }
+        w.points.push_back(int16_t(n));
+    }
+}
+
+// SVG path data: move, line, curve, arc and close commands with numbers.
+std::string readPathData(JsonObjectConst obj, Ctx& ctx) {
+    const char* s = obj["d"].as<const char*>();
+    if (!s || !s[0]) {
+        ctx.fail("'d' is required: the path data of an SVG path");
+        return std::string();
+    }
+    const size_t len = strlen(s);
+    if (len > kMaxPathLength) {
+        ctx.fail("'d' is longer than %u characters", unsigned(kMaxPathLength));
+        return std::string();
+    }
+    for (size_t i = 0; i < len; i++) {
+        if (!strchr("MmLlHhVvCcSsQqTtAaZz0123456789 .,+-eE\t\n", s[i])) {
+            ctx.fail("'d' has a character that is not SVG path data");
+            return std::string();
+        }
+    }
+    return std::string(s);
+}
+
 void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     const char* typeName = obj["type"].as<const char*>();
     if (!typeName) {
@@ -347,7 +417,9 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     w.x = int16_t(readInt(obj, "x", kScreenSize / 2, 0, kScreenSize, ctx));
     w.y = int16_t(readInt(obj, "y", kScreenSize / 2, 0, kScreenSize, ctx));
     w.color = readColor(obj, "color", t.fg, ctx);
-    if (w.type != WidgetType::Label) readChannel(obj, w, ctx);
+    // A shape or path is plain decoration unless it names a channel.
+    const bool decoration = w.type == WidgetType::Shape || w.type == WidgetType::Path;
+    if (w.type != WidgetType::Label && !(decoration && obj["channel"].isNull())) readChannel(obj, w, ctx);
     if (!ctx.ok()) return;
 
     switch (w.type) {
@@ -413,6 +485,8 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.showUnit = readBool(obj, "showUnit", true, ctx);
             w.unitSize = uint8_t(readInt(obj, "unitSize", w.size / 3 < 12 ? 12 : w.size / 3, 8, 80, ctx));
             w.unitPos = UnitPos(readEnum(obj, "unitPos", kUnitPositions, uint8_t(UnitPos::Below), ctx));
+            w.unitDx = int16_t(readInt(obj, "unitDx", 0, -200, 200, ctx));
+            w.unitDy = int16_t(readInt(obj, "unitDy", 0, -200, 200, ctx));
             w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
             w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
             break;
@@ -460,9 +534,28 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
                 w.to = w.from;
             }
             break;
+
+        case WidgetType::Shape:
+            w.shapeKind = ShapeKind(readEnum(obj, "shape", kShapeKinds, uint8_t(ShapeKind::Rect), ctx));
+            w.w = int16_t(readInt(obj, "w", 100, 1, kScreenSize, ctx));
+            w.h = int16_t(readInt(obj, "h", 60, 1, kScreenSize, ctx));
+            w.cornerRadius = uint8_t(readInt(obj, "cornerRadius", 0, 0, 233, ctx));
+            readFill(obj, w, ctx);
+            if (w.shapeKind == ShapeKind::Polygon) readPoints(obj, w, ctx);
+            readCondition(obj, w, ctx);
+            break;
+
+        case WidgetType::Path:
+            w.path = readPathData(obj, ctx);
+            w.box = int16_t(readInt(obj, "box", 24, 1, 2000, ctx));
+            w.size = uint16_t(readInt(obj, "size", 48, 4, kScreenSize, ctx));
+            readFill(obj, w, ctx);
+            readCondition(obj, w, ctx);
+            break;
     }
 
-    if (w.type != WidgetType::Light) readThreshold(obj, "warn", w.warn, ctx);
+    const bool usesOn = w.type == WidgetType::Light || w.type == WidgetType::Shape || w.type == WidgetType::Path;
+    if (!usesOn) readThreshold(obj, "warn", w.warn, ctx);
 }
 
 void parseTheme(JsonVariantConst v, Ctx& ctx) {

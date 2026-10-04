@@ -25,16 +25,19 @@ constexpr size_t kMaxFaces = 8;
 constexpr size_t kMaxWidgetsPerFace = 16;
 constexpr size_t kMaxZones = 6;
 constexpr size_t kMaxTextLength = 32;
+constexpr size_t kMaxPathLength = 1024;   // SVG path data of a path widget
+constexpr size_t kMaxPolygonPoints = 16;
 
 typedef uint32_t Color;  // 0xRRGGBB
 
-enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim };
+enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
 // Marker: arrow at radius r pointing inward; MarkerOut: arrow inside r pointing outward.
 enum class NeedleStyle : uint8_t { Line, Tapered, TaperedCap, None, Marker, MarkerOut };
 enum class BarStyle : uint8_t { Horizontal, Vertical };
 enum class Align : uint8_t { Left, Center, Right };
-enum class UnitPos : uint8_t { Right, Below };
+enum class UnitPos : uint8_t { Right, Below, Left, Above };
+enum class ShapeKind : uint8_t { Rect, Ellipse, Line, Triangle, Polygon };
 enum class Hold : uint8_t { None, Max, Min };
 enum class LightShape : uint8_t { Dot, Ring, Square, Text };
 enum class TickShape : uint8_t { Line, Triangle };
@@ -124,6 +127,8 @@ struct Widget {
     bool showUnit = true;
     uint8_t unitSize = 24;
     UnitPos unitPos = UnitPos::Below;
+    int16_t unitDx = 0;     // nudge of the unit text from its position, px
+    int16_t unitDy = 0;
     Align align = Align::Center;
     Hold hold = Hold::None;
     std::string text;
@@ -139,6 +144,17 @@ struct Widget {
 
     LightShape shape = LightShape::Dot;
     Color offColor = 0x3A3A3C;
+
+    // shape and path: drawn as given, or, with a channel, lit while its condition holds
+    ShapeKind shapeKind = ShapeKind::Rect;
+    bool filled = true;
+    Color strokeColor = 0xFFFFFF;
+    uint8_t strokeWidth = 0;
+    uint8_t opacity = 100;        // percent
+    bool hideWhenOff = false;     // draw nothing while the condition is not met
+    std::vector<int16_t> points;  // polygon: x, y pairs relative to x, y
+    std::string path;             // path: SVG path data
+    int16_t box = 24;             // path: the size of the path's own coordinate box
 
     // rim
     RimMode rimMode = RimMode::Flash;

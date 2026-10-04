@@ -286,6 +286,31 @@ void test_arc_label() {
     assertRejected(withWidget(R"({"type":"label","text":"x","arc":100,"arcSide":"sideways"})"), "'arcSide': unknown value");
 }
 
+void test_shapes_paths_and_unit_position() {
+    Config c;
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"shape","shape":"ellipse","w":80,"h":40,"filled":false,"strokeWidth":4,"rotate":30})"), c).ok);
+    TEST_ASSERT_EQUAL(int(ShapeKind::Ellipse), int(c.faces[0].widgets[0].shapeKind));
+    TEST_ASSERT_EQUAL(-1, c.faces[0].widgets[0].channel);
+    TEST_ASSERT_FALSE(c.faces[0].widgets[0].warn.enabled);
+
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"shape","shape":"polygon","points":[0,-20,20,20,-20,20]})"), c).ok);
+    TEST_ASSERT_EQUAL(6, c.faces[0].widgets[0].points.size());
+    assertRejected(withWidget(R"({"type":"shape","shape":"polygon","points":[0,0,10,10]})"), "'points' must list 3 to 16");
+    assertRejected(withWidget(R"({"type":"shape","shape":"blob"})"), "'shape': unknown value");
+
+    // A path tied to a channel lights on its condition, like a light.
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"path","d":"M12 2 L1 21 H23 Z","size":64,"channel":"check_engine_light","hideWhenOff":true})"), c).ok);
+    TEST_ASSERT_TRUE(c.faces[0].widgets[0].warn.enabled);
+    TEST_ASSERT_TRUE(c.faces[0].widgets[0].hideWhenOff);
+    TEST_ASSERT_EQUAL(64, c.faces[0].widgets[0].size);
+    assertRejected(withWidget(R"({"type":"path"})"), "'d' is required");
+    assertRejected(withWidget(R"({"type":"path","d":"M0 0 <script>"})"), "not SVG path data");
+
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"number","channel":"rpm","unitPos":"above","unitDx":-12,"unitDy":4})"), c).ok);
+    TEST_ASSERT_EQUAL(int(UnitPos::Above), int(c.faces[0].widgets[0].unitPos));
+    TEST_ASSERT_EQUAL(-12, c.faces[0].widgets[0].unitDx);
+}
+
 void test_theme_presets_exist() {
     size_t count = 0;
     const ThemePreset* presets = themePresets(count);
@@ -312,6 +337,7 @@ int main(int, char**) {
     RUN_TEST(test_scale_without_needle_and_text_light);
     RUN_TEST(test_nfs_options);
     RUN_TEST(test_arc_label);
+    RUN_TEST(test_shapes_paths_and_unit_position);
     RUN_TEST(test_theme_presets_exist);
     return UNITY_END();
 }

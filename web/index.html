@@ -75,6 +75,11 @@ input[type=range]{width:110px}
 .wrow input[type=text]{width:150px}
 .wrow select.chan{max-width:230px}
 .colorctl{display:inline-flex;gap:4px;align-items:center}
+.wrow details.more{margin-top:6px}
+.wrow details.more summary{cursor:pointer;color:var(--dim);font-size:13px;margin-bottom:6px}
+.wrow .zones{display:inline-flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.wrow .zone input[type=number]{width:64px}
+.wrow input.long{width:260px;font-family:ui-monospace,Consolas,monospace}
 .wrow input[type=color]{width:36px;height:26px;padding:1px 2px;border-radius:6px}
 .wrow input[type=checkbox]{width:16px;height:16px;margin:0}
 .live-val{font-family:ui-monospace,Consolas,monospace;text-align:right}
@@ -865,7 +870,7 @@ $('#btn-endtry').addEventListener('click', async () => {
 // first piece of the builder. Edits rewrite the JSON in the editor.
 
 const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
-const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22 };
+const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22, path: 48 };
 const FONT_SAMPLE = '0123456789 RPM 14.7 \u00b0C km/h';
 
 function widgetName(w) {
@@ -899,35 +904,86 @@ function renderFontList() {
 }
 
 // What the panel offers per widget type: [key, kind, label, options].
-const ALIGNS = ['left', 'center', 'right'];
+const ALIGNS = ['center', 'left', 'right'];   // the default first
 const ANGLE_HINT = "Degrees clockwise from 3 o'clock: 90 is 6 o'clock, 180 is 9, 270 is 12.";
+const SWEEP_HINT = 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.';
+const COND_HINT = 'With a channel, drawn in its colour while this holds and in the off colour otherwise.';
+
+// A few vector icons to start from; paste any SVG path data in their place.
+// The engine outline is from Material Design Icons (Apache 2.0); the rest are drawn for this page.
+const ICONS = {
+  engine: 'M7,4V6H10V8H7L5,10V13H3V10H1V18H3V15H5V18H8L10,20H18V16H20V19H23V9H20V12H18V8H12V6H15V4H7Z',
+  warning: 'M12 2 L1 21 H23 Z M11 9 H13 V15 H11 Z M11 17 H13 V19 H11 Z',
+  battery: 'M2 7 H5 V5 H8 V7 H16 V5 H19 V7 H22 V19 H2 Z M5 12 H9 V13.5 H5 Z M15 12 H16.5 V10.5 H18 V12 H19.5 V13.5 H18 V15 H16.5 V13.5 H15 Z',
+  thermometer: 'M10 3 H14 V13.5 A5 5 0 1 1 10 13.5 Z M11.2 5 H12.8 V14.4 A3.4 3.4 0 1 1 11.2 14.4 Z',
+  arrow: 'M12 3 L20 13 H15 V21 H9 V13 H4 Z',
+  circle: 'M12 2 A10 10 0 1 0 12 22 A10 10 0 1 0 12 2 Z',
+  star: 'M12 2 L14.9 8.6 L22 9.3 L16.6 14 L18.2 21 L12 17.3 L5.8 21 L7.4 14 L2 9.3 L9.1 8.6 Z',
+};
+
+// Field spec: [key, kind, label, options, hint]. PANEL_FIELDS show on the row;
+// MORE_FIELDS are every other setting the format accepts, under "All options".
+// For kind 'int' the options are [min, max, default].
 const PANEL_FIELDS = {
   dial:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
            ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
-           ['sweep', 'number', 'Sweep', null, 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.'],
+           ['sweep', 'number', 'Sweep', null, SWEEP_HINT],
            ['color', 'color', 'Colour', 'fg'], ['needleColor', 'color', 'Needle', 'accent'],
-           ['needle', 'select', 'Needle', ['line', 'tapered', 'tapered_cap', 'none', 'marker', 'marker_out']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
+           ['needle', 'select', 'Needle', ['tapered', 'line', 'tapered_cap', 'none', 'marker', 'marker_out']], ['tickShape', 'select', 'Ticks', ['line', 'triangle']],
            ['labelFont', 'font', 'Labels'], ['labelSize', 'size', 'Size']],
   ring:   [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
            ['start', 'number', 'Start', null, ANGLE_HINT], ['end', 'end', 'End', null, 'Where the scale finishes. ' + ANGLE_HINT],
-           ['sweep', 'number', 'Sweep', null, 'Length of the arc in degrees. 270 is the classic three-quarter dial, 360 a full circle.'],
-           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'number', 'Segments']],
+           ['sweep', 'number', 'Sweep', null, SWEEP_HINT],
+           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'int', 'Segments', [0, 60, 0], '0 is a solid arc']],
   bar:    [['channel', 'channel'], ['unit', 'unit'], ['min', 'number', 'Min'], ['max', 'number', 'Max'],
-           ['style', 'select', 'Style', ['horizontal', 'vertical']], ['rotate', 'number', 'Rotate'],
-           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'number', 'Segments']],
-  number: [['channel', 'channel'], ['unit', 'unit'], ['showUnit', 'bool', 'Show unit', true], ['unitPos', 'select', 'Unit at', ['below', 'right']],
-           ['format', 'select', 'Format', ['plain', 'gear']], ['decimals', 'number', 'Decimals'], ['pad', 'number', 'Pad'],
-           ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+           ['style', 'select', 'Style', ['horizontal', 'vertical']], ['rotate', 'int', 'Rotate', [-180, 180, 0]],
+           ['color', 'color', 'Colour', 'fg'], ['trackColor', 'color', 'Track', 'dim'], ['segments', 'int', 'Segments', [0, 60, 0], '0 is a solid bar']],
+  number: [['channel', 'channel'], ['unit', 'unit'], ['showUnit', 'bool', 'Show unit', true],
+           ['unitPos', 'select', 'Unit at', ['below', 'right', 'left', 'above'], 'Where the unit sits relative to the number'],
+           ['unitDx', 'int', 'Unit dx', [-200, 200, 0], 'Nudge the unit sideways, pixels'], ['unitDy', 'int', 'Unit dy', [-200, 200, 0], 'Nudge the unit up or down, pixels'],
+           ['format', 'select', 'Format', ['plain', 'gear']], ['decimals', 'int', 'Decimals', [0, 3, 0]], ['pad', 'int', 'Pad', [0, 6, 0], 'Minimum digits, zero-filled'],
+           ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'int', 'Rotate', [-180, 180, 0]],
            ['font', 'font', 'Font'], ['size', 'size', 'Size']],
-  label:  [['text', 'text', 'Text'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
-           ['arc', 'number', 'Arc r', null, 'Radius of the circle the text follows, centred on x, y. 0 is straight text.'],
+  label:  [['text', 'text', 'Text'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'int', 'Rotate', [-180, 180, 0]],
+           ['arc', 'int', 'Arc r', [0, 233, 0], 'Radius of the circle the text follows, centred on x, y. 0 is straight text.'],
            ['arcAngle', 'number', 'Arc at', null, 'Where the middle of the text sits. ' + ANGLE_HINT],
            ['arcSide', 'select', 'Letters', ['auto', 'inside', 'outside'], 'Which way the letters face: auto is outward on the top half, inward on the bottom.'],
            ['font', 'font', 'Font'], ['size', 'size', 'Size']],
-  light:  [['channel', 'channel'], ['text', 'text', 'Text'], ['shape', 'select', 'Shape', ['dot', 'ring', 'square', 'text']],
-           ['color', 'color', 'Lit', 'alert'], ['offColor', 'color', 'Off', 'dim'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'number', 'Rotate'],
+  light:  [['channel', 'channel'], ['on', 'cond', 'Lit when'], ['text', 'text', 'Text'], ['shape', 'select', 'Shape', ['dot', 'ring', 'square', 'text']],
+           ['color', 'color', 'Lit', 'alert'], ['offColor', 'color', 'Off', 'dim'], ['align', 'select', 'Align', ALIGNS], ['rotate', 'int', 'Rotate', [-180, 180, 0]],
            ['font', 'font', 'Font'], ['size', 'size', 'Size']],
   rim:    [['channel', 'channel'], ['unit', 'unit'], ['from', 'number', 'From'], ['to', 'number', 'To'], ['color', 'color', 'Colour', 'alert']],
+  shape:  [['shape', 'select', 'Shape', ['rect', 'ellipse', 'line', 'triangle', 'polygon'], 'A polygon takes its corners from Points, under All options'],
+           ['w', 'int', 'W', [1, 466, 100]], ['h', 'int', 'H', [1, 466, 60]],
+           ['filled', 'bool', 'Filled', true], ['color', 'color', 'Fill', 'fg'], ['strokeColor', 'color', 'Outline', '=color', 'Follows the fill colour unless set'], ['strokeWidth', 'int', 'Outline w', [0, 40, 0]],
+           ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
+  path:   [['d', 'icon', 'Icon'], ['d', 'longtext', 'Path', null, 'SVG path data: the d attribute of an icon\'s <path>'],
+           ['size', 'int', 'Size', [4, 466, 48]], ['color', 'color', 'Colour', 'fg'], ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
+};
+const XY = [['x', 'int', 'X', [0, 466, 233], 'Centre, pixels from the left'], ['y', 'int', 'Y', [0, 466, 233], 'Centre, pixels from the top']];
+const CONDITION = [['channel', 'channelOpt', 'Channel', null, 'Optional. ' + COND_HINT], ['on', 'cond', 'Lit when', null, COND_HINT],
+  ['offColor', 'color', 'Off', 'dim'], ['hideWhenOff', 'bool', 'Hide when off', false], ['flash', 'bool', 'Flash', false]];
+const MORE_FIELDS = {
+  dial:   [...XY, ['r', 'int', 'Radius', [40, 233, 220]], ['major', 'int', 'Major', [1, 20, 10], 'Divisions between labelled ticks'], ['minor', 'int', 'Minor', [1, 10, 5], 'Subdivisions per division'],
+           ['ticks', 'bool', 'Ticks', true], ['tickLen', 'int', 'Tick len', [2, 60, 16]], ['tickWidth', 'int', 'Tick w', [1, 10, 3]],
+           ['arcWidth', 'int', 'Arc line', [0, 20, 0], 'A thin arc along the sweep where the ticks start; 0 is none'],
+           ['labels', 'bool', 'Labels', true], ['labelScale', 'number', 'Label /', null, 'Labels show value divided by this; 1000 for RPM x1000'],
+           ['needleWidth', 'int', 'Needle w', [1, 20, 6]], ['needleLen', 'int', 'Needle len', [10, 233, ''], 'Default is the radius less 24, or 28 for a marker'],
+           ['zoneWidth', 'int', 'Zone w', [1, 40, 6]], ['zones', 'zones', 'Zones', null, 'Coloured bands on the rim, e.g. a redline']],
+  ring:   [...XY, ['r', 'int', 'Radius', [40, 233, 225]], ['thickness', 'int', 'Thickness', [2, 120, 20]], ['rounded', 'bool', 'Round ends', true],
+           ['track', 'bool', 'Track', true], ['gap', 'int', 'Gap', [0, 20, 3], 'Degrees between segments'],
+           ['zones', 'zones', 'Zones', null, 'The arc takes a zone\'s colour while the value is inside it'], ['warn', 'warn', 'Warn']],
+  bar:    [...XY, ['w', 'int', 'W', [4, 466, 260]], ['h', 'int', 'H', [4, 466, 28]], ['track', 'bool', 'Track', true], ['gap', 'int', 'Gap', [0, 20, 3], 'Pixels between segments'],
+           ['cornerRadius', 'int', 'Corners', [0, 60, 4]], ['zones', 'zones', 'Zones'], ['warn', 'warn', 'Warn']],
+  number: [...XY, ['unitSize', 'int', 'Unit size', [8, 80, ''], 'Default is a third of the number size'], ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'Show the highest or lowest value seen'], ['warn', 'warn', 'Warn']],
+  label:  [...XY],
+  light:  [...XY, ['r', 'int', 'Half size', [4, 100, 14]], ['flash', 'bool', 'Flash', false]],
+  rim:    [...XY, ['mode', 'select', 'Mode', ['flash', 'fill']], ['r', 'int', 'Radius', [40, 233, 233]], ['thickness', 'int', 'Thickness', [2, 60, 12]]],
+  shape:  [...XY, ['cornerRadius', 'int', 'Corners', [0, 233, 0], 'Rounds the corners of a rectangle'],
+           ['points', 'points', 'Points', null, 'Polygon corners as x, y pairs measured from the widget\'s x, y'], ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
+  path:   [...XY, ['box', 'int', 'Box', [1, 2000, 24], 'The size of the path\'s own coordinate square; 24 for most icon sets'],
+           ['filled', 'bool', 'Filled', true], ['strokeColor', 'color', 'Outline', '=color', 'Follows the fill colour unless set'], ['strokeWidth', 'int', 'Outline w', [0, 40, 0]],
+           ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
 };
 
 const ROLES = ['fg', 'accent', 'dim', 'warn', 'alert', 'bg'];
@@ -937,25 +993,32 @@ function hex6(c) {
 }
 // A theme role or a custom colour: a dropdown of roles plus a colour picker that
 // shows the current colour either way and is live when "custom" is chosen.
-function colorControl(w, i, key, defaultRole) {
+// `set` receives the new value ('' for the default). `same` is the colour the
+// default follows when it is another property of the widget, not a theme role.
+function colorPicker(val, defaultRole, set, same) {
   const theme = resolveTheme(state.previewCfg ? state.previewCfg.theme : null);
-  const val = w[key] || '';
+  val = val || '';
   const custom = /^#/.test(val);
-  const pick = el('input', { type: 'color', value: hex6(custom ? val : theme[val || defaultRole]), disabled: custom ? null : '',
-    onchange: ev => setWidgetFields(i, { [key]: ev.target.value.toUpperCase() }) });
+  const fallback = same ? (/^#/.test(same) ? same : theme[same]) : theme[defaultRole];
+  const pick = el('input', { type: 'color', value: hex6(custom ? val : val ? theme[val] : fallback), disabled: custom ? null : '',
+    onchange: ev => set(ev.target.value.toUpperCase()) });
   const sel = el('select', { onchange: ev => {
-    if (ev.target.value === 'custom') { pick.disabled = false; setWidgetFields(i, { [key]: pick.value.toUpperCase() }); }
-    else setWidgetFields(i, { [key]: ev.target.value });
-  } }, el('option', { value: '' }, 'default (' + defaultRole + ')'),
+    if (ev.target.value === 'custom') { pick.disabled = false; set(pick.value.toUpperCase()); }
+    else set(ev.target.value);
+  } }, el('option', { value: '' }, same ? 'default (same)' : 'default (' + defaultRole + ')'),
     ...ROLES.map(r => el('option', { value: r, selected: r === val ? '' : null }, r)),
     el('option', { value: 'custom', selected: custom ? '' : null }, 'custom'));
   return el('span', { class: 'colorctl' }, sel, pick);
 }
 
-function channelSelect(w, i) {
-  const sel = el('select', { class: 'chan', onchange: ev => { if (ev.target.value) setWidgetFields(i, { channel: ev.target.value, unit: '' }); } });
+function channelSelect(w, i, optional) {
+  const sel = el('select', { class: 'chan', onchange: ev => {
+    if (ev.target.value) setWidgetFields(i, { channel: ev.target.value, unit: '' });
+    else if (optional) setWidgetFields(i, { channel: '', unit: '' });
+  } });
   const chans = state.meta ? state.meta.channels.slice().sort((a, b) => a.l.localeCompare(b.l)) : [];
-  if (!chans.some(c => c.n === w.channel)) sel.append(el('option', { value: w.channel || '', selected: '' }, w.channel || 'choose a channel'));
+  if (optional) sel.append(el('option', { value: '', selected: w.channel ? null : '' }, 'none: always shown'));
+  else if (!chans.some(c => c.n === w.channel)) sel.append(el('option', { value: w.channel || '', selected: '' }, w.channel || 'choose a channel'));
   for (const c of chans) sel.append(el('option', { value: c.n, selected: c.n === w.channel ? '' : null }, c.l + (state.meta.units[c.u].s ? ' (' + state.meta.units[c.u].s + ')' : '')));
   return sel;
 }
@@ -969,6 +1032,95 @@ function unitSelect(w, i) {
   return sel;
 }
 
+// "above 0.5" / "below 60": the condition of a light, shape or path.
+function conditionControl(w, i, key) {
+  const c = w[key] || { above: 0.5 }, kind = c.below != null ? 'below' : 'above';
+  const write = (k, v) => { const next = Object.assign({}, c); delete next.above; delete next.below; next[k] = v; setWidgetFields(i, { [key]: next }); };
+  return el('span', { class: 'colorctl' },
+    el('select', { onchange: ev => write(ev.target.value, c[kind]) },
+      el('option', { value: 'above', selected: kind === 'above' ? '' : null }, 'above'), el('option', { value: 'below', selected: kind === 'below' ? '' : null }, 'below')),
+    el('input', { type: 'number', step: 'any', value: c[kind], onchange: ev => write(kind, +ev.target.value) }));
+}
+
+// A warning threshold: the widget changes colour past it.
+function warnControl(w, i) {
+  const wn = w.warn, on = !!wn, kind = wn && wn.below != null ? 'below' : 'above';
+  const write = next => setWidgetFields(i, { warn: next });
+  const parts = [el('input', { type: 'checkbox', checked: on ? '' : null, title: 'Change colour past a threshold',
+    onchange: ev => write(ev.target.checked ? { above: w.max != null ? w.max * 0.9 : 100, color: 'alert' } : '') })];
+  if (on) {
+    const rebuilt = changes => { const base = { [kind]: wn[kind] }; if (wn.color) base.color = wn.color; if (wn.flash) base.flash = true; return Object.assign(base, changes); };
+    parts.push(
+      el('select', { onchange: ev => { const next = rebuilt({}); delete next[kind]; next[ev.target.value] = wn[kind]; write(next); } },
+        el('option', { value: 'above', selected: kind === 'above' ? '' : null }, 'above'), el('option', { value: 'below', selected: kind === 'below' ? '' : null }, 'below')),
+      el('input', { type: 'number', step: 'any', value: wn[kind], onchange: ev => write(rebuilt({ [kind]: +ev.target.value })) }),
+      colorPicker(wn.color, 'alert', v => { const next = rebuilt({}); if (v) next.color = v; else delete next.color; write(next); }),
+      el('label', {}, 'flash', el('input', { type: 'checkbox', checked: wn.flash ? '' : null, onchange: ev => { const next = rebuilt({}); if (ev.target.checked) next.flash = true; else delete next.flash; write(next); } })));
+  }
+  return el('span', { class: 'colorctl' }, ...parts);
+}
+
+// Zones: value ranges with their own colour, up to six.
+function zonesControl(w, i) {
+  const zones = Array.isArray(w.zones) ? w.zones : [];
+  const write = next => setWidgetFields(i, { zones: next.length ? next : '' });
+  const rows = zones.map((z, k) => el('span', { class: 'colorctl zone' },
+    el('input', { type: 'number', step: 'any', value: z.from, title: 'from', onchange: ev => write(zones.map((q, n) => n === k ? Object.assign({}, q, { from: +ev.target.value }) : q)) }),
+    'to',
+    el('input', { type: 'number', step: 'any', value: z.to, title: 'to', onchange: ev => write(zones.map((q, n) => n === k ? Object.assign({}, q, { to: +ev.target.value }) : q)) }),
+    colorPicker(z.color, 'alert', v => write(zones.map((q, n) => { if (n !== k) return q; const c = Object.assign({}, q); if (v) c.color = v; else delete c.color; return c; }))),
+    btn('x', () => write(zones.filter((q, n) => n !== k)), false, 'small', 'Remove this zone')));
+  const hi = w.max != null ? w.max : 100, lo = w.min != null ? w.min : 0;
+  rows.push(btn('add zone', () => write(zones.concat([{ from: Math.round(lo + (hi - lo) * 0.85), to: hi, color: 'alert' }])), zones.length >= 6, 'small'));
+  return el('span', { class: 'zones' }, ...rows);
+}
+
+// One control for one field spec.
+function fieldControl(w, i, [key, kind, label, opts, hint]) {
+  const set = v => setWidgetFields(i, { [key]: v });
+  const numeric = extra => el('input', Object.assign({ type: 'number', value: w[key] == null ? '' : w[key],
+    onchange: ev => set(ev.target.value === '' ? '' : +ev.target.value) }, extra || {}));
+  let control;
+  if (kind === 'channel') control = channelSelect(w, i, false);
+  else if (kind === 'channelOpt') control = channelSelect(w, i, true);
+  else if (kind === 'unit') control = unitSelect(w, i);
+  else if (kind === 'font') control = el('select', { onchange: ev => set(ev.target.value) }, ...fontOptions(w[key], true));
+  else if (kind === 'size') control = numeric({ min: 8, max: 200, placeholder: DEFAULT_SIZES[w.type] });
+  else if (kind === 'number') control = numeric({ step: 'any' });
+  else if (kind === 'int') control = numeric({ min: opts[0], max: opts[1], step: 1, placeholder: opts[2] });
+  else if (kind === 'end') {
+    // The finish angle, kept as a sweep in the JSON.
+    const start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
+    control = el('input', { type: 'number', step: 'any', value: (start + sweep) % 360,
+      onchange: ev => { let s = ((+ev.target.value - start) % 360 + 360) % 360; if (s === 0) s = 360; setWidgetFields(i, { sweep: s }); } });
+  }
+  else if (kind === 'bool') control = el('input', { type: 'checkbox', checked: (w[key] == null ? opts : w[key]) ? '' : null, onchange: ev => set(ev.target.checked) });
+  else if (kind === 'color') control = opts[0] === '=' ? colorPicker(w[key], 'fg', set, w[opts.slice(1)] || 'fg') : colorPicker(w[key], opts, set);
+  else if (kind === 'select') control = el('select', { onchange: ev => {
+    const v = ev.target.value;
+    if (w.type === 'shape' && key === 'shape' && v === 'polygon' && !Array.isArray(w.points)) setWidgetFields(i, { shape: v, points: [0, -40, 38, -12, 24, 32, -24, 32, -38, -12] });
+    else set(v);
+  } },
+    el('option', { value: '' }, 'default (' + opts[0] + ')'), ...opts.map(o => el('option', { value: o, selected: o === w[key] ? '' : null }, o)));
+  else if (kind === 'cond') control = conditionControl(w, i, key);
+  else if (kind === 'warn') control = warnControl(w, i);
+  else if (kind === 'zones') control = zonesControl(w, i);
+  else if (kind === 'icon') control = el('select', { onchange: ev => { if (ev.target.value) setWidgetFields(i, { d: ICONS[ev.target.value], box: '' }); } },
+    el('option', { value: '' }, 'choose\u2026'), ...Object.keys(ICONS).map(k => el('option', { value: k, selected: ICONS[k] === w.d ? '' : null }, k)));
+  else if (kind === 'points') control = el('input', { type: 'text', class: 'long', value: Array.isArray(w.points) ? w.points.join(', ') : '',
+    onchange: ev => {
+      const n = ev.target.value.split(/[\s,]+/).filter(s => s !== '').map(Number);
+      if (n.length >= 6 && n.length <= 32 && n.length % 2 === 0 && n.every(Number.isFinite)) set(n.map(Math.round));
+      else setMsg('Points: 3 to 16 corners as x, y pairs, e.g. 0, -40, 35, 30, -35, 30', 'bad');
+    } });
+  else if (kind === 'longtext') control = el('input', { type: 'text', class: 'long', maxlength: 1024, value: w[key] == null ? '' : w[key], onchange: ev => set(ev.target.value.trim()) });
+  else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => set(ev.target.value) });
+  if (hint) control.title = hint;
+  return el('label', { title: hint || null }, label ? label : '', control);
+}
+
+const openMore = new Set();   // rows whose "All options" are open
+
 function renderWidgetTable() {
   const root = $('#widget-list');
   root.innerHTML = '';
@@ -978,43 +1130,26 @@ function renderWidgetTable() {
   $('#widget-note').textContent = face ? 'on face ' + (state.faceIndex + 1) + (face.name ? ': ' + face.name : '') : '';
   widgets.forEach((w, i) => {
     const ctl = el('div', { class: 'ctl' });
-    const numeric = (key, extra) => el('input', Object.assign({ type: 'number', value: w[key] == null ? '' : w[key],
-      onchange: ev => setWidgetFields(i, { [key]: ev.target.value === '' ? '' : +ev.target.value }) }, extra || {}));
-    for (const [key, kind, label, opts, hint] of PANEL_FIELDS[w.type] || []) {
-      let control;
-      if (kind === 'channel') control = channelSelect(w, i);
-      else if (kind === 'unit') control = unitSelect(w, i);
-      else if (kind === 'font') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) }, ...fontOptions(w[key], true));
-      else if (kind === 'size') control = numeric(key, { min: 8, max: 200, placeholder: DEFAULT_SIZES[w.type] });
-      else if (kind === 'number') control = numeric(key, { step: 'any' });
-      else if (kind === 'end') {
-        // The finish angle, kept as a sweep in the JSON.
-        const start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
-        control = el('input', { type: 'number', step: 'any', value: (start + sweep) % 360,
-          onchange: ev => { let s = ((+ev.target.value - start) % 360 + 360) % 360; if (s === 0) s = 360; setWidgetFields(i, { sweep: s }); } });
-      }
-      else if (kind === 'bool') control = el('input', { type: 'checkbox', checked: (w[key] == null ? opts : w[key]) ? '' : null, onchange: ev => setWidgetFields(i, { [key]: ev.target.checked }) });
-      else if (kind === 'color') control = colorControl(w, i, key, opts);
-      else if (kind === 'select') control = el('select', { onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) },
-        el('option', { value: '' }, 'default'), ...opts.map(o => el('option', { value: o, selected: o === w[key] ? '' : null }, o)));
-      else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => setWidgetFields(i, { [key]: ev.target.value }) });
-      if (hint) control.title = hint;
-      ctl.append(el('label', { title: hint || null }, label ? label : '', control));
-    }
+    for (const spec of PANEL_FIELDS[w.type] || []) ctl.append(fieldControl(w, i, spec));
+    const moreSpecs = MORE_FIELDS[w.type] || [];
+    const more = el('details', { class: 'more' }, el('summary', {}, 'All options (' + moreSpecs.length + ' more)'),
+      el('div', { class: 'ctl' }, ...moreSpecs.map(spec => fieldControl(w, i, spec))));
+    more.open = openMore.has(i);
+    more.addEventListener('toggle', () => { if (more.open) openMore.add(i); else openMore.delete(i); });
     const title = el('div', { class: 'wtitle', draggable: 'true',
       ondragstart: ev => { dragFrom = i; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); ev.currentTarget.parentNode.classList.add('dragging'); },
       ondragend: ev => { ev.currentTarget.parentNode.classList.remove('dragging'); dragFrom = -1; } },
-      el('span', { class: 'grip' }, '≡'),
-      el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.text ? ' "' + w.text + '"' : '')),
+      el('span', { class: 'grip' }, '\u2261'),
+      el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.type === 'shape' ? ' ' + (w.shape || 'rect') : '') + (w.text ? ' "' + w.text + '"' : '')),
       el('span', { class: 'spacer' }),
-      btn('▲', () => reorderWidget(i, i - 1), i === 0, 'small', 'Move up: drawn earlier, further back'),
-      btn('▼', () => reorderWidget(i, i + 1), i === widgets.length - 1, 'small', 'Move down: drawn later, further forward'),
-      btn('remove', () => removeWidget(i), false, 'small'));
+      btn('\u25B2', () => { openMore.clear(); reorderWidget(i, i - 1); }, i === 0, 'small', 'Move up: drawn earlier, further back'),
+      btn('\u25BC', () => { openMore.clear(); reorderWidget(i, i + 1); }, i === widgets.length - 1, 'small', 'Move down: drawn later, further forward'),
+      btn('remove', () => { openMore.clear(); removeWidget(i); }, false, 'small'));
     root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : ''),
       ondragover: ev => { if (dragFrom < 0) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; ev.currentTarget.classList.add('dropTarget'); },
       ondragleave: ev => ev.currentTarget.classList.remove('dropTarget'),
-      ondrop: ev => { ev.preventDefault(); ev.currentTarget.classList.remove('dropTarget'); if (dragFrom >= 0 && dragFrom !== i) reorderWidget(dragFrom, i); dragFrom = -1; } },
-      title, ctl));
+      ondrop: ev => { ev.preventDefault(); ev.currentTarget.classList.remove('dropTarget'); if (dragFrom >= 0 && dragFrom !== i) { openMore.clear(); reorderWidget(dragFrom, i); } dragFrom = -1; } },
+      title, ctl, moreSpecs.length ? more : null));
   });
   if (!widgets.length) root.append(el('div', { class: 'muted' }, 'This face has no widgets.'));
 }
@@ -1028,6 +1163,8 @@ const WIDGET_DEFAULTS = {
   label: { type: 'label', text: 'LABEL', y: 150, size: 24 },
   light: { type: 'light', channel: 'check_engine_light', y: 400, r: 12, text: 'CEL' },
   rim: { type: 'rim', channel: 'rpm', from: 7200 },
+  shape: { type: 'shape', shape: 'rect', w: 140, h: 70, cornerRadius: 10, filled: false, strokeWidth: 3 },
+  path: { type: 'path', d: ICONS.engine, size: 72, y: 380, color: 'warn', channel: 'check_engine_light', offColor: 'dim' },
 };
 const MAX_WIDGETS = 16;  // the parser's limit per face
 $('#add-type').append(...Object.keys(WIDGET_DEFAULTS).map(k => el('option', { value: k }, k)));
@@ -1409,7 +1546,7 @@ function valueOf(w, t) {
   const p = 0.5 - 0.5 * Math.cos(t / 4000 * 2 * Math.PI);
   if (w.format === 'gear') return Math.floor(p * 6.99);
   if (w.min != null && w.max != null) return w.min + (w.max - w.min) * p;
-  if (w.type === 'light') return Math.floor(t / 3000) % 2;
+  if (w.type === 'light' || w.type === 'shape' || w.type === 'path') return Math.floor(t / 3000) % 2;
   if (w.type === 'rim') { const lo = w.from * 0.8, hi = w.to != null ? w.to : w.from * 1.2; return lo + (hi - lo) * p; }
   return 100 * p;
 }
@@ -1591,11 +1728,12 @@ function drawNumber(ctx, w, th, t) {
     const us = w.unitSize || Math.max(12, Math.floor(size / 3));
     const mw = ctx.measureText(txt).width;
     ctx.font = us + 'px ' + fontStack('sans'); ctx.fillStyle = withAlpha(col, 0.75);
-    if ((w.unitPos || 'below') === 'below') { ctx.textAlign = 'center'; ctx.fillText(sym, cx, cy + size * 0.55 + us * 0.6); }
-    else {
-      const left = align === 'center' ? cx + mw / 2 : align === 'left' ? cx + mw : cx;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(sym, left + 6, cy + size * 0.3);
-    }
+    const pos = w.unitPos || 'below', dx = w.unitDx || 0, dy = w.unitDy || 0;
+    const leftEdge = align === 'center' ? cx - mw / 2 : align === 'left' ? cx : cx - mw, rightEdge = leftEdge + mw, mid = leftEdge + mw / 2;
+    if (pos === 'below') { ctx.textAlign = 'center'; ctx.fillText(sym, mid + dx, cy + size * 0.55 + us * 0.6 + dy); }
+    else if (pos === 'above') { ctx.textAlign = 'center'; ctx.fillText(sym, mid + dx, cy - size * 0.55 - us * 0.6 + dy); }
+    else if (pos === 'left') { ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillText(sym, leftEdge - 6 + dx, cy + size * 0.3 + dy); }
+    else { ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(sym, rightEdge + 6 + dx, cy + size * 0.3 + dy); }
   }
 }
 
@@ -1668,7 +1806,60 @@ function drawRim(ctx, w, th, t) {
   }
 }
 
-const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim };
+// A shape or path is plain decoration, or, with a channel, lit while its condition holds.
+function shapePaint(w, th, t) {
+  let lit = true;
+  if (w.channel) {
+    const v = valueOf(w, t), on = w.on || { above: 0.5 };
+    lit = v != null && (on.above != null ? v > on.above : v < on.below) && (!w.flash || Math.floor(t / 250) % 2 === 0);
+    if (!lit && w.hideWhenOff) return null;
+  }
+  const fill = lit ? color(w.color, th, th.fg) : color(w.offColor, th, th.dim);
+  const filled = w.filled !== false;
+  return { fill, stroke: lit ? color(w.strokeColor, th, fill) : fill, sw: w.strokeWidth == null ? (filled ? 0 : 3) : w.strokeWidth, filled };
+}
+
+function drawShape(ctx, w, th, t) {
+  const s = shapePaint(w, th, t);
+  if (!s) return;
+  const W = w.w == null ? 100 : w.w, H = w.h == null ? 60 : w.h, kind = w.shape || 'rect';
+  ctx.translate(w.x == null ? 233 : w.x, w.y == null ? 233 : w.y);
+  if (w.rotate) ctx.rotate(rad(w.rotate));
+  ctx.globalAlpha = (w.opacity == null ? 100 : w.opacity) / 100;
+  if (kind === 'line') {
+    ctx.beginPath(); ctx.moveTo(-W / 2, 0); ctx.lineTo(W / 2, 0);
+    ctx.strokeStyle = s.fill; ctx.lineWidth = s.sw || 3; ctx.lineCap = 'round'; ctx.stroke();
+    return;
+  }
+  if (kind === 'ellipse') { ctx.beginPath(); ctx.ellipse(0, 0, W / 2, H / 2, 0, 0, Math.PI * 2); }
+  else if (kind === 'triangle') { ctx.beginPath(); ctx.moveTo(0, -H / 2); ctx.lineTo(W / 2, H / 2); ctx.lineTo(-W / 2, H / 2); ctx.closePath(); }
+  else if (kind === 'polygon') {
+    const p = w.points || [];
+    ctx.beginPath();
+    for (let k = 0; k + 1 < p.length; k += 2) { if (k === 0) ctx.moveTo(p[k], p[k + 1]); else ctx.lineTo(p[k], p[k + 1]); }
+    ctx.closePath();
+  }
+  else roundRect(ctx, -W / 2, -H / 2, W, H, w.cornerRadius || 0);
+  if (s.filled) { ctx.fillStyle = s.fill; ctx.fill(); }
+  if (s.sw > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.sw; ctx.stroke(); }
+}
+
+function drawPath(ctx, w, th, t) {
+  const s = shapePaint(w, th, t);
+  if (!s || !w.d) return;
+  const size = w.size || 48, box = w.box || 24, k = size / box;
+  let p;
+  try { p = new Path2D(w.d); } catch (e) { return; }
+  ctx.translate(w.x == null ? 233 : w.x, w.y == null ? 233 : w.y);
+  if (w.rotate) ctx.rotate(rad(w.rotate));
+  ctx.scale(k, k);
+  ctx.translate(-box / 2, -box / 2);
+  ctx.globalAlpha = (w.opacity == null ? 100 : w.opacity) / 100;
+  if (s.filled) { ctx.fillStyle = s.fill; ctx.fill(p, 'evenodd'); }
+  if (s.sw > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.sw / k; ctx.stroke(p); }
+}
+
+const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath };
 
 function drawFace(canvas, cfg, faceIdx, t) {
   loadFonts();
@@ -1735,6 +1926,16 @@ function widgetBounds(ctx, w, t) {
     const r = w.r == null ? 14 : w.r, cap = w.text ? (w.size || 18) + 6 : 0;
     return rotated({ kind: 'rect', cx, cy: cy + cap / 2, w: 2 * r + 8, h: 2 * r + 8 + cap }, w.rotate || 0, cx, cy);
   }
+  if (w.type === 'shape') {
+    let W = w.w == null ? 100 : w.w, H = w.h == null ? 60 : w.h;
+    if ((w.shape || 'rect') === 'line') H = Math.max(12, w.strokeWidth || 3);
+    if (w.shape === 'polygon' && Array.isArray(w.points) && w.points.length >= 6) {
+      const xs = w.points.filter((v, k) => k % 2 === 0), ys = w.points.filter((v, k) => k % 2 === 1);
+      W = 2 * Math.max(...xs.map(Math.abs)); H = 2 * Math.max(...ys.map(Math.abs));
+    }
+    return rotated({ kind: 'rect', cx, cy, w: W, h: H }, w.rotate || 0, cx, cy);
+  }
+  if (w.type === 'path') { const s = w.size || 48; return rotated({ kind: 'rect', cx, cy, w: s, h: s }, w.rotate || 0, cx, cy); }
   // Text: number, label, light caption.
   const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : (w.size || 24);
   const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
@@ -1760,7 +1961,7 @@ function rotated(b, angle, px, py) {
 }
 
 // What dragging a corner handle turns: the widget's rotation, or an arc's start.
-const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', dial: 'start', ring: 'start' };
+const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', shape: 'rotate', path: 'rotate', dial: 'start', ring: 'start' };
 
 // The four corner handles of a selection box, in canvas coordinates.
 function handleCorners(b) {
@@ -1792,7 +1993,8 @@ function startResize(w, b, p) {
   const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
   const d0 = Math.max(4, Math.hypot(p.x - px, p.y - py));
   drag = { resize: true, px, py, d0, moved: false, keys: [],
-    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : 24), r0: w.r == null ? 14 : w.r, rotate: 0 };
+    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : w.type === 'path' ? 48 : 24), r0: w.r == null ? 14 : w.r, rotate: 0,
+    points0: Array.isArray(w.points) ? w.points.slice() : null };
 }
 
 function applyResize(w, p) {
@@ -1802,7 +2004,10 @@ function applyResize(w, p) {
     w.r = lim(d, 40, 233);
     if ((w.type === 'ring' || w.type === 'rim') && w.thickness != null && w.thickness >= w.r) w.thickness = w.r - 2;
     drag.keys = ['r', 'thickness'];
-  } else if (w.type === 'bar') {
+  } else if (w.type === 'shape' && w.shape === 'polygon' && drag.points0) {
+    w.points = drag.points0.map(v => lim(v * d / drag.d0, -466, 466));
+    drag.keys = ['points'];
+  } else if (w.type === 'bar' || w.type === 'shape') {
     const a = rad(w.rotate || 0), dx = p.x - drag.px, dy = p.y - drag.py;
     const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
     w.w = lim(2 * Math.abs(lx), 4, 466);
@@ -1812,7 +2017,7 @@ function applyResize(w, p) {
     w.r = lim(drag.r0 * d / drag.d0, 4, 100);
     drag.keys = ['r'];
   } else {
-    w.size = lim(drag.size0 * d / drag.d0, 8, 200);
+    w.size = lim(drag.size0 * d / drag.d0, 8, w.type === 'path' ? 466 : 200);
     drag.keys = ['size'];
   }
   drag.moved = true;

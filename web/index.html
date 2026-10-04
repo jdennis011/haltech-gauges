@@ -134,6 +134,9 @@ input[type=range]{width:110px}
       <button class="btn" id="btn-new">New from template</button>
       <button class="btn" id="btn-import">Import file</button>
       <input type="file" id="file-import" accept=".json,application/json" style="display:none">
+      <button class="btn" id="btn-export-all" title="Every stored config, the planned gauges and the assignments, as one file">Export all</button>
+      <button class="btn" id="btn-import-all" title="Restore a file made by Export all">Import all</button>
+      <input type="file" id="file-import-all" accept=".json,application/json" style="display:none">
     </div>
     <table id="config-table" style="margin-top:10px"><thead><tr><th>Name</th><th>Title</th><th>Faces</th><th>Size</th><th>Assigned to</th><th></th></tr></thead><tbody></tbody></table>
   </div>
@@ -733,6 +736,76 @@ $('#file-import').addEventListener('change', ev => {
   reader.readAsText(file);
   ev.target.value = '';
 });
+
+
+// -------------------------------------------------------- export / import all
+// One file holds every stored config, the planned gauges and the assignments,
+// so a hub's whole setup can be kept, moved or restored.
+
+async function buildBackup() {
+  const [list, gauges, assignments] = await Promise.all([api.get('/api/configs'), api.get('/api/virtual'), api.get('/api/assignments')]);
+  const configs = {};
+  for (const c of list) configs[c.name] = await api.get('/api/configs/' + c.name);
+  return { kind: 'haltech-gauges-backup', schema: 1, exported: new Date().toISOString(),
+    hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments };
+}
+
+async function exportAll() {
+  try {
+    const bundle = await buildBackup();
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: 'haltech-gauges-' + bundle.exported.slice(0, 10) + '.json' });
+    document.body.append(a);
+    a.click();
+    a.remove();
+  } catch (e) { alert('Export failed: ' + e.message); }
+}
+
+// Configs with the same name are replaced. A planned gauge linked to real
+// hardware is matched by its MAC; one that is not is matched by name, since
+// hub-made MACs mean nothing on another hub. Assignments follow the match.
+async function importAll(file) {
+  let bundle;
+  try { bundle = JSON.parse(await file.text()); } catch (e) { alert('Not a JSON file: ' + e.message); return; }
+  if (!bundle || bundle.kind !== 'haltech-gauges-backup' || !bundle.configs) { alert('That is not an export from this page. For a single config, use Import file.'); return; }
+  const names = Object.keys(bundle.configs), gauges = bundle.gauges || [], assignments = bundle.assignments || {};
+  if (!confirm('Import ' + names.length + ' config(s), ' + gauges.length + ' planned gauge(s) and ' + Object.keys(assignments).length + ' assignment(s)?\nConfigs with the same name are replaced; planned gauges are matched by MAC or name.')) return;
+  const errors = [], done = { configs: 0, gauges: 0, assignments: 0 };
+  for (const name of names) {
+    try { await api.put('/api/configs/' + name, JSON.stringify(bundle.configs[name]), true); forgetConfig(name); done.configs++; }
+    catch (e) { errors.push('config ' + name + ': ' + e.message); }
+  }
+  const macMap = {};
+  let existing = [];
+  try { existing = await api.get('/api/virtual'); } catch (e) { errors.push('planned gauges: ' + e.message); }
+  for (const g of gauges) {
+    try {
+      const real = !!g.mac && !isSynthetic(g.mac);
+      let match = existing.find(x => real ? x.mac === g.mac : x.label === g.label);
+      if (match) {
+        await api.put('/api/virtual/' + match.id, real ? { label: g.label, mac: g.mac } : { label: g.label });
+      } else {
+        const r = await api.post('/api/virtual', real ? { label: g.label, mac: g.mac } : { label: g.label });
+        existing = await api.get('/api/virtual');
+        match = existing.find(x => x.id === r.id);
+      }
+      if (!match) throw new Error('could not create it');
+      if (g.face != null) await api.put('/api/virtual/' + match.id, { face: g.face });
+      macMap[g.mac] = match.mac;
+      done.gauges++;
+    } catch (e) { errors.push('gauge ' + g.label + ': ' + e.message); }
+  }
+  for (const [mac, name] of Object.entries(assignments)) {
+    try { await api.put('/api/assignments/' + (macMap[mac] || mac), { name }); done.assignments++; }
+    catch (e) { errors.push('assignment ' + mac + ': ' + e.message); }
+  }
+  await loadConfigs();
+  alert('Imported ' + done.configs + ' config(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s).' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
+}
+
+$('#btn-export-all').addEventListener('click', exportAll);
+$('#btn-import-all').addEventListener('click', () => $('#file-import-all').click());
+$('#file-import-all').addEventListener('change', ev => { const f = ev.target.files[0]; if (f) importAll(f); ev.target.value = ''; });
 
 function renderTryGauges() {
   const sel = $('#try-gauge');

@@ -180,7 +180,7 @@ input[type=range]{width:110px}
           <button class="btn" id="btn-endtry">End try</button>
         </div>
         <canvas id="preview" width="466" height="466"></canvas>
-        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it, or drag a corner handle to rotate it (on a dial or ring, to turn the scale); arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
+        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; guides snap it to the face centre and to other widgets. Corner handles resize it (radius, width and height, or text size); the knob above rotates it (on a dial or ring, turns the scale). Arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
         <div class="sub">
           <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
@@ -1770,10 +1770,76 @@ function handleCorners(b) {
   return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => ({ x: b.cx + x * c - y * s, y: b.cy + x * s + y * c }));
 }
 
+// The rotate knob sits above the selection, on a stem.
+function rotateKnob(b) {
+  if (b.kind === 'ring') return { x: b.cx, y: b.cy - b.r - 30 };
+  const a = rad(b.rotate || 0), up = -(b.h / 2 + 30);
+  return { x: b.cx - up * Math.sin(a), y: b.cy + up * Math.cos(a) };
+}
+
+// Which handle of the selected widget is under the pointer: 'rotate', 'resize' or null.
 function hitHandle(ctx, px, py, t) {
   const w = currentWidgets()[selected];
-  if (!w || !ROTATE_KEY[w.type]) return false;
-  return handleCorners(widgetBounds(ctx, w, t)).some(h => Math.hypot(px - h.x, py - h.y) <= 9);
+  if (!w) return null;
+  const b = widgetBounds(ctx, w, t);
+  if (ROTATE_KEY[w.type]) { const k = rotateKnob(b); if (Math.hypot(px - k.x, py - k.y) <= 10) return 'rotate'; }
+  if (handleCorners(b).some(h => Math.hypot(px - h.x, py - h.y) <= 9)) return 'resize';
+  return null;
+}
+
+// Resizing: radius for arcs, width and height for bars, text size for text, size for a light.
+function startResize(w, b, p) {
+  const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
+  const d0 = Math.max(4, Math.hypot(p.x - px, p.y - py));
+  drag = { resize: true, px, py, d0, moved: false, keys: [],
+    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : 24), r0: w.r == null ? 14 : w.r, rotate: 0 };
+}
+
+function applyResize(w, p) {
+  const d = Math.hypot(p.x - drag.px, p.y - drag.py);
+  const lim = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
+  if (w.type === 'dial' || w.type === 'ring' || w.type === 'rim') {
+    w.r = lim(d, 40, 233);
+    if ((w.type === 'ring' || w.type === 'rim') && w.thickness != null && w.thickness >= w.r) w.thickness = w.r - 2;
+    drag.keys = ['r', 'thickness'];
+  } else if (w.type === 'bar') {
+    const a = rad(w.rotate || 0), dx = p.x - drag.px, dy = p.y - drag.py;
+    const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
+    w.w = lim(2 * Math.abs(lx), 4, 466);
+    w.h = lim(2 * Math.abs(ly), 4, 466);
+    drag.keys = ['w', 'h'];
+  } else if (w.type === 'light' && (w.shape || 'dot') !== 'text') {
+    w.r = lim(drag.r0 * d / drag.d0, 4, 100);
+    drag.keys = ['r'];
+  } else {
+    w.size = lim(drag.size0 * d / drag.d0, 8, 200);
+    drag.keys = ['size'];
+  }
+  drag.moved = true;
+}
+
+// Guides shown while moving: the face centre, and other widgets' centres.
+let guides = [];
+function snapMove(w, nx, ny) {
+  const others = currentWidgets().filter(o => o !== w);
+  const xs = [{ v: 233, face: true }, ...others.map(o => ({ v: o.x == null ? 233 : o.x }))];
+  const ys = [{ v: 233, face: true }, ...others.map(o => ({ v: o.y == null ? 233 : o.y }))];
+  guides = [];
+  const sx = xs.find(c => Math.abs(nx - c.v) < 6), sy = ys.find(c => Math.abs(ny - c.v) < 6);
+  if (sx) { nx = sx.v; guides.push({ axis: 'v', pos: sx.v, face: !!sx.face }); }
+  if (sy) { ny = sy.v; guides.push({ axis: 'h', pos: sy.v, face: !!sy.face }); }
+  return { x: Math.max(0, Math.min(466, Math.round(nx))), y: Math.max(0, Math.min(466, Math.round(ny))) };
+}
+
+function drawGuides(ctx) {
+  for (const g of guides) {
+    ctx.save();
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.strokeStyle = g.face ? '#0a84ff' : '#ff2d9b';
+    ctx.beginPath();
+    if (g.axis === 'v') { ctx.moveTo(g.pos, 0); ctx.lineTo(g.pos, 466); } else { ctx.moveTo(0, g.pos); ctx.lineTo(466, g.pos); }
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function hitWidget(ctx, px, py, t) {
@@ -1805,12 +1871,18 @@ function drawSelection(ctx, w, t) {
     ctx.strokeRect(-b.w / 2 - 4, -b.h / 2 - 4, b.w + 8, b.h + 8);
   }
   ctx.restore();
-  if (!ROTATE_KEY[w.type]) return;
-  // Corner handles: drag one to rotate.
+  // Corner handles resize; the knob above rotates.
   ctx.save();
   ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = '#0a84ff'; ctx.fillStyle = '#ffffff';
   for (const h of handleCorners(b)) { ctx.beginPath(); ctx.rect(h.x - 5, h.y - 5, 10, 10); ctx.fill(); ctx.stroke(); }
+  if (ROTATE_KEY[w.type]) {
+    const k = rotateKnob(b);
+    const top = b.kind === 'ring' ? { x: b.cx, y: b.cy - b.r - 6 } : (() => { const a = rad(b.rotate || 0), up = -(b.h / 2 + 4); return { x: b.cx - up * Math.sin(a), y: b.cy + up * Math.cos(a) }; })();
+    ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(k.x, k.y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(k.x, k.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
   ctx.restore();
+  drawGuides(ctx);
 }
 
 // Rotation of the selected widget, as a drag of a corner handle.
@@ -1857,14 +1929,14 @@ function moveWidget(i, x, y) {
   selectWidget(i);
 }
 
-const snap = v => Math.abs(v - 233) < 6 ? 233 : Math.max(0, Math.min(466, Math.round(v)));
 
 $('#preview').addEventListener('pointerdown', ev => {
   if (!state.previewCfg) return;
   const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
-  if (hitHandle(ctx, p.x, p.y, performance.now())) {
-    const w = currentWidgets()[selected];
-    startRotate(w, widgetBounds(ctx, w, performance.now()), p);
+  const handle = hitHandle(ctx, p.x, p.y, performance.now());
+  if (handle) {
+    const w = currentWidgets()[selected], b = widgetBounds(ctx, w, performance.now());
+    if (handle === 'rotate') startRotate(w, b, p); else startResize(w, b, p);
     try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic event */ }
     ev.preventDefault();
     return;
@@ -1882,23 +1954,28 @@ $('#preview').addEventListener('pointermove', ev => {
   if (!state.previewCfg) return;
   const p = canvasPoint(ev), ctx = $('#preview').getContext('2d');
   if (!drag) {
-    ev.target.style.cursor = hitHandle(ctx, p.x, p.y, performance.now()) ? 'grab' : hitWidget(ctx, p.x, p.y, performance.now()) >= 0 ? 'move' : 'default';
+    const h = hitHandle(ctx, p.x, p.y, performance.now());
+    ev.target.style.cursor = h === 'rotate' ? 'grab' : h === 'resize' ? 'nwse-resize' : hitWidget(ctx, p.x, p.y, performance.now()) >= 0 ? 'move' : 'default';
     return;
   }
   const w = currentWidgets()[selected];
   if (!w) return;
   if (drag.rotate) { applyRotate(w, p); return; }
-  w.x = snap(p.x - drag.ox); w.y = snap(p.y - drag.oy);   // live object: the preview redraws it
+  if (drag.resize) { applyResize(w, p); return; }
+  const s = snapMove(w, p.x - drag.ox, p.y - drag.oy);
+  w.x = s.x; w.y = s.y;   // live object: the preview redraws it
   drag.moved = true;
 });
 
 function endDrag() {
   if (!drag) return;
   const w = currentWidgets()[selected];
-  const moved = drag.moved, key = drag.rotate;
+  const moved = drag.moved, key = drag.rotate, resizeKeys = drag.resize ? drag.keys : null;
   drag = null;
+  guides = [];
   if (!moved || !w) return;
   if (key) { setWidgetFields(selected, { [key]: w[key] }); selectWidget(selected); }
+  else if (resizeKeys) { const changes = {}; for (const k of resizeKeys) if (w[k] != null) changes[k] = w[k]; setWidgetFields(selected, changes); selectWidget(selected); }
   else moveWidget(selected, w.x, w.y);
 }
 $('#preview').addEventListener('pointerup', endDrag);

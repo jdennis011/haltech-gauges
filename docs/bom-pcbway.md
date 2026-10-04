@@ -83,39 +83,38 @@ Order 5 boards, assemble 1 or 2.
 
 ## Hub carrier, ESP32-P4 variant
 
-Instead of the hub carrier above, not as well as it. The Wi-Fi module (U6) is a fine-pitch
-part with pads underneath: have it placed, do not plan to hand-solder it. The Olimex
-DevKit, the Pololu module and the coin cell are yours to fit.
+Instead of the hub carrier above, not as well as it. The Waveshare board and the Pololu
+module are yours to fit; the GPS, its SMA lead and the antenna are bought separately
+(electrical spec section 5.7).
 
 | Designators | Qty | Manufacturer | Part number | Description | Package | Fit | Notes |
 |---|---|---|---|---|---|---|---|
-| U6 | 1 | Espressif | ESP32-C6-MINI-1-N4 | Wi-Fi 6 module, 4 MB flash, PCB antenna | SMD module, 53 pads | SMT | For an external antenna: ESP32-C6-MINI-1U-N4 (C7558096), same pads |
-| U5 | 1 | Analog Devices | DS3231SN#T&R | Real-time clock, temperature compensated, I2C | SOIC-16 wide | SMT |  |
 | U2 | 1 | NXP | TJA1051T/3/1J | CAN transceiver, 5 V supply, 3.3 V logic, ECU bus | SOIC-8 | SMT |  |
 | U3 | 1 | Texas Instruments | SN65HVD230DR | CAN transceiver, 3.3 V, gauge bus | SOIC-8 | SMT |  |
+| U5 | 1 | Analog Devices | DS3231SN#T&R | Real-time clock, temperature compensated, I2C | SOIC-16 wide | SMT |  |
 | D4, D5 | 2 | Nexperia | PESD2CAN,215 | CAN bus ESD protection diode, one per connector | SOT-23 | SMT |  |
 | D1 | 1 | Vishay | SMBJ26CA-E3/52 | TVS diode, bidirectional, 26 V standoff, 12 V input | SMB (DO-214AA) | SMT |  |
 | D2 | 1 | MDD | SS34 | Schottky diode 3 A 40 V, reverse-polarity block | SMA (DO-214AC) | SMT | Distributor alternative in the same SMA package: Diodes Inc B340A-13-F |
+| D3 | 1 | MDD | SS14 | Schottky diode 1 A 40 V, 5 V rail to the board's VSYS | SMA (DO-214AC) | SMT | Any SS14 in SMA; Vishay SS14-E3/61T from a distributor |
 | D6 | 1 | Nexperia | BAT54,215 | Schottky diode 30 V 200 mA, cell trickle charge | SOT-23 | SMT | Any single BAT54 in SOT-23 (pin 1 anode, pin 3 cathode) |
+| Q1 | 1 | Nexperia | 2N7002,215 | N-channel MOSFET 60 V, turns the GPS off | SOT-23 | SMT | Any 2N7002 in SOT-23 (pin 1 gate, 2 source, 3 drain); LCSC C8545 is Changjiang's |
 | F2 | 1 | Littelfuse | 1812L200/16DR | PTC resettable fuse, 2 A hold, 16 V, chain output | 1812 | SMT |  |
 | C1, C3 | 2 | Nichicon | UUD1H101MNL1GS | 100 uF 50 V aluminium electrolytic, SMD | 8 x 10 mm | SMT | Polarised |
 | C2 | 1 | Samsung | CL21B105KBFNNNE | 1 uF 50 V X7R, buck input | 0805 | SMT |  |
-| C4, C5, C11, C16 | 4 | Samsung | CL21A106KAYNNNE | 10 uF 25 V X5R | 0805 | SMT | C16 only with the GPS header |
-| C6, C7, C8, C10, C12, C13, C14, C15 | 8 | Samsung | CL21B104KBCNNNC | 100 nF 50 V X7R, decoupling | 0805 | SMT |  |
+| C4, C5, C16 | 3 | Samsung | CL21A106KAYNNNE | 10 uF 25 V X5R | 0805 | SMT |  |
+| C6, C7, C8, C10, C14, C15 | 6 | Samsung | CL21B104KBCNNNC | 100 nF 50 V X7R, decoupling | 0805 | SMT |  |
 | C9 | 1 | Samsung | CL21B472KBANNNC | 4.7 nF 50 V X7R, split termination | 0805 | SMT |  |
 | R3, R4, R5, R6, R7 | 5 | Yageo | RC1206FR-07120RL | 120 R 1%, termination | 1206 | SMT |  |
-| R1, R2, R9, R10, R11, R12, R13, R14, R15, R16, R17, R20 | 12 | Yageo | RC0805FR-0710KL | 10 k 1% | 0805 | SMT |  |
-| R8 | 1 | Yageo | RC0805FR-07100KL | 100 k 1%, 12 V sense divider | 0805 | SMT |  |
-| R21, R22, R23 | 3 | Yageo | RC0805FR-071KL | 1 k 1% | 0805 | SMT | R22, R23 only with the GPS header |
+| R1, R2, R9, R20 | 4 | Yageo | RC0805FR-0710KL | 10 k 1% | 0805 | SMT |  |
+| R8, R24 | 2 | Yageo | RC0805FR-07100KL | 100 k 1%: 12 V sense divider, Q1 gate pull-down | 0805 | SMT |  |
+| R21, R22, R23 | 3 | Yageo | RC0805FR-071KL | 1 k 1% | 0805 | SMT |  |
 | J10, J11 | 2 | Molex | 43045-0412 | Micro-Fit 3.0 header, 2x2, vertical: ECU in, chain out | THT, 4 pins + 2 pegs | THT |  |
-| J12 | 1 | Wurth Elektronik | 61300511121 | 1x5 male header 2.54 mm, GPS module | THT | THT | Optional |
-| J13 | 1 | Wurth Elektronik | 61300211121 | 1x2 male header 2.54 mm, 5 V to the DevKit's POE_PWR1 | THT | THT | Or solder the lead's two wires into the holes |
+| J12 | 1 | Sullins | PPTC091LFBN-RC | 1x9 female socket 2.54 mm, 8.5 mm tall, for the Adafruit Ultimate GPS | THT | THT |  |
 | JP1, JP2 | 2 | Wurth Elektronik | 61300211121 | 1x2 male header 2.54 mm: ECU termination, ML2032 charge | THT | THT | Shunts 60900213421 supplied loose. JP2 is fitted only with a rechargeable ML2032 |
-| JP3 | 1 | Wurth Elektronik | 61300311121 | 1x3 male header 2.54 mm, GPS supply 3.3 V or 5 V | THT | THT | Optional, with one shunt |
 | BT1 | 1 | Keystone | 3034 | Holder for a 2032 coin cell | SMT | SMT | Or any 2032 holder; the footprint in the schematic is a placeholder |
 | U1 | 1 | Pololu | D36V28F5 (Pololu item 3782) | 5 V 3.2 A step-down regulator module | THT module, 1x4 pins | THT | Consign, or solder it yourself |
-| U4 | 1 | Olimex | ESP32-P4-DevKit | ESP32-P4 development board, rev C | 2 x 1x20 2.54 mm | THT | Consign, or solder it yourself. Optional sockets: 2 x 1x20, 8.5 mm |
-| TP1-TP9 |  |  |  | Test pads: GND, 5 V, 3V3, 12 V sense, RST, and the Wi-Fi module's EN, TXD, RXD, BOOT | bare pads | none | No part |
+| U4 | 1 | Waveshare | ESP32-P4-WIFI6 (SKU 32020) | ESP32-P4 board with ESP32-C6 Wi-Fi | 2 x 20, Raspberry Pi Pico pattern | THT | Consign, or fit it yourself on 2 x Sullins PPTC201LFBN-RC sockets (1x20, 8.5 mm) |
+| TP1-TP5 |  |  |  | Test pads: GND, 5 V, 3V3, 12 V sense, RST | bare pads | none | No part |
 
 ## Before you submit
 

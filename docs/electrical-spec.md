@@ -4,7 +4,7 @@ Draft for layout. Two items wait on bench results and are marked **[bench]**:
 the gauge header pin order (bring-up step 1) and the 5 V budget (steps 1 and 4).
 
 Section 1 is the hub as ordered, on an ESP32-C6 DevKit. Section 5 is a second hub
-design on an ESP32-P4 board, with Wi-Fi module, clock and GPS header on the carrier.
+design on a Waveshare ESP32-P4 board, with the clock and a GPS on the carrier.
 
 ## 1. Hub carrier board
 
@@ -333,8 +333,9 @@ label are connected.
   set that as the part's supplier number and take the footprint from the LCSC library.
 - The footprints inside the files are generic land patterns, there so pin numbers survive
   the import. Do not lay out on them as they are.
-- The ESP32-C6-DevKitC-1 footprint is dimensionally correct (from Espressif's drawing),
-  and so is the Olimex ESP32-P4-DevKit one (from Olimex's KiCad board file).
+- The ESP32-C6-DevKitC-1 footprint is dimensionally correct (from Espressif's drawing), and
+  so are the Waveshare ESP32-P4-WIFI6's pins and outline (from Waveshare's drawing) and the
+  Adafruit Ultimate GPS socket and its standoff holes (from Adafruit's board file).
 - The Micro-Fit footprint follows Molex sales drawing SD-43045-005 for the vertical
   43045-0412: four 1.02 mm holes on a 3.00 mm square, circuits 1 and 2 along one row with
   3 and 4 opposite, two 1.02 mm polarising peg holes 9.00 mm apart and 0.94 mm outside the
@@ -352,239 +353,249 @@ To change a circuit, edit the part and net lists in the script and run it again.
 
 ## 5. Hub carrier, ESP32-P4 variant
 
-A second hub design on an **Olimex ESP32-P4-DevKit** in place of the ESP32-C6 DevKit.
-The P4 has three CAN controllers, two fast cores and 32 MB of RAM, but no radio, so this
-carrier adds a small Wi-Fi module. It also builds in the real-time clock and has a header
-for a GPS module. The 12 V input, the 5 V rail, both CAN transceivers, the terminations and
-the two Micro-Fit connectors are the C6 carrier's (sections 1.3 to 1.6), with the same
-reference designators.
+A second hub design on a **Waveshare ESP32-P4-WIFI6** (SKU 32020) in place of the
+ESP32-C6 DevKit. The P4 has three CAN controllers, two fast cores and 32 MB of RAM, and the
+board adds an ESP32-C6 for Wi-Fi, already wired and loaded with its firmware, so the carrier
+needs no radio of its own. The carrier adds the real-time clock and a socket for an
+Adafruit Ultimate GPS with an external antenna. The 12 V input, the 5 V rail, both CAN
+transceivers, the terminations and the two Micro-Fit connectors are the C6 carrier's
+(sections 1.3 to 1.6), with the same reference designators.
 
 Schematic: `hardware/hub-carrier-p4.sch`, drawn out in `docs/hub-carrier-p4-schematic.svg`.
-Nothing here has been built or bench-tested, and
-the hub firmware has no P4 build yet (section 5.8).
+Nothing here has been built or bench-tested, and the hub firmware has no P4 build yet
+(section 5.8). The first version of this design, on an Olimex ESP32-P4-DevKit with a Wi-Fi
+module on the carrier, is in the git history (commit 4ca940c).
 
 | | C6 carrier (section 1) | P4 carrier |
 |---|---|---|
-| Processor board | ESP32-C6-DevKitC-1, 25.4 x 51.8 mm | Olimex ESP32-P4-DevKit rev C, 30 x 72 mm |
+| Processor board | ESP32-C6-DevKitC-1, 25.4 x 51.8 mm | Waveshare ESP32-P4-WIFI6, 21 x 71 mm, Raspberry Pi Pico pin pattern |
 | CAN controllers | 2 (both used) | 3 (two used, one spare) |
-| Wi-Fi | In the C6 | U6, an ESP32-C6-MINI-1 module on the carrier, over SDIO |
+| Wi-Fi | In the C6 | An ESP32-C6 module on the Waveshare board |
 | Clock | Wired-in module (rev A) | U5 DS3231 and a 2032 cell on the carrier |
-| GPS | None | J12, optional header |
-| Extras on the DevKit | | Ethernet, microSD slot, 16 MB flash, USB high-speed |
-| Feed to the DevKit | 5 V pin through D3 | J13 to the DevKit's POE_PWR1 connector; no D3 |
+| GPS | None | Adafruit Ultimate GPS in J12, with an external active antenna |
+| 5 V into the board | DevKit 5V pin, through D3 | VSYS pin, through D3 |
+| Also on the board | | microSD slot, speaker amplifier and microphone, USB 2.0 high-speed port, 32 MB flash |
 
-### 5.1 The DevKit
+### 5.1 The board
 
-Dimensions and pin order are taken from Olimex's KiCad board file for rev C, and the pin
-order was checked against the copper and against the user manual.
+Pin pattern and outline from Waveshare's dimension drawing, pin functions from its
+schematic, holes from its layout print.
 
 ```
-                 Ethernet jack (overhangs this end)
-            +---------------------------------------+
-            | (o)                               (o) |   3.3 mm holes, 23 mm apart
-   EXT1-20  o  GPIO19                    USB_DN     o  EXT2-20
-            o  GPIO18                    USB_DP     o
-            o  GPIO17                    GND        o
-            o  GPIO16                    USB1P1_N   o
-            o  GPIO15                    USB1P1_P   o
-            o  GPIO14                    GND        o
-            o  GPIO13                    EN (reset) o
-            o  GPIO12                    GPIO20     o
-            o  GPIO11                    GPIO21     o
-            o  GPIO10                    GPIO22     o
-            o  GPIO9                     GPIO23     o
-            o  GPIO8  (SCL)              GPIO32     o
-            o  GPIO7  (SDA)              GPIO33     o
-            o  GPIO6                     GPIO46     o
-            o  GPIO5                     GPIO47     o
-            o  GPIO4                     GPIO48     o
-            o  GPIO3  (SD detect)        GPIO53     o
-            o  GPIO2  (user LED)         GPIO54     o
-            o  GND                       GND        o
-   EXT1-1   o  +3.3V                     +5V        o  EXT2-1
-            | (o)                               (o) |   holes 65 mm from the other pair
-            +----------------[USB-C]----------------+
-            |<-------------- 30 mm --------------->|
+               USB-C end
+          +------------------------------------+
+  pin 1   o  GPIO52                  VBUS      o  pin 40   never connect
+          o  GPIO51                  VSYS      o  39       5 V in, through D3
+          o  GND                     GND       o  38
+          o  GPIO31  clock 1 Hz      3V3_EN    o  37       leave open
+          o  GPIO30  GPS PPS         3V3       o  36       carrier 3.3 V
+          o  GPIO29  GPS data out    GPIO20    o  35       12 V sense
+          o  GPIO28  GPS data in     GPIO21    o  34       ECU TXD
+          o  GND                     GND       o  33
+          o  GPIO50  GPS off         GPIO22    o  32       ECU RXD
+          o  GPIO49                  GPIO23    o  31       ECU S
+          o  GPIO5                   RUN       o  30       reset test point
+          o  GPIO4                   GPIO26    o  29
+          o  GND                     GND       o  28
+          o  GPIO3                   GPIO27    o  27
+          o  GPIO2                   GPIO32    o  26       gauge TXD
+          o  GPIO8   I2C SCL         GPIO33    o  25       gauge RXD
+          o  GPIO7   I2C SDA         GPIO46    o  24
+          o  GND                     GND       o  23
+          o  GPIO24  USB D-          GPIO47    o  22
+  pin 20  o  GPIO25  USB D+          GPIO48    o  21
+          |      ESP32-C6 Wi-Fi module,        |
+          |      antenna over a notch          |
+          +----------+              +----------+
 ```
 
 | Item | Value |
 |---|---|
-| Outline | 30 x 72 mm. The Ethernet jack overhangs one short edge, the USB-C port is on the other |
-| Headers | EXT1 and EXT2, 1 x 20 each, 2.54 mm pitch, 25.40 mm apart (1.0 in), each 2.3 mm in from its long edge. Pin 1 of both is at the USB-C end, 12.87 mm from that edge; pin 20 is 10.87 mm from the Ethernet edge |
-| Header position | The header centre is 1.0 mm towards the Ethernet end of the board centre |
-| Carrier holes for the pins | 1.0 mm drill, 1.8 mm pad, 40 positions |
-| Mounting holes | Four, 3.3 mm, on a 23 x 65 mm rectangle: 3.5 mm in from each long edge and each short edge |
-| Underside | The P4, the flash, the Ethernet PHY, both regulators and the microSD socket are on the DevKit's underside, about 1.7 mm tall. With the pin headers soldered straight in there is under 1 mm of clearance: keep the carrier's top side bare beneath the DevKit, or seat it on 8.5 mm sockets |
-| microSD | The slot opens at the USB-C end, between the two boards. Leave that edge reachable |
-| I2C pull-ups | The DevKit has 2.2 k pull-ups to 3.3 V on GPIO7 (SDA) and GPIO8 (SCL). The carrier adds none |
-| 3.3 V supply | The DevKit's 3.3 V regulator is a 2 A buck (TPS62A02A). The carrier draws from it on EXT1-1: about 0.25 A average, 0.5 A in Wi-Fi transmit bursts |
+| Outline | 21.00 x 71.05 mm. USB-C at one end. The last 18 mm at the other end hold the ESP32-C6 module, whose antenna sits over a 13.8 x 5.2 mm notch in the board's end |
+| Pins | 2 x 20 at 2.54 mm, the rows 17.78 mm apart and 1.61 mm in from the long edges: the Raspberry Pi Pico pattern, so any Pico footprint fits the pins. Pins 1 and 40 are 4.52 mm from the USB end; pins 20 and 21 are 18.27 mm from the far end. The edge pads are castellated and drilled |
+| Holes | Four of about 1.7 mm, measured from Waveshare's layout print to about 0.1 mm: 1.37 mm in from the long edges, 1.45 mm and 55.6 mm from the USB end. They are on the footprint's documentation layer only: check them against a board before drilling for them |
+| Underside | The P4, the microSD slot, the audio chips and the 2-pin speaker plug are on the underside, so the board can't lie flat on its edge pads. Two 1 x 20 sockets (8.5 mm tall) clear all of it. Soldered straight in on the 2.5 mm headers Waveshare supplies, the speaker plug needs a cut-out in the carrier |
+| Retention | On sockets, hold the board down with a strap or a printed clamp in the enclosure; sockets alone work loose with vibration |
+| Antenna | No copper under the far end: let the last 20 mm hang past the carrier's edge, and keep the GPS and the buck at least 15 mm from it |
+| On the board | ESP32-P4 (chip revision 3, section 5.8) with 32 MB flash, ESP32-C6-MINI-1 Wi-Fi with a PCB antenna, microSD slot, ES8311 audio codec with a speaker amplifier and microphone, USB-C through a USB-serial chip with automatic reset for programming, a 4-pin header for reflashing the C6, MIPI display and camera connectors, and a 3.3 V buck regulator marked 3 A |
+| I2C | GPIO7 (SDA) and GPIO8 (SCL) are the board's own bus, shared with its audio codec (address 0x18) and the display and camera connectors, with 2.2 k pull-ups to 3.3 V. The clock joins it at 0x68 |
 
-### 5.2 Feeding the DevKit
+### 5.2 Power
 
-The carrier's 5 V rail goes to the DevKit's **POE_PWR1** connector, not to a header pin.
-
-| J13 pin | Net | Goes to |
+| Board pin | Net | Notes |
 |---|---|---|
-| 1 | +5V | POE_PWR1 pin 4 (+5VP) |
-| 2 | GND | POE_PWR1 pin 3 (GND) |
+| 39 VSYS | +5V_MCU | From the carrier's 5 V rail through D3 (SS14) |
+| 36 3V3 | +3V3 | The board's 3.3 V regulator. It supplies the ECU transceiver's logic side, the gauge-bus transceiver, the clock and the pull-ups |
+| 40 VBUS | none | The USB-C port's own 5 V. Never connect it |
+| 37 3V3_EN | none | Pulled up on the board; pulled low, it turns the 3.3 V regulator off |
+| 30 RUN | RST | The P4's reset, to test point TP5 |
 
-POE_PWR1 is a 4-way JST PH (2.0 mm) header on the DevKit's top side. Use a 4-way PH lead
-with wires 1 and 2 cut off: those two pins are the raw power-over-Ethernet pair from the
-network jack and carry up to 57 V on a PoE switch. Never connect them to the carrier.
+On the board, USB power reaches VSYS through an ideal-diode circuit (a P-channel FET
+switched by a pair of PNP transistors) that stops current flowing from VSYS back into the
+USB port, so feeding VSYS never pushes the car's supply into a PC. Nothing on the board
+stops current the other way: with USB plugged in and the car off, a PC would feed VSYS, and
+through it the carrier's 5 V rail, the ECU transceiver, the GPS and the whole gauge chain.
+D3 blocks that, as it does on the C6 carrier.
 
-Why not the +5V pin on EXT2-1: on the DevKit, USB power reaches the 5 V rail through a
-P-channel FET that is switched off only when +5VP is present. Feeding the rail directly on
-EXT2-1 leaves that FET on, and the carrier then pushes 5 V back up the USB cable into the
-PC whenever the PC's port is the lower of the two. Through +5VP the DevKit does the
-switching itself: on the car's supply it runs from the carrier and isolates USB; on USB
-alone it runs from the PC and the carrier's 5 V rail stays dead. EXT2-1 is left
-unconnected.
+- On the car's supply, everything runs.
+- On USB alone, the board runs with its Wi-Fi, and so do the clock and the gauge-bus
+  transceiver; the carrier's 5 V side (the ECU transceiver, the GPS and the gauge chain)
+  stays off.
 
-On USB alone the DevKit still powers its own 3.3 V rail, so the Wi-Fi module, the clock,
-the GPS (on its 3.3 V setting) and the gauge-bus transceiver all work on the bench. Only
-the ECU transceiver, which needs the carrier's 5 V, is off.
+D3 drops about 0.3 V, leaving about 4.8 V at VSYS, ample for the board's 3.3 V regulator.
 
-### 5.3 DevKit pins used
+### 5.3 Board pins used
 
-| EXT pin | GPIO | Carrier connection |
+| Board pin | GPIO | Carrier connection |
 |---|---|---|
-| EXT1-1 | +3.3V | The carrier's 3.3 V rail: U2 VIO, U3, U5, U6, pull-ups |
-| EXT1-2, EXT2-2, EXT2-15, EXT2-18 | GND | Ground |
-| EXT2-13 | GPIO20 (ADC1 channel 4) | 12 V sense divider |
-| EXT2-12 | GPIO21 | ECU transceiver TXD |
-| EXT2-11 | GPIO22 | ECU transceiver RXD |
-| EXT2-10 | GPIO23 | ECU transceiver S (silent), 10 k pull-down |
-| EXT2-9 | GPIO32 | Gauge transceiver TXD, 10 k pull-up |
-| EXT2-8 | GPIO33 | Gauge transceiver RXD |
-| EXT1-19 | GPIO18 | Wi-Fi SDIO CLK |
-| EXT1-20 | GPIO19 | Wi-Fi SDIO CMD |
-| EXT1-15 to 18 | GPIO14 to 17 | Wi-Fi SDIO D0 to D3 |
-| EXT2-3 | GPIO54 | Wi-Fi module EN (reset) |
-| EXT1-7 | GPIO6 | Wi-Fi module IO2 (wake-up line) |
-| EXT1-5 | GPIO4 | Wi-Fi module RXD0, for loading its firmware |
-| EXT1-6 | GPIO5 | Wi-Fi module TXD0 |
-| EXT2-4 | GPIO53 | Wi-Fi module IO9 (boot select) |
-| EXT1-8 | GPIO7 | I2C SDA, clock |
-| EXT1-9 | GPIO8 | I2C SCL, clock |
-| EXT1-10 | GPIO9 | Clock INT/SQW (1 Hz tick or alarm), 10 k pull-up |
-| EXT1-11 | GPIO10 | GPS data in (module TXD, through 1 k) |
-| EXT1-12 | GPIO11 | GPS data out (module RXD) |
-| EXT1-13 | GPIO12 | GPS PPS in (through 1 k) |
-| EXT2-14 | EN | Reset test point only |
-| EXT2-1 | +5V | Not connected (section 5.2) |
+| 35 | GPIO20 (ADC1 channel 4) | 12 V sense divider |
+| 34 | GPIO21 | ECU transceiver TXD |
+| 32 | GPIO22 | ECU transceiver RXD |
+| 31 | GPIO23 | ECU transceiver S (silent), 10 k pull-down |
+| 26 | GPIO32 | Gauge transceiver TXD, 10 k pull-up |
+| 25 | GPIO33 | Gauge transceiver RXD |
+| 17 | GPIO7 | I2C SDA, clock |
+| 16 | GPIO8 | I2C SCL, clock |
+| 4 | GPIO31 | Clock INT/SQW (1 Hz tick or alarm), 10 k pull-up |
+| 7 | GPIO28 | GPS data in: the GPS's TX, through 1 k |
+| 6 | GPIO29 | GPS data out: the GPS's RX |
+| 5 | GPIO30 | GPS PPS, through 1 k |
+| 9 | GPIO50 | GPS off: high turns the GPS off through Q1 |
+| 39, 36, 30 | VSYS, 3V3, RUN | Section 5.2 |
+| 3, 8, 13, 18, 23, 28, 33, 38 | GND | Ground |
 
-The SDIO, reset and wake-up pins are the ones Espressif's own ESP32-P4 board uses for
-its C6, so the stock ESP-Hosted and Arduino settings work unchanged.
+- **Spare:** GPIO2 to 5, GPIO26, GPIO27, GPIO49, GPIO51 and GPIO52; enough for a third CAN
+  bus.
+- **Avoid GPIO46 to 48** (pins 24, 22 and 21): they run from the microSD slot's supply, which
+  the P4 switches itself and which is off until the firmware turns it on. Pins 19 and 20 are
+  the P4's full-speed USB port.
+- **Taken on the board and not on the header:** GPIO14 to 19, GPIO54 and GPIO6 (Wi-Fi),
+  GPIO9 to 13 and GPIO53 (audio), GPIO39 to 45 (microSD), GPIO34 to 38 (strapping pins, the
+  BOOT button and the USB-serial chip), GPIO0 and GPIO1 (32 kHz crystal).
 
-Free: GPIO13. GPIO2 and GPIO3 stay with the DevKit's LED and card detect. Avoid GPIO46
-to 48: they share the microSD slot's supply, which the P4 switches itself and which is
-off until the firmware turns it on. A third CAN transceiver, should one ever be wanted,
-would take GPIO13 and one of the Wi-Fi firmware-loading pins.
+### 5.4 Wi-Fi
 
-### 5.4 Wi-Fi module
-
-U6 is an **ESP32-C6-MINI-1-N4** (13.2 x 16.6 mm, antenna on the module) running
-Espressif's ESP-Hosted firmware. The P4 uses it as a network card: the hub's access
-point, the home-network connection and the web page all work as on the C6, in software
-that sees an ordinary Wi-Fi interface.
-
-| Module pin | Signal | Connection |
-|---|---|---|
-| 3 | 3V3 | 3.3 V rail; C11 10 uF and C12 100 nF at the pin |
-| 8 | EN | P4 GPIO54; R10 10 k to 3.3 V, C13 100 nF to GND |
-| 24 | IO18, SDIO CMD | P4 GPIO19; R11 10 k pull-up |
-| 25 | IO19, SDIO CLK | P4 GPIO18 |
-| 26 to 29 | IO20 to IO23, SDIO D0 to D3 | P4 GPIO14 to 17; R12 to R15, 10 k pull-ups |
-| 5 | IO2 | P4 GPIO6 |
-| 23 | IO9, boot select | R16 10 k pull-up; P4 GPIO53 |
-| 22 | IO8 | R17 10 k pull-up (needed for the serial download mode) |
-| 31, 30 | TXD0, RXD0 | P4 GPIO5 and GPIO4 |
-| 1, 2, 11, 14, 36 to 53 | GND | Ground, every one |
-
-- **Pull-ups.** SDIO needs external pull-ups on CMD and all four data lines; the chips'
-  internal ones are too weak. CLK has none.
-- **Layout.** Put the module at a board edge with its antenna end hanging over the edge
-  or over a copper-free cut-out, at least 15 mm from the DevKit's Ethernet jack and from
-  the buck. Keep the six SDIO traces short (under 50 mm), similar in length, over
-  unbroken ground.
-- **Behind a metal dash** use the **ESP32-C6-MINI-1U-N4** (LCSC C7558096): same pads,
-  shorter body, a U.FL socket for a stick-on antenna on a lead.
-- **Loading its firmware.** Modules arrive blank. The schematic gives the P4 the
-  module's serial port, boot pin and reset, so the P4 can act as the programmer: a small
-  bridge sketch on the P4 holds IO9 low, pulses EN, then passes its USB serial port
-  through to GPIO4 and GPIO5 while `esptool` on the PC writes the ESP-Hosted image.
-  After that the image can be updated over SDIO from the P4. The same four signals are on
-  test points TP6 to TP9 for a USB-serial adapter instead.
+- The ESP32-C6-MINI-1 on the board runs Espressif's ESP-Hosted firmware and appears to the
+  P4 as an ordinary Wi-Fi interface over SDIO, on the same pins Espressif's own P4 board
+  uses. The hub's access point, the home-network connection and the web page work as on the
+  C6 hub.
+- It ships with its firmware loaded, but the P4 side of ESP-Hosted has to match the version
+  on the C6. There is an open report of a Waveshare P4 board whose factory C6 firmware would
+  not talk to Arduino-ESP32 3.3.11 (waveshareteam/ESP32-P4-WIFI6-Touch-LCD-5, issue 13). If
+  that happens here, reflash the C6 through the 4-pin header beside it (IO9, GND, RXD, TXD):
+  short IO9 to GND, connect a 3.3 V USB-serial adapter (its TX to RXD, its RX to TXD), hold
+  the board's BOOT button while powering up so the P4 leaves the C6 alone, and flash. After
+  that, ESP-Hosted can update the C6 over the SDIO link.
+- Inside the case, keep the GPS at least 15 mm from the board's antenna end. The GPS antenna
+  itself is outside the case.
 
 ### 5.5 Clock
 
-Section 1.8's rev B circuit, on the carrier.
+The P4 has a clock of its own and the board fits its 32 kHz crystal, but nothing on the
+board keeps it powered after key-off. The carrier's DS3231 carries the time; with a GPS fix,
+the hub also sets it from the satellites.
 
 | Ref | Part | Notes |
 |---|---|---|
-| U5 | DS3231SN# (SO-16 wide, +/-2 ppm) | VCC 3.3 V with C14 100 nF. SDA and SCL to GPIO7 and GPIO8, on the DevKit's own pull-ups. Pins 5 to 12 have no function and are grounded, as the datasheet requires. RST and 32KHZ unconnected |
-| R20 | 10 k | Pull-up on INT/SQW, which goes to GPIO9 for a 1 Hz tick |
+| U5 | DS3231SN# (SO-16 wide, +/-2 ppm) | VCC 3.3 V with C14 100 nF. SDA and SCL to GPIO7 and GPIO8, on the board's own pull-ups. Pins 5 to 12 have no function and are grounded, as the datasheet requires. RST and 32KHZ unconnected |
+| R20 | 10 k | Pull-up on INT/SQW, which goes to GPIO31 for a 1 Hz tick |
 | BT1 | 2032 holder | CR2032 (5 to 10 years), or a rechargeable ML2032 |
 | C15 | 100 nF | On the cell |
 | D6, R21, JP2 | BAT54, 1 k, 2-pin jumper | Trickle charge from 3.3 V for an ML2032: about 3.0 V at the cell, under 1 mA. **JP2 is fitted only with an ML2032. A CR2032 must never be charged: leave JP2 open** |
 
-With a GPS fitted the clock is set from the satellites and the DS3231 carries the time
-between fixes and at start-up before the first one.
+### 5.6 GPS
 
-### 5.6 GPS header (optional)
+An **Adafruit Ultimate GPS** (product 746) plugs into J12 and uses an **external active
+antenna**: GPS signals barely reach a box behind the dash.
 
-J12, 1 x 5 at 2.54 mm, for any serial GPS module on a lead: u-blox NEO-M8N or M10
-boards, Beitian BN-220 or BN-880, ATGM336H. Leave J12, JP3, R22, R23 and C16 off if no
-GPS is wanted; nothing else depends on them.
-
-| J12 pin | Signal | Notes |
+| J12 pin | GPS pin | Connection |
 |---|---|---|
-| 1 | VCC | 3.3 V or 5 V, chosen by JP3 (1-2 = 3.3 V from the DevKit, 2-3 = 5 V from the carrier). C16 10 uF at the header |
-| 2 | GND | |
-| 3 | TXD, from the module | Through R22 1 k to GPIO10 |
-| 4 | RXD, to the module | From GPIO11. Only needed to configure the module |
-| 5 | PPS | Through R23 1 k to GPIO12. Optional: one pulse per second, good to about a microsecond |
+| 1 | PPS | Through R23 1 k to GPIO30: one pulse a second once it has a fix |
+| 2 | VIN | Carrier 5 V, with C16 10 uF at the socket. The GPS board makes its own clean 3.3 V from it |
+| 3 | GND | |
+| 4 | RX | From GPIO29. 5 V tolerant on the GPS side; the P4 drives it at 3.3 V |
+| 5 | TX | Through R22 1 k to GPIO28; a 3.3 V signal |
+| 6 | FIX | Not connected (the GPS board's own fix LED) |
+| 7 | VBAT | Not connected: the GPS board has its own CR1220 holder |
+| 8 | EN | Drain of Q1 (2N7002). GPIO50 high turns Q1 on, pulls EN low and turns the GPS off |
+| 9 | 3.3V | Not connected |
 
-- The P4's pins are 3.3 V and not 5 V tolerant. Nearly every module, even one powered
-  from 5 V, talks at 3.3 V; the two 1 k resistors are there for the odd one that does not.
-- On the 5 V setting the GPS is off while the hub runs from USB alone.
-- Pin order on GPS modules is not standard. Wire the lead to suit the module; do not
-  expect a module to plug straight in.
-- Mount the module, or at least its antenna, with a view of the sky: on top of the dash
-  under the windscreen, not behind metal.
+- **Why Q1:** the GPS board pulls EN up to VIN, 5 V, through 10 k, and a P4 pin must never
+  see 5 V. R24 (100 k) holds Q1's gate low, so the GPS is on unless the hub turns it off,
+  including while the P4 is in reset. Turning it off and on again restarts a GPS that has
+  stopped answering.
+- **Mounting:** J12 is a 1 x 9 socket (Sullins PPTC091LFBN-RC, 8.5 mm). Solder the header
+  supplied with the GPS to its underside, pins down, and plug it in component side up. The
+  GPS board is 25.4 x 34.3 mm and lies over the carrier; its two 2.5 mm holes are 29.72 mm
+  from the header row, in line with pins 1 and 9. The footprint has 2.7 mm holes there for
+  M2.5 standoffs about 11 mm tall (the socket plus the header's plastic). Keep parts under it
+  below about 8 mm.
+- **Backup cell:** the CR1220 holder is on the GPS board's underside. Fit a CR1220: it keeps
+  the GPS's almanac and clock, so it gets a fix within seconds of key-on instead of about half
+  a minute.
+- **Antenna socket:** the GPS's u.FL socket is at its far end, near the hole above pin 1.
+  Place J12 so that end faces the case wall that carries the SMA socket.
+
+The antenna:
+
+| Part | Notes |
+|---|---|
+| Adafruit 851 | 15 cm lead from u.FL to an SMA socket (female) that bolts through the case wall. Plug the u.FL end in once and tie the lead down: u.FL is rated for about 30 matings, and a pull on the antenna cable should land on the case, not the GPS board |
+| Adafruit 960 | Active antenna, 3 to 5 V, 28 dB, 5 m lead, SMA plug, magnetic base, IP66. Any active GPS antenna that runs on 3 V and has an SMA plug will do. Not RP-SMA: Wi-Fi antennas often use it, it looks almost the same, and it does not mate with SMA |
+
+- The GPS powers the antenna through the coax and switches to it by itself when one is
+  plugged in. A passive antenna is not used.
+- The roof is best (the magnetic base needs a steel roof), with the cable in through a door
+  or boot seal. Hidden is fine under plastic or glass, never under metal: on the dash top
+  under the windscreen, under the rear shelf, or inside a plastic spoiler. Heat-reflecting
+  windscreens block GPS except at a clear patch near the mirror.
 
 ### 5.7 Parts
 
-The C6 carrier's list (section 3.2) less D3 and the C6 DevKit, plus:
+The C6 carrier's list (section 3.2) less the C6 DevKit, plus:
 
 | Ref | Part | Package | LCSC | Class |
 |---|---|---|---|---|
-| U6 | ESP32-C6-MINI-1-N4 (or -1U-N4, C7558096) | 53-pad module | C5736265 | extended |
 | U5 | DS3231SN#T&R | SO-16 wide | C9866 | extended |
 | D6 | BAT54 | SOT-23 | C8590 | extended |
-| R10 to R17, R20 | 10 k 1% (nine more, twelve in all with R1, R2, R9) | 0805 | C17414 | basic |
+| Q1 | 2N7002 | SOT-23 | C8545 | basic |
+| R20 | 10 k 1% (four in all with R1, R2, R9) | 0805 | C17414 | basic |
+| R24 | 100 k 1% (two in all with R8) | 0805 | C149504 | basic |
 | R21, R22, R23 | 1 k 1% | 0805 | C17513 | basic |
-| C11, C16 | 10 uF 25 V (four in all with C4, C5) | 0805 | C15850 | basic |
-| C12 to C15 | 100 nF 50 V X7R (eight in all with C6, C7, C8, C10) | 0805 | C49678 | basic |
+| C16 | 10 uF 25 V (three in all with C4, C5) | 0805 | C15850 | basic |
+| C14, C15 | 100 nF 50 V X7R (six in all with C6, C7, C8, C10) | 0805 | C49678 | basic |
 
-Hand-soldered: J10, J11 (Molex 43045-0412), J12 (1 x 5 header), J13 (1 x 2 header or two
-wire pads), JP1, JP2 (1 x 2), JP3 (1 x 3), BT1 (2032 holder), the Pololu D36V28F5 and the
-Olimex ESP32-P4-DevKit (or two 1 x 20 sockets for it).
+Hand-soldered: J10, J11 (Molex 43045-0412), J12 (Sullins PPTC091LFBN-RC), JP1, JP2 (1 x 2
+headers), BT1 (2032 holder), the Pololu D36V28F5, and two 1 x 20 sockets for the Waveshare
+board (Sullins PPTC201LFBN-RC).
 
-LCSC numbers for U6, U5, D6 and the 1 k resistors were checked on 5 October 2026; the
-rest are the C6 carrier's. `hardware/pcbway/hub-carrier-p4-bom.csv` is the same list by manufacturer
-part number.
+Bought separately:
+
+| Item | Where | Price |
+|---|---|---|
+| Waveshare ESP32-P4-WIFI6, SKU 32020. The version with the headers already fitted plugs straight into the sockets | Waveshare | $13.99 |
+| Adafruit Ultimate GPS, product 746 | Core Electronics, or Adafruit | US$29.95 |
+| Adafruit 851, u.FL to SMA panel lead | Core Electronics, or Adafruit | US$3.95 |
+| Adafruit 960 active GPS antenna, or any active GPS antenna with an SMA plug that runs on 3 V | Adafruit | US$21.50 |
+| M2.5 standoffs, about 11 mm, and screws, two | Anywhere | |
+| CR1220 for the GPS, CR2032 or ML2032 for the clock | Anywhere | |
+
+Q1's LCSC number was checked on 5 October 2026; the rest are the C6 carrier's or the first
+version's, checked the same week. `hardware/pcbway/hub-carrier-p4-bom.csv` is the board's
+list by manufacturer part number.
 
 ### 5.8 What is not done
 
-- **Firmware.** The hub firmware builds for the C6 and for the C3 stand-in only. A P4
-  build needs: the two CAN ports on GPIO21/22 and GPIO32/33, Wi-Fi through ESP-Hosted
-  (`WiFi.setPins(18, 19, 14, 15, 16, 17, 54)`, the defaults), the clock on I2C, a GPS
-  parser, and the bridge sketch for loading the Wi-Fi module. The CAN library used on
-  the C6 also has to be confirmed on the P4.
-- **Bench checks before layout is frozen.** That POE_PWR1 powers the DevKit and isolates
-  USB as described; the 3.3 V rail's sag in a Wi-Fi transmit burst; SDIO at the trace
-  length the layout ends up with; the height under the DevKit.
-- **Footprints.** The DevKit's is dimensionally right. The Wi-Fi module's, the cell
-  holder's and the Pololu's are placeholders with the right pad names: take the real ones
-  from the part libraries.
+- **Firmware.** The hub firmware builds for the C6 and for the C3 stand-in only. A P4 build
+  needs the two CAN ports on GPIO21/22 and GPIO32/33, Wi-Fi through ESP-Hosted
+  (Arduino-ESP32's defaults match this board), the clock on I2C, a GPS reader, and GPIO50 for
+  the GPS's power. The CAN library used on the C6 also has to be confirmed on the P4.
+- **Chip revision.** This board's P4 is the newer revision 3 (ESP32-P4NRW32X). Firmware has to
+  be built for it: Arduino-ESP32 3.3.11 or later with the chip variant set to revision 3 (the
+  toolchain here is 3.3.12). Builds for revision 1 do not run on it.
+- **Wi-Fi firmware match:** section 5.4.
+- **Bench checks before the layout is frozen:** that D3 and the board's ideal diode behave as
+  described with USB plugged in; the height under the board on its sockets; the hole
+  positions; the GPS's reception from the chosen antenna spot.
+- **Footprints.** The Waveshare board's pins and outline and the GPS's pins and holes are from
+  the makers' files. The cell holder's and the Pololu's are placeholders.

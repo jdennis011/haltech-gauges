@@ -3,7 +3,7 @@
     python scripts/gen_eagle_sch.py
 
 Writes hardware/gauge-adapter.sch, hardware/hub-carrier.sch (ESP32-C6 DevKit)
-and hardware/hub-carrier-p4.sch (Olimex ESP32-P4-DevKit). They import
+and hardware/hub-carrier-p4.sch (Waveshare ESP32-P4-WIFI6). They import
 into EasyEDA (File > Import > Eagle). The circuits are the ones described in
 docs/electrical-spec.md; this script is their machine-readable form.
 
@@ -179,6 +179,11 @@ class Package:
             self.elements.append(("wire", dict(x1=f(a), y1=f(b), x2=f(c), y2=f(d),
                                                width="0.127", layer="21"), None))
 
+    def polyline(self, points, layer="21"):
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            self.elements.append(("wire", dict(x1=f(x1), y1=f(y1), x2=f(x2), y2=f(y2),
+                                               width="0.127", layer=layer), None))
+
     def labels(self, x, y):
         self.elements.append(("text", dict(x=f(x), y=f(y), size="1.016", layer="25"), ">NAME"))
 
@@ -225,7 +230,7 @@ def build_packages():
     soic16.labels(-3.75, 5.7)
     packages.append(soic16)
 
-    for count in (2, 3, 5, 8):
+    for count in (2, 8):
         hdr = Package(f"HDR-1X{count}", "Pin header, 2.54 mm pitch, 1.0 mm drill.")
         for i in range(count):
             hdr.pad(str(i + 1), (i - (count - 1) / 2) * G, 0, square=(i == 0))
@@ -266,38 +271,44 @@ def build_packages():
     dev.labels(-12.7, 21.2)
     packages.append(dev)
 
-    # From Olimex's KiCad board file, ESP32-P4-DevKit rev C: EXT1 and EXT2 are 1x20
-    # at 2.54 mm, 25.40 mm apart, pin 1 of each at the USB-C end. The board is
-    # 30 x 72 mm with 3.3 mm holes on a 23 x 65 mm pattern; the header centre is
-    # 1 mm towards the Ethernet end of the board centre.
-    p4 = Package("OLIMEX-ESP32-P4-DEVKIT",
-                 "Top view, USB-C at the bottom, Ethernet jack at the top (it overhangs the edge). "
-                 "The DevKit carries parts on its underside: keep the carrier clear beneath it, "
-                 "or seat it on sockets.")
+    # From Waveshare's dimension drawing and layout print for the ESP32-P4-WIFI6
+    # (SKU 32020): the Raspberry Pi Pico pin pattern, 2 x 20 at 2.54 mm with the
+    # rows 17.78 mm apart, on a 21.00 x 71.05 mm board. Pin 1 is 4.52 mm from the
+    # USB end and the last pins are 18.27 mm from the far end, where the ESP32-C6
+    # module's antenna overhangs a 13.83 x 5.21 mm notch. The four holes are
+    # measured from the layout print and drawn on the documentation layer only.
+    ws = Package("WAVESHARE-ESP32-P4-WIFI6",
+                 "Top view, USB-C end at the top, Raspberry Pi Pico pin pattern. The far end holds the "
+                 "Wi-Fi antenna: keep the carrier's copper clear of it, or let it overhang the edge. The P4, "
+                 "the microSD slot and the speaker plug are on the board's underside, so seat it on sockets. "
+                 "The hole circles (documentation layer) are measured, +/-0.1 mm: check before drilling.")
     for i in range(20):
-        y = -24.13 + i * G
-        p4.pad(f"EXT1_{i + 1}", -12.7, y, square=(i == 0))
-        p4.pad(f"EXT2_{i + 1}", 12.7, y, square=(i == 0))
-    for x, y in ((-11.5, 31.5), (11.5, 31.5), (-11.5, -33.5), (11.5, -33.5)):
-        p4.elements.append(("hole", dict(x=f(x), y=f(y), drill="3.3"), None))
-    p4.outline(-15, 35, 15, -37)
-    p4.labels(-15, 35.5)
-    packages.append(p4)
+        y = 24.13 - i * G
+        ws.pad(str(i + 1), -8.89, y, square=(i == 0))
+        ws.pad(str(40 - i), 8.89, y)
+    for x in (-9.13, 9.13):
+        for y in (27.20, -26.94):
+            ws.elements.append(("circle", dict(x=f(x), y=f(y), radius="0.85", width="0.127",
+                                                layer="51"), None))
+    ws.polyline([(-10.5, 28.65), (10.5, 28.65), (10.5, -42.4), (6.92, -42.4), (6.92, -37.19),
+                 (-6.92, -37.19), (-6.92, -42.4), (-10.5, -42.4), (-10.5, 28.65)])
+    ws.labels(-10.5, 29.2)
+    packages.append(ws)
 
-    # Pad names follow the datasheet; the positions do not.
-    mini = Package("ESP32-C6-MINI-1-PLACEHOLDER",
-                   "PLACEHOLDER with the module's 53 pad names. Use the ESP32-C6-MINI-1 footprint "
-                   "from the LCSC part (C5736265) or Espressif's library. 13.2 x 16.6 mm.")
-    for i in range(12):
-        mini.smd(str(i + 1), -6.2, 4.4 - i * 0.8, 0.8, 0.4)
-        mini.smd(str(i + 13), -4.4 + i * 0.8, -7.9, 0.4, 0.8)
-        mini.smd(str(i + 25), 6.2, -4.4 + i * 0.8, 0.8, 0.4)
-        mini.smd(str(i + 37), 4.4 - i * 0.8, 7.9, 0.4, 0.8)
-    for i in range(5):
-        mini.smd(str(i + 49), -2.4 + i * 1.2, 0, 0.8, 0.8)
-    mini.outline(-6.6, 8.3, 6.6, -8.3)
-    mini.labels(-6.6, 8.8)
-    packages.append(mini)
+    # From Adafruit's Eagle board file for the Ultimate GPS breakout (product 746):
+    # 25.4 x 34.29 mm, a 1 x 9 header along one short edge, and two 2.5 mm holes at
+    # the far edge, 29.718 mm from the header row and in line with its end pins.
+    gps = Package("ADAFRUIT-ULTIMATE-GPS",
+                  "1 x 9 socket for the Adafruit Ultimate GPS breakout, and 2.7 mm holes for M2.5 "
+                  "standoffs under its own two holes. Top view, header row at the bottom: the breakout "
+                  "lies over this area, component side up, with its u.FL socket near the hole above pin 1.")
+    for i in range(9):
+        gps.pad(str(i + 1), 10.16 - i * G, 0, square=(i == 0))
+    for x in (-10.16, 10.16):
+        gps.elements.append(("hole", dict(x=f(x), y=f(29.718), drill="2.7"), None))
+    gps.outline(-12.7, 32.258, 12.7, -2.032)
+    gps.labels(-12.7, 32.8)
+    packages.append(gps)
 
     cell = Package("CR2032-HOLDER-PLACEHOLDER",
                    "PLACEHOLDER. Replace with the footprint of the 2032 holder you buy.")
@@ -325,20 +336,13 @@ DEVKIT_J3 = ["GND@2", "IO16_TX", "IO17_RX", "IO15", "IO23", "IO22", "IO21", "IO2
              "IO18", "IO9", "GND@3", "IO13_USB_DP", "IO12_USB_DM", "GND@4", "NC@2"]
 
 
-# Olimex ESP32-P4-DevKit rev C headers, pin 1 first (from its KiCad files).
-P4_EXT1 = ["3V3", "GND@1", "IO2_LED", "IO3_SD_DET", "IO4", "IO5", "IO6", "IO7_SDA", "IO8_SCL",
-           "IO9", "IO10", "IO11", "IO12", "IO13", "IO14", "IO15", "IO16", "IO17", "IO18", "IO19"]
-P4_EXT2 = ["5V", "GND@2", "IO54", "IO53", "IO48", "IO47", "IO46", "IO33", "IO32", "IO23", "IO22",
-           "IO21", "IO20", "EN", "GND@3", "USB1_P", "USB1_N", "GND@4", "USB_DP", "USB_DN"]
-
-# ESP32-C6-MINI-1 pads by number (datasheet, pin definitions).
-C6_MINI_SIGNALS = {"3V3": 3, "EN": 8, "IO8": 22, "IO9": 23, "RXD0": 30, "TXD0": 31, "IO2": 5,
-                   "IO18": 24, "IO19": 25, "IO20": 26, "IO21": 27, "IO22": 28, "IO23": 29,
-                   "IO0": 12, "IO1": 13, "IO3": 6, "IO4": 9, "IO5": 10, "IO6": 15, "IO7": 16,
-                   "IO12": 17, "IO13": 18, "IO14": 19, "IO15": 20}
-C6_MINI_NC = [4, 7, 21, 32, 33, 34, 35]
-C6_MINI_GND = [1, 2, 11, 14] + list(range(36, 54))
-
+# Waveshare ESP32-P4-WIFI6 header (Raspberry Pi Pico pattern): pins 1 to 20 down
+# one side from the USB end, 40 to 21 down the other.
+WS_LEFT = ["IO52", "IO51", "GND@1", "IO31", "IO30", "IO29", "IO28", "GND@2", "IO50", "IO49",
+           "IO5", "IO4", "GND@3", "IO3", "IO2", "IO8_SCL", "IO7_SDA", "GND@4", "IO24_USB_DM",
+           "IO25_USB_DP"]
+WS_RIGHT = ["VBUS", "VSYS", "GND@8", "3V3_EN", "3V3", "IO20", "IO21", "GND@7", "IO22", "IO23",
+            "RUN", "IO26", "GND@6", "IO27", "IO32", "IO33", "IO46", "GND@5", "IO47", "IO48"]
 
 def build_library():
     """Returns (symbols, devicesets). A deviceset is (prefix, symbol, package, pin->pad)."""
@@ -384,21 +388,12 @@ def build_library():
     add("ESP32-C6-DEVKITC-1", "U", box_symbol("ESP32-C6-DEVKITC-1", DEVKIT_J1, DEVKIT_J3, 12 * G),
         "ESP32-C6-DEVKITC-1", connects)
 
-    # The symbol reads like the board seen from above: Ethernet end (pin 20) at the top.
-    connects = {pin: f"EXT1_{i + 1}" for i, pin in enumerate(P4_EXT1)}
-    connects.update({pin: f"EXT2_{i + 1}" for i, pin in enumerate(P4_EXT2)})
-    add("OLIMEX-ESP32-P4-DEVKIT", "U",
-        box_symbol("OLIMEX-ESP32-P4-DEVKIT", P4_EXT1[::-1], P4_EXT2[::-1], 12 * G),
-        "OLIMEX-ESP32-P4-DEVKIT", connects)
-
-    # Every pad of the module is on the symbol, at half the usual pin spacing.
-    connects = {name: str(pad) for name, pad in C6_MINI_SIGNALS.items()}
-    connects.update({f"NC@{pad}": str(pad) for pad in C6_MINI_NC})
-    connects.update({f"GND@{pad}": str(pad) for pad in C6_MINI_GND})
-    left = list(C6_MINI_SIGNALS) + [f"NC@{pad}" for pad in C6_MINI_NC[:3]]
-    right = [f"NC@{pad}" for pad in C6_MINI_NC[3:]] + [f"GND@{pad}" for pad in C6_MINI_GND]
-    add("ESP32-C6-MINI-1", "U", box_symbol("ESP32-C6-MINI-1", left, right, 10 * G, pitch=G),
-        "ESP32-C6-MINI-1-PLACEHOLDER", connects)
+    # The symbol reads like the board seen from above, USB end at the top.
+    connects = {pin: str(i + 1) for i, pin in enumerate(WS_LEFT)}
+    connects.update({pin: str(40 - i) for i, pin in enumerate(WS_RIGHT)})
+    add("WAVESHARE-ESP32-P4-WIFI6", "U",
+        box_symbol("WAVESHARE-ESP32-P4-WIFI6", WS_LEFT, WS_RIGHT, 12 * G),
+        "WAVESHARE-ESP32-P4-WIFI6", connects)
 
     # Pins 5 to 12 of the SO-16 have no function and must be grounded.
     rtc_pads = {"32KHZ": "1", "VCC": "2", "INT_SQW": "3", "RST": "4", "GND": "13", "VBAT": "14",
@@ -411,13 +406,12 @@ def build_library():
     add("BATTERY-2032", "BT", two_pin("BATTERY", "+", "-", draw_battery), "CR2032-HOLDER-PLACEHOLDER",
         {"+": "POS", "-": "NEG"})
     add("BAT54", "D", two_pin("DIODE", "A", "K", draw_diode), "SOT23", {"A": "1", "K": "3"})
-    add("JUMPER-3", "JP", box_symbol("JUMPER-3", ["1", "2", "3"], [], 4 * G), "HDR-1X3",
-        {str(i): str(i) for i in range(1, 4)})
-    add("POWER-2", "J", box_symbol("POWER-2", ["+5V", "GND"], [], 6 * G), "HDR-1X2",
-        {"+5V": "1", "GND": "2"})
-    gps_pins = ["VCC", "GND", "TXD", "RXD", "PPS"]
-    add("GPS-HEADER", "J", box_symbol("GPS-HEADER", gps_pins, [], 6 * G), "HDR-1X5",
-        {pin: str(i + 1) for i, pin in enumerate(gps_pins)})
+    # Pin order and numbers as on the breakout's own header (Adafruit's board file).
+    gps_pins = ["PPS", "VIN", "GND", "RX", "TX", "FIX", "VBAT", "EN", "3V3"]
+    add("ADAFRUIT-ULTIMATE-GPS", "J", box_symbol("ADAFRUIT-ULTIMATE-GPS", gps_pins, [], 8 * G),
+        "ADAFRUIT-ULTIMATE-GPS", {pin: str(i + 1) for i, pin in enumerate(gps_pins)})
+    add("2N7002", "Q", box_symbol("2N7002", ["G"], ["D", "S"], 4 * G), "SOT23",
+        {"G": "1", "S": "2", "D": "3"})
 
     add("POLOLU-D36V28F5", "U",
         box_symbol("BUCK-MODULE", ["VIN", "EN", "GND@1"], ["VOUT", "GND@2"], 8 * G),
@@ -553,20 +547,20 @@ def hub_carrier():
 
 
 def hub_carrier_p4():
-    """The hub on an Olimex ESP32-P4-DevKit: the C6 carrier's power and CAN circuits,
-    plus a Wi-Fi module, a real-time clock and an optional GPS header."""
+    """The hub on a Waveshare ESP32-P4-WIFI6: the C6 carrier's power and CAN circuits,
+    plus a real-time clock and a socket for an Adafruit Ultimate GPS."""
     s = Schematic(
-        "Haltech gauges: hub carrier, ESP32-P4 variant (Olimex ESP32-P4-DevKit)",
+        "Haltech gauges: hub carrier, ESP32-P4 variant (Waveshare ESP32-P4-WIFI6)",
         ["J10 is the ECU side: 1 +12V switched, 2 GND, 3 CAN H, 4 CAN L. J11 is the gauge chain: 1 +5V, 2 GND, 3 CAN H, 4 CAN L.",
-         "U4 is the Olimex ESP32-P4-DevKit (rev C), pins down, USB-C end at EXT pin 1. It takes its 3.3 V rail to the carrier on EXT1-1.",
-         "J13 feeds the DevKit: wire J13-1 to POE_PWR1 pin 4 (+5VP) and J13-2 to pin 3 (GND). Leave POE_PWR1 pins 1 and 2 open.",
-         "Do not feed the DevKit through EXT2-1 (+5V): with USB plugged in, that pin back-feeds the PC.",
-         "U6 is the Wi-Fi radio (ESP-Hosted over SDIO, the pins Espressif's own P4 board uses). Antenna at a board edge, no copper under it.",
-         "U5 is the clock. BT1 is a CR2032; fit JP2 only with a rechargeable ML2032, never with a CR2032.",
-         "J12 is the optional GPS header: 1 VCC (JP3 picks 3.3 V or 5 V), 2 GND, 3 TXD from the module, 4 RXD to it, 5 PPS.",
-         "The DevKit already has 2.2 k pull-ups on SDA and SCL (GPIO7, GPIO8). Footprints are generic or placeholders."])
+         "U4 is the Waveshare ESP32-P4-WIFI6 (SKU 32020) on two 1x20 sockets: Raspberry Pi Pico pin pattern, USB-C end at pins 1 and 40.",
+         "Its Wi-Fi (an ESP32-C6) is on the board, with the antenna at the far end: keep the carrier's copper away from that end.",
+         "The carrier's 5 V reaches the board's VSYS pin through D3. Never connect VBUS (pin 40): it is the board's USB 5 V.",
+         "U5 is the clock, on the board's own I2C bus (GPIO7, GPIO8; 2.2 k pull-ups on the board). BT1 is a CR2032; fit JP2 only with a rechargeable ML2032.",
+         "J12 takes an Adafruit Ultimate GPS (product 746) by its 9-pin header. It uses an external active antenna, through a u.FL-to-SMA lead to a socket in the case.",
+         "Q1 turns the GPS off while GPIO50 is high (it pulls the GPS board's EN low); R24 keeps the GPS on while the P4 is in reset.",
+         "Footprints are generic or placeholders, except U4's pins and outline and J12's pins and holes, which come from the makers' files."])
 
-    # 12 V input and the 5 V rail: as on the C6 carrier, less its D3 (the DevKit has its own diode).
+    # 12 V input and the 5 V rail, as on the C6 carrier.
     s.part("J10", "MICROFIT-2X2", "43045-0412 ECU", 14, 150)
     s.part("D1", "TVS-SMB", "SMBJ26CA", 34, 150, LCSC="C515606")
     s.part("D2", "SCHOTTKY-SMA", "SS34", 54, 150, LCSC="C8678")
@@ -576,12 +570,12 @@ def hub_carrier_p4():
     s.part("C3", "CPOL-8X10", "100u 50V", 46, 138, LCSC="C116241")
     s.part("C4", "C0805", "10u 25V", 66, 138, LCSC="C15850")
     s.part("C5", "C0805", "10u 25V", 86, 138, LCSC="C15850")
-    s.part("J13", "POWER-2", "TO DEVKIT POE_PWR1", 48, 130)
+    s.part("D3", "SCHOTTKY-SMA", "SS14", 46, 131, LCSC="C2480")
     s.part("F2", "POLYFUSE-1812", "1812L200/16DR", 70, 131, LCSC="C439873")
     s.part("J11", "MICROFIT-2X2", "43045-0412 CHAIN", 110, 136)
 
-    # MCU and the two CAN transceivers
-    s.part("U4", "OLIMEX-ESP32-P4-DEVKIT", "ESP32-P4-DevKit", 30, 100)
+    # The board and the two CAN transceivers
+    s.part("U4", "WAVESHARE-ESP32-P4-WIFI6", "ESP32-P4-WIFI6", 30, 100)
     s.part("U2", "TJA1051T-3", "TJA1051T/3", 72, 112, LCSC="C38695")
     s.part("U3", "SN65HVD230", "SN65HVD230DR", 72, 94, LCSC="C12084")
     s.part("D4", "PESD2CAN", "PESD2CAN", 100, 116, LCSC="C75176")
@@ -594,76 +588,60 @@ def hub_carrier_p4():
     s.part("R7", "R1206", "120R", 120, 88, LCSC="C17909")
     s.part("C9", "C0805", "4n7", 100, 83, LCSC="C1744")
 
-    # GPS header (optional)
-    s.part("J12", "GPS-HEADER", "GPS 1x5 2.54", 152, 114)
-    s.part("JP3", "JUMPER-3", "GPS 3V3/5V", 152, 101)
-    s.part("R22", "R0805", "1k", 150, 92, LCSC="C17513")
-    s.part("R23", "R0805", "1k", 150, 87, LCSC="C17513")
-    s.part("C16", "C0805", "10u 25V", 150, 82, LCSC="C15850")
-
-    # Wi-Fi module and what it needs
-    s.part("U6", "ESP32-C6-MINI-1", "ESP32-C6-MINI-1-N4", 30, 50, LCSC="C5736265")
-    s.part("R10", "R0805", "10k", 62, 62, LCSC="C17414")
-    s.part("C13", "C0805", "100n", 84, 62, LCSC="C49678")
-    s.part("C11", "C0805", "10u 25V", 106, 62, LCSC="C15850")
-    s.part("C12", "C0805", "100n", 128, 62, LCSC="C49678")
-    s.part("R11", "R0805", "10k", 62, 56, LCSC="C17414")
-    s.part("R12", "R0805", "10k", 84, 56, LCSC="C17414")
-    s.part("R13", "R0805", "10k", 106, 56, LCSC="C17414")
-    s.part("R14", "R0805", "10k", 128, 56, LCSC="C17414")
-    s.part("R15", "R0805", "10k", 62, 50, LCSC="C17414")
-    s.part("R16", "R0805", "10k", 84, 50, LCSC="C17414")
-    s.part("R17", "R0805", "10k", 106, 50, LCSC="C17414")
-    for i, name in enumerate(("C6 EN", "C6 TXD", "C6 RXD", "C6 BOOT")):
-        s.part(f"TP{i + 6}", "TESTPOINT", name, 64 + 22 * i, 44)
+    # GPS socket, its power-off switch and series resistors
+    s.part("J12", "ADAFRUIT-ULTIMATE-GPS", "ADAFRUIT 746 SOCKET", 152, 112)
+    s.part("Q1", "2N7002", "2N7002", 150, 95, LCSC="C8545")
+    s.part("R24", "R0805", "100k", 150, 88, LCSC="C149504")
+    s.part("R22", "R0805", "1k", 150, 83, LCSC="C17513")
+    s.part("R23", "R0805", "1k", 150, 78, LCSC="C17513")
+    s.part("C16", "C0805", "10u 25V", 150, 73, LCSC="C15850")
 
     # Decoupling, pulls and the 12 V sense divider
-    s.part("C6", "C0805", "100n", 62, 38, LCSC="C49678")
-    s.part("C7", "C0805", "100n", 84, 38, LCSC="C49678")
-    s.part("C8", "C0805", "100n", 106, 38, LCSC="C49678")
-    s.part("C10", "C0805", "100n", 128, 38, LCSC="C49678")
-    s.part("R1", "R0805", "10k", 62, 33, LCSC="C17414")
-    s.part("R2", "R0805", "10k", 84, 33, LCSC="C17414")
-    s.part("R8", "R0805", "100k", 106, 33, LCSC="C149504")
-    s.part("R9", "R0805", "10k", 128, 33, LCSC="C17414")
+    s.part("C6", "C0805", "100n", 62, 70, LCSC="C49678")
+    s.part("C7", "C0805", "100n", 84, 70, LCSC="C49678")
+    s.part("C8", "C0805", "100n", 106, 70, LCSC="C49678")
+    s.part("C10", "C0805", "100n", 128, 70, LCSC="C49678")
+    s.part("R1", "R0805", "10k", 62, 65, LCSC="C17414")
+    s.part("R2", "R0805", "10k", 84, 65, LCSC="C17414")
+    s.part("R8", "R0805", "100k", 106, 65, LCSC="C149504")
+    s.part("R9", "R0805", "10k", 128, 65, LCSC="C17414")
 
     # Real-time clock
-    s.part("U5", "DS3231SN", "DS3231SN#", 30, 16, LCSC="C9866")
-    s.part("C14", "C0805", "100n", 62, 26, LCSC="C49678")
-    s.part("R20", "R0805", "10k", 84, 26, LCSC="C17414")
-    s.part("BT1", "BATTERY-2032", "CR2032 holder", 62, 19)
-    s.part("C15", "C0805", "100n", 84, 19, LCSC="C49678")
-    s.part("D6", "BAT54", "BAT54", 62, 12, LCSC="C8590")
-    s.part("R21", "R0805", "1k", 84, 12, LCSC="C17513")
-    s.part("JP2", "JUMPER-2", "ML2032 CHARGE", 106, 12)
+    s.part("U5", "DS3231SN", "DS3231SN#", 30, 50, LCSC="C9866")
+    s.part("C14", "C0805", "100n", 62, 56, LCSC="C49678")
+    s.part("R20", "R0805", "10k", 84, 56, LCSC="C17414")
+    s.part("BT1", "BATTERY-2032", "CR2032 holder", 62, 49)
+    s.part("C15", "C0805", "100n", 84, 49, LCSC="C49678")
+    s.part("D6", "BAT54", "BAT54", 62, 42, LCSC="C8590")
+    s.part("R21", "R0805", "1k", 84, 42, LCSC="C17513")
+    s.part("JP2", "JUMPER-2", "ML2032 CHARGE", 106, 42)
 
     for i, name in enumerate(("GND", "+5V", "+3V3", "VBAT", "RST")):
         s.part(f"TP{i + 1}", "TESTPOINT", name, 152, 150 - 4 * i)
 
-    c6_grounds = [f"U6.GND@{n}" for n in C6_MINI_GND]
     rtc_unused = [f"U5.NC@{n}" for n in range(5, 13)]  # the datasheet wants these on ground
 
     s.net("+12V_IN", "J10.1", "D1.1", "D2.A", "R8.1")
     s.net("+12V_PROT", "D2.K", "C1.+", "C2.1", "U1.VIN")
-    s.net("+5V", "U1.VOUT", "C3.+", "C4.1", "C5.1", "F2.1", "J13.+5V", "U2.VCC", "C6.1", "JP3.3", "TP2.TP")
+    s.net("+5V", "U1.VOUT", "C3.+", "C4.1", "C5.1", "F2.1", "D3.A", "U2.VCC", "C6.1", "TP2.TP",
+          "J12.VIN", "C16.1")
+    s.net("+5V_MCU", "D3.K", "U4.VSYS")
     s.net("+5V_CHAIN", "F2.2", "J11.1")
     s.net("+3V3", "U4.3V3", "U2.VIO", "C7.1", "U3.VCC", "C8.1", "R2.1", "TP3.TP",
-          "U6.3V3", "C11.1", "C12.1", "R10.1", "R11.1", "R12.1", "R13.1", "R14.1", "R15.1", "R16.1", "R17.1",
-          "U5.VCC", "C14.1", "R20.1", "D6.A", "JP3.1")
+          "U5.VCC", "C14.1", "R20.1", "D6.A")
     s.net("GND", "J10.2", "D1.2", "C1.-", "C2.2", "U1.GND@1", "U1.GND@2", "C3.-", "C4.2", "C5.2",
-          "J11.2", "J13.GND", "U4.GND@1", "U4.GND@2", "U4.GND@3", "U4.GND@4", "U2.GND", "U3.GND", "U3.RS",
+          "J11.2", *[f"U4.GND@{n}" for n in range(1, 9)], "U2.GND", "U3.GND", "U3.RS",
           "D4.GND", "D5.GND", "C9.2", "C6.2", "C7.2", "C8.2", "C10.2", "R1.2", "R9.2", "TP1.TP",
-          *c6_grounds, "C11.2", "C12.2", "C13.2", "U5.GND", *rtc_unused, "C14.2", "BT1.-", "C15.2",
-          "J12.GND", "C16.2")
+          "U5.GND", *rtc_unused, "C14.2", "BT1.-", "C15.2", "J12.GND", "C16.2", "Q1.S", "R24.2")
 
-    # CAN and the 12 V sense, on pins of the P4's always-3.3 V domains
+    # CAN and the 12 V sense: the same GPIOs as before, all on the board's header
     s.net("ECU_TX", "U4.IO21", "U2.TXD")
     s.net("ECU_RX", "U4.IO22", "U2.RXD")
     s.net("ECU_SILENT", "U4.IO23", "U2.S", "R1.1")
     s.net("GAUGE_TX", "U4.IO32", "U3.D", "R2.2")
     s.net("GAUGE_RX", "U4.IO33", "U3.R")
     s.net("VBAT_SENSE", "U4.IO20", "R8.2", "R9.1", "C10.1", "TP4.TP")
-    s.net("RST", "U4.EN", "TP5.TP")
+    s.net("RST", "U4.RUN", "TP5.TP")
     s.net("ECU_CANH", "J10.3", "U2.CANH", "D4.IO1", "R3.1")
     s.net("ECU_CANL", "J10.4", "U2.CANL", "D4.IO2", "JP1.2")
     s.net("ECU_TERM", "R3.2", "JP1.1")
@@ -671,38 +649,23 @@ def hub_carrier_p4():
     s.net("CANL", "J11.4", "U3.CANL", "D5.IO2", "R6.2", "R7.2")
     s.net("TERM_MID", "R4.2", "R5.2", "R6.1", "R7.1", "C9.1")
 
-    # Wi-Fi: SDIO to the module, with the pull-ups SDIO needs
-    s.net("SDIO_CLK", "U4.IO18", "U6.IO19")
-    s.net("SDIO_CMD", "U4.IO19", "U6.IO18", "R11.2")
-    s.net("SDIO_D0", "U4.IO14", "U6.IO20", "R12.2")
-    s.net("SDIO_D1", "U4.IO15", "U6.IO21", "R13.2")
-    s.net("SDIO_D2", "U4.IO16", "U6.IO22", "R14.2")
-    s.net("SDIO_D3", "U4.IO17", "U6.IO23", "R15.2")
-    s.net("C6_EN", "U4.IO54", "U6.EN", "R10.2", "C13.1", "TP6.TP")
-    s.net("C6_WAKE", "U4.IO6", "U6.IO2")
-    # The module's serial port and boot pin, so the P4 can load its firmware.
-    s.net("C6_TXD", "U6.TXD0", "U4.IO5", "TP7.TP")
-    s.net("C6_RXD", "U6.RXD0", "U4.IO4", "TP8.TP")
-    s.net("C6_BOOT", "U6.IO9", "U4.IO53", "R16.2", "TP9.TP")
-    s.net("C6_IO8", "U6.IO8", "R17.2")
-
-    # Clock: I2C on the DevKit's own bus, a 1 Hz tick, and the cell
+    # Clock: the board's I2C bus, a 1 Hz tick, and the cell
     s.net("I2C_SDA", "U4.IO7_SDA", "U5.SDA")
     s.net("I2C_SCL", "U4.IO8_SCL", "U5.SCL")
-    s.net("RTC_INT", "U4.IO9", "U5.INT_SQW", "R20.2")
+    s.net("RTC_INT", "U4.IO31", "U5.INT_SQW", "R20.2")
     s.net("RTC_VBAT", "U5.VBAT", "BT1.+", "C15.1", "JP2.2")
     s.net("RTC_CHG_A", "D6.K", "R21.1")
     s.net("RTC_CHG_B", "R21.2", "JP2.1")
 
-    # GPS: 1 k in each line coming from the module
-    s.net("GPS_VCC", "JP3.2", "J12.VCC", "C16.1")
-    s.net("GPS_TXD", "J12.TXD", "R22.1")
-    s.net("GPS_RX", "R22.2", "U4.IO10")
-    s.net("GPS_RXD", "J12.RXD", "U4.IO11")
+    # GPS: 1 k in each line coming from the module, and its enable pulled low by Q1
+    s.net("GPS_TX", "J12.TX", "R22.1")
+    s.net("GPS_TX_IN", "R22.2", "U4.IO28")
+    s.net("GPS_RX", "J12.RX", "U4.IO29")
     s.net("GPS_PPS", "J12.PPS", "R23.1")
-    s.net("GPS_PPS_IN", "R23.2", "U4.IO12")
+    s.net("GPS_PPS_IN", "R23.2", "U4.IO30")
+    s.net("GPS_EN", "J12.EN", "Q1.D")
+    s.net("GPS_OFF", "U4.IO50", "Q1.G", "R24.1")
     return s
-
 
 # ------------------------------------------------------------------ output
 

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1623" height="1752" font-family="Arial" font-size="6.8"><rect width="100%" height="100%" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1623" height="1406" font-family="Arial" font-size="6.8"><rect width="100%" height="100%" fill="#fff"/>
 <line x1="104.1" y1="220.2" x2="144.7" y2="220.2" stroke="#900" stroke-width="1.2"/>
 <line x1="144.7" y1="220.2" x2="144.7" y2="311.6" stroke="#900" stroke-width="1.2"/>
 <line x1="144.7" y1="311.6" x2="104.1" y2="311.6" stroke="#900" stroke-width="1.2"/>
@@ -94,16 +94,16 @@
 <line x1="876.2" y1="387.8" x2="866.1" y2="387.8" stroke="#090" stroke-width="1.2"/>
 <text x="845.8" y="379.0" fill="#06c">C5</text>
 <text x="845.8" y="403.8" fill="#06c">10u 25V</text>
-<line x1="439.4" y1="443.7" x2="500.3" y2="443.7" stroke="#900" stroke-width="1.2"/>
-<line x1="500.3" y1="443.7" x2="500.3" y2="494.5" stroke="#900" stroke-width="1.2"/>
-<line x1="500.3" y1="494.5" x2="439.4" y2="494.5" stroke="#900" stroke-width="1.2"/>
-<line x1="439.4" y1="494.5" x2="439.4" y2="443.7" stroke="#900" stroke-width="1.2"/>
-<line x1="419.0" y1="459.0" x2="439.4" y2="459.0" stroke="#090" stroke-width="1.2"/>
-<text x="442.6" y="461.8" text-anchor="start" fill="#333">+5V</text>
-<line x1="419.0" y1="479.3" x2="439.4" y2="479.3" stroke="#090" stroke-width="1.2"/>
-<text x="442.6" y="482.1" text-anchor="start" fill="#333">GND</text>
-<text x="439.4" y="439.7" fill="#06c">J13</text>
-<text x="439.4" y="505.7" fill="#06c">TO DEVKIT POE_PWR1</text>
+<line x1="439.4" y1="459.0" x2="444.4" y2="459.0" stroke="#900" stroke-width="1.2"/>
+<line x1="454.6" y1="459.0" x2="459.7" y2="459.0" stroke="#900" stroke-width="1.2"/>
+<line x1="444.4" y1="453.9" x2="444.4" y2="464.0" stroke="#900" stroke-width="1.2"/>
+<line x1="444.4" y1="464.0" x2="454.6" y2="459.0" stroke="#900" stroke-width="1.2"/>
+<line x1="454.6" y1="459.0" x2="444.4" y2="453.9" stroke="#900" stroke-width="1.2"/>
+<line x1="454.6" y1="453.9" x2="454.6" y2="464.0" stroke="#900" stroke-width="1.2"/>
+<line x1="429.2" y1="459.0" x2="439.4" y2="459.0" stroke="#090" stroke-width="1.2"/>
+<line x1="469.8" y1="459.0" x2="459.7" y2="459.0" stroke="#090" stroke-width="1.2"/>
+<text x="439.4" y="450.2" fill="#06c">D3</text>
+<text x="439.4" y="475.0" fill="#06c">SS14</text>
 <line x1="683.2" y1="462.5" x2="703.5" y2="462.5" stroke="#900" stroke-width="1.2"/>
 <line x1="703.5" y1="462.5" x2="703.5" y2="455.4" stroke="#900" stroke-width="1.2"/>
 <line x1="703.5" y1="455.4" x2="683.2" y2="455.4" stroke="#900" stroke-width="1.2"/>
@@ -132,87 +132,87 @@
 <line x1="347.9" y1="982.2" x2="226.0" y2="982.2" stroke="#900" stroke-width="1.2"/>
 <line x1="226.0" y1="982.2" x2="226.0" y2="565.6" stroke="#900" stroke-width="1.2"/>
 <line x1="205.7" y1="580.9" x2="226.0" y2="580.9" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="583.7" text-anchor="start" fill="#333">IO19</text>
+<text x="229.2" y="583.7" text-anchor="start" fill="#333">IO52</text>
 <line x1="205.7" y1="601.2" x2="226.0" y2="601.2" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="604.0" text-anchor="start" fill="#333">IO18</text>
+<text x="229.2" y="604.0" text-anchor="start" fill="#333">IO51</text>
 <line x1="205.7" y1="621.5" x2="226.0" y2="621.5" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="624.3" text-anchor="start" fill="#333">IO17</text>
+<text x="229.2" y="624.3" text-anchor="start" fill="#333">GND</text>
 <line x1="205.7" y1="641.8" x2="226.0" y2="641.8" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="644.6" text-anchor="start" fill="#333">IO16</text>
+<text x="229.2" y="644.6" text-anchor="start" fill="#333">IO31</text>
 <line x1="205.7" y1="662.2" x2="226.0" y2="662.2" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="665.0" text-anchor="start" fill="#333">IO15</text>
+<text x="229.2" y="665.0" text-anchor="start" fill="#333">IO30</text>
 <line x1="205.7" y1="682.5" x2="226.0" y2="682.5" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="685.3" text-anchor="start" fill="#333">IO14</text>
+<text x="229.2" y="685.3" text-anchor="start" fill="#333">IO29</text>
 <line x1="205.7" y1="702.8" x2="226.0" y2="702.8" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="705.6" text-anchor="start" fill="#333">IO13</text>
+<text x="229.2" y="705.6" text-anchor="start" fill="#333">IO28</text>
 <line x1="205.7" y1="723.1" x2="226.0" y2="723.1" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="725.9" text-anchor="start" fill="#333">IO12</text>
+<text x="229.2" y="725.9" text-anchor="start" fill="#333">GND</text>
 <line x1="205.7" y1="743.4" x2="226.0" y2="743.4" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="746.2" text-anchor="start" fill="#333">IO11</text>
+<text x="229.2" y="746.2" text-anchor="start" fill="#333">IO50</text>
 <line x1="205.7" y1="763.8" x2="226.0" y2="763.8" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="766.6" text-anchor="start" fill="#333">IO10</text>
+<text x="229.2" y="766.6" text-anchor="start" fill="#333">IO49</text>
 <line x1="205.7" y1="784.1" x2="226.0" y2="784.1" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="786.9" text-anchor="start" fill="#333">IO9</text>
+<text x="229.2" y="786.9" text-anchor="start" fill="#333">IO5</text>
 <line x1="205.7" y1="804.4" x2="226.0" y2="804.4" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="807.2" text-anchor="start" fill="#333">IO8_SCL</text>
+<text x="229.2" y="807.2" text-anchor="start" fill="#333">IO4</text>
 <line x1="205.7" y1="824.7" x2="226.0" y2="824.7" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="827.5" text-anchor="start" fill="#333">IO7_SDA</text>
+<text x="229.2" y="827.5" text-anchor="start" fill="#333">GND</text>
 <line x1="205.7" y1="845.0" x2="226.0" y2="845.0" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="847.8" text-anchor="start" fill="#333">IO6</text>
+<text x="229.2" y="847.8" text-anchor="start" fill="#333">IO3</text>
 <line x1="205.7" y1="865.4" x2="226.0" y2="865.4" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="868.2" text-anchor="start" fill="#333">IO5</text>
+<text x="229.2" y="868.2" text-anchor="start" fill="#333">IO2</text>
 <line x1="205.7" y1="885.7" x2="226.0" y2="885.7" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="888.5" text-anchor="start" fill="#333">IO4</text>
+<text x="229.2" y="888.5" text-anchor="start" fill="#333">IO8_SCL</text>
 <line x1="205.7" y1="906.0" x2="226.0" y2="906.0" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="908.8" text-anchor="start" fill="#333">IO3_SD_DET</text>
+<text x="229.2" y="908.8" text-anchor="start" fill="#333">IO7_SDA</text>
 <line x1="205.7" y1="926.3" x2="226.0" y2="926.3" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="929.1" text-anchor="start" fill="#333">IO2_LED</text>
+<text x="229.2" y="929.1" text-anchor="start" fill="#333">GND</text>
 <line x1="205.7" y1="946.6" x2="226.0" y2="946.6" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="949.4" text-anchor="start" fill="#333">GND</text>
+<text x="229.2" y="949.4" text-anchor="start" fill="#333">IO24_USB_DM</text>
 <line x1="205.7" y1="967.0" x2="226.0" y2="967.0" stroke="#090" stroke-width="1.2"/>
-<text x="229.2" y="969.8" text-anchor="start" fill="#333">3V3</text>
+<text x="229.2" y="969.8" text-anchor="start" fill="#333">IO25_USB_DP</text>
 <line x1="368.2" y1="580.9" x2="347.9" y2="580.9" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="583.7" text-anchor="end" fill="#333">USB_DN</text>
+<text x="344.7" y="583.7" text-anchor="end" fill="#333">VBUS</text>
 <line x1="368.2" y1="601.2" x2="347.9" y2="601.2" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="604.0" text-anchor="end" fill="#333">USB_DP</text>
+<text x="344.7" y="604.0" text-anchor="end" fill="#333">VSYS</text>
 <line x1="368.2" y1="621.5" x2="347.9" y2="621.5" stroke="#090" stroke-width="1.2"/>
 <text x="344.7" y="624.3" text-anchor="end" fill="#333">GND</text>
 <line x1="368.2" y1="641.8" x2="347.9" y2="641.8" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="644.6" text-anchor="end" fill="#333">USB1_N</text>
+<text x="344.7" y="644.6" text-anchor="end" fill="#333">3V3_EN</text>
 <line x1="368.2" y1="662.2" x2="347.9" y2="662.2" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="665.0" text-anchor="end" fill="#333">USB1_P</text>
+<text x="344.7" y="665.0" text-anchor="end" fill="#333">3V3</text>
 <line x1="368.2" y1="682.5" x2="347.9" y2="682.5" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="685.3" text-anchor="end" fill="#333">GND</text>
+<text x="344.7" y="685.3" text-anchor="end" fill="#333">IO20</text>
 <line x1="368.2" y1="702.8" x2="347.9" y2="702.8" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="705.6" text-anchor="end" fill="#333">EN</text>
+<text x="344.7" y="705.6" text-anchor="end" fill="#333">IO21</text>
 <line x1="368.2" y1="723.1" x2="347.9" y2="723.1" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="725.9" text-anchor="end" fill="#333">IO20</text>
+<text x="344.7" y="725.9" text-anchor="end" fill="#333">GND</text>
 <line x1="368.2" y1="743.4" x2="347.9" y2="743.4" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="746.2" text-anchor="end" fill="#333">IO21</text>
+<text x="344.7" y="746.2" text-anchor="end" fill="#333">IO22</text>
 <line x1="368.2" y1="763.8" x2="347.9" y2="763.8" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="766.6" text-anchor="end" fill="#333">IO22</text>
+<text x="344.7" y="766.6" text-anchor="end" fill="#333">IO23</text>
 <line x1="368.2" y1="784.1" x2="347.9" y2="784.1" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="786.9" text-anchor="end" fill="#333">IO23</text>
+<text x="344.7" y="786.9" text-anchor="end" fill="#333">RUN</text>
 <line x1="368.2" y1="804.4" x2="347.9" y2="804.4" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="807.2" text-anchor="end" fill="#333">IO32</text>
+<text x="344.7" y="807.2" text-anchor="end" fill="#333">IO26</text>
 <line x1="368.2" y1="824.7" x2="347.9" y2="824.7" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="827.5" text-anchor="end" fill="#333">IO33</text>
+<text x="344.7" y="827.5" text-anchor="end" fill="#333">GND</text>
 <line x1="368.2" y1="845.0" x2="347.9" y2="845.0" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="847.8" text-anchor="end" fill="#333">IO46</text>
+<text x="344.7" y="847.8" text-anchor="end" fill="#333">IO27</text>
 <line x1="368.2" y1="865.4" x2="347.9" y2="865.4" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="868.2" text-anchor="end" fill="#333">IO47</text>
+<text x="344.7" y="868.2" text-anchor="end" fill="#333">IO32</text>
 <line x1="368.2" y1="885.7" x2="347.9" y2="885.7" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="888.5" text-anchor="end" fill="#333">IO48</text>
+<text x="344.7" y="888.5" text-anchor="end" fill="#333">IO33</text>
 <line x1="368.2" y1="906.0" x2="347.9" y2="906.0" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="908.8" text-anchor="end" fill="#333">IO53</text>
+<text x="344.7" y="908.8" text-anchor="end" fill="#333">IO46</text>
 <line x1="368.2" y1="926.3" x2="347.9" y2="926.3" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="929.1" text-anchor="end" fill="#333">IO54</text>
+<text x="344.7" y="929.1" text-anchor="end" fill="#333">GND</text>
 <line x1="368.2" y1="946.6" x2="347.9" y2="946.6" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="949.4" text-anchor="end" fill="#333">GND</text>
+<text x="344.7" y="949.4" text-anchor="end" fill="#333">IO47</text>
 <line x1="368.2" y1="967.0" x2="347.9" y2="967.0" stroke="#090" stroke-width="1.2"/>
-<text x="344.7" y="969.8" text-anchor="end" fill="#333">5V</text>
+<text x="344.7" y="969.8" text-anchor="end" fill="#333">IO48</text>
 <text x="226.0" y="561.6" fill="#06c">U4</text>
-<text x="226.0" y="993.4" fill="#06c">ESP32-P4-DevKit</text>
+<text x="226.0" y="993.4" fill="#06c">ESP32-P4-WIFI6</text>
 <line x1="673.0" y1="586.0" x2="754.3" y2="586.0" stroke="#900" stroke-width="1.2"/>
 <line x1="754.3" y1="586.0" x2="754.3" y2="718.0" stroke="#900" stroke-width="1.2"/>
 <line x1="754.3" y1="718.0" x2="673.0" y2="718.0" stroke="#900" stroke-width="1.2"/>
@@ -337,439 +337,235 @@
 <line x1="1018.5" y1="946.6" x2="1008.3" y2="946.6" stroke="#090" stroke-width="1.2"/>
 <text x="988.0" y="937.8" fill="#06c">C9</text>
 <text x="988.0" y="962.6" fill="#06c">4n7</text>
-<line x1="1496.0" y1="575.8" x2="1557.0" y2="575.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1557.0" y1="575.8" x2="1557.0" y2="687.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1557.0" y1="687.6" x2="1496.0" y2="687.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1496.0" y1="687.6" x2="1496.0" y2="575.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1475.7" y1="591.0" x2="1496.0" y2="591.0" stroke="#090" stroke-width="1.2"/>
-<text x="1499.2" y="593.8" text-anchor="start" fill="#333">VCC</text>
-<line x1="1475.7" y1="611.4" x2="1496.0" y2="611.4" stroke="#090" stroke-width="1.2"/>
-<text x="1499.2" y="614.2" text-anchor="start" fill="#333">GND</text>
-<line x1="1475.7" y1="631.7" x2="1496.0" y2="631.7" stroke="#090" stroke-width="1.2"/>
-<text x="1499.2" y="634.5" text-anchor="start" fill="#333">TXD</text>
-<line x1="1475.7" y1="652.0" x2="1496.0" y2="652.0" stroke="#090" stroke-width="1.2"/>
-<text x="1499.2" y="654.8" text-anchor="start" fill="#333">RXD</text>
-<line x1="1475.7" y1="672.3" x2="1496.0" y2="672.3" stroke="#090" stroke-width="1.2"/>
-<text x="1499.2" y="675.1" text-anchor="start" fill="#333">PPS</text>
-<text x="1496.0" y="571.8" fill="#06c">J12</text>
-<text x="1496.0" y="698.8" fill="#06c">GPS 1x5 2.54</text>
-<line x1="1506.2" y1="728.2" x2="1546.8" y2="728.2" stroke="#900" stroke-width="1.2"/>
-<line x1="1546.8" y1="728.2" x2="1546.8" y2="799.3" stroke="#900" stroke-width="1.2"/>
-<line x1="1546.8" y1="799.3" x2="1506.2" y2="799.3" stroke="#900" stroke-width="1.2"/>
-<line x1="1506.2" y1="799.3" x2="1506.2" y2="728.2" stroke="#900" stroke-width="1.2"/>
-<line x1="1485.8" y1="743.4" x2="1506.2" y2="743.4" stroke="#090" stroke-width="1.2"/>
-<text x="1509.4" y="746.2" text-anchor="start" fill="#333">1</text>
-<line x1="1485.8" y1="763.8" x2="1506.2" y2="763.8" stroke="#090" stroke-width="1.2"/>
-<text x="1509.4" y="766.6" text-anchor="start" fill="#333">2</text>
-<line x1="1485.8" y1="784.1" x2="1506.2" y2="784.1" stroke="#090" stroke-width="1.2"/>
-<text x="1509.4" y="786.9" text-anchor="start" fill="#333">3</text>
-<text x="1506.2" y="724.2" fill="#06c">JP3</text>
-<text x="1506.2" y="810.5" fill="#06c">GPS 3V3/5V</text>
-<line x1="1496.0" y1="859.3" x2="1516.3" y2="859.3" stroke="#900" stroke-width="1.2"/>
-<line x1="1516.3" y1="859.3" x2="1516.3" y2="851.1" stroke="#900" stroke-width="1.2"/>
-<line x1="1516.3" y1="851.1" x2="1496.0" y2="851.1" stroke="#900" stroke-width="1.2"/>
-<line x1="1496.0" y1="851.1" x2="1496.0" y2="859.3" stroke="#900" stroke-width="1.2"/>
-<line x1="1485.8" y1="855.2" x2="1496.0" y2="855.2" stroke="#090" stroke-width="1.2"/>
-<line x1="1526.5" y1="855.2" x2="1516.3" y2="855.2" stroke="#090" stroke-width="1.2"/>
-<text x="1496.0" y="846.4" fill="#06c">R22</text>
-<text x="1496.0" y="871.2" fill="#06c">1k</text>
-<line x1="1496.0" y1="910.1" x2="1516.3" y2="910.1" stroke="#900" stroke-width="1.2"/>
-<line x1="1516.3" y1="910.1" x2="1516.3" y2="901.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1516.3" y1="901.9" x2="1496.0" y2="901.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1496.0" y1="901.9" x2="1496.0" y2="910.1" stroke="#900" stroke-width="1.2"/>
-<line x1="1485.8" y1="906.0" x2="1496.0" y2="906.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1526.5" y1="906.0" x2="1516.3" y2="906.0" stroke="#090" stroke-width="1.2"/>
-<text x="1496.0" y="897.2" fill="#06c">R23</text>
-<text x="1496.0" y="922.0" fill="#06c">1k</text>
-<line x1="1496.0" y1="956.8" x2="1503.6" y2="956.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1508.7" y1="956.8" x2="1516.3" y2="956.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1503.6" y1="963.9" x2="1503.6" y2="949.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1508.7" y1="963.9" x2="1508.7" y2="949.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1485.8" y1="956.8" x2="1496.0" y2="956.8" stroke="#090" stroke-width="1.2"/>
-<line x1="1526.5" y1="956.8" x2="1516.3" y2="956.8" stroke="#090" stroke-width="1.2"/>
-<text x="1496.0" y="948.0" fill="#06c">C16</text>
-<text x="1496.0" y="972.8" fill="#06c">10u 25V</text>
-<line x1="236.2" y1="1139.7" x2="337.8" y2="1139.7" stroke="#900" stroke-width="1.2"/>
-<line x1="337.8" y1="1139.7" x2="337.8" y2="1424.2" stroke="#900" stroke-width="1.2"/>
-<line x1="337.8" y1="1424.2" x2="236.2" y2="1424.2" stroke="#900" stroke-width="1.2"/>
-<line x1="236.2" y1="1424.2" x2="236.2" y2="1139.7" stroke="#900" stroke-width="1.2"/>
-<line x1="215.8" y1="1149.8" x2="236.2" y2="1149.8" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1152.6" text-anchor="start" fill="#333">3V3</text>
-<line x1="215.8" y1="1160.0" x2="236.2" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1162.8" text-anchor="start" fill="#333">EN</text>
-<line x1="215.8" y1="1170.2" x2="236.2" y2="1170.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1173.0" text-anchor="start" fill="#333">IO8</text>
-<line x1="215.8" y1="1180.3" x2="236.2" y2="1180.3" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1183.1" text-anchor="start" fill="#333">IO9</text>
-<line x1="215.8" y1="1190.5" x2="236.2" y2="1190.5" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1193.3" text-anchor="start" fill="#333">RXD0</text>
-<line x1="215.8" y1="1200.6" x2="236.2" y2="1200.6" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1203.4" text-anchor="start" fill="#333">TXD0</text>
+<line x1="1485.8" y1="555.5" x2="1567.1" y2="555.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1567.1" y1="555.5" x2="1567.1" y2="748.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1567.1" y1="748.5" x2="1485.8" y2="748.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="748.5" x2="1485.8" y2="555.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1465.5" y1="570.7" x2="1485.8" y2="570.7" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="573.5" text-anchor="start" fill="#333">PPS</text>
+<line x1="1465.5" y1="591.0" x2="1485.8" y2="591.0" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="593.8" text-anchor="start" fill="#333">VIN</text>
+<line x1="1465.5" y1="611.4" x2="1485.8" y2="611.4" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="614.2" text-anchor="start" fill="#333">GND</text>
+<line x1="1465.5" y1="631.7" x2="1485.8" y2="631.7" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="634.5" text-anchor="start" fill="#333">RX</text>
+<line x1="1465.5" y1="652.0" x2="1485.8" y2="652.0" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="654.8" text-anchor="start" fill="#333">TX</text>
+<line x1="1465.5" y1="672.3" x2="1485.8" y2="672.3" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="675.1" text-anchor="start" fill="#333">FIX</text>
+<line x1="1465.5" y1="692.6" x2="1485.8" y2="692.6" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="695.4" text-anchor="start" fill="#333">VBAT</text>
+<line x1="1465.5" y1="713.0" x2="1485.8" y2="713.0" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="715.8" text-anchor="start" fill="#333">EN</text>
+<line x1="1465.5" y1="733.3" x2="1485.8" y2="733.3" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="736.1" text-anchor="start" fill="#333">3V3</text>
+<text x="1485.8" y="551.5" fill="#06c">J12</text>
+<text x="1485.8" y="759.7" fill="#06c">ADAFRUIT 746 SOCKET</text>
+<line x1="1485.8" y1="799.3" x2="1526.5" y2="799.3" stroke="#900" stroke-width="1.2"/>
+<line x1="1526.5" y1="799.3" x2="1526.5" y2="850.1" stroke="#900" stroke-width="1.2"/>
+<line x1="1526.5" y1="850.1" x2="1485.8" y2="850.1" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="850.1" x2="1485.8" y2="799.3" stroke="#900" stroke-width="1.2"/>
+<line x1="1465.5" y1="814.6" x2="1485.8" y2="814.6" stroke="#090" stroke-width="1.2"/>
+<text x="1489.0" y="817.4" text-anchor="start" fill="#333">G</text>
+<line x1="1546.8" y1="814.6" x2="1526.5" y2="814.6" stroke="#090" stroke-width="1.2"/>
+<text x="1523.3" y="817.4" text-anchor="end" fill="#333">D</text>
+<line x1="1546.8" y1="834.9" x2="1526.5" y2="834.9" stroke="#090" stroke-width="1.2"/>
+<text x="1523.3" y="837.7" text-anchor="end" fill="#333">S</text>
+<text x="1485.8" y="795.3" fill="#06c">Q1</text>
+<text x="1485.8" y="861.3" fill="#06c">2N7002</text>
+<line x1="1496.0" y1="899.9" x2="1516.3" y2="899.9" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="899.9" x2="1516.3" y2="891.8" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="891.8" x2="1496.0" y2="891.8" stroke="#900" stroke-width="1.2"/>
+<line x1="1496.0" y1="891.8" x2="1496.0" y2="899.9" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="895.8" x2="1496.0" y2="895.8" stroke="#090" stroke-width="1.2"/>
+<line x1="1526.5" y1="895.8" x2="1516.3" y2="895.8" stroke="#090" stroke-width="1.2"/>
+<text x="1496.0" y="887.0" fill="#06c">R24</text>
+<text x="1496.0" y="911.8" fill="#06c">100k</text>
+<line x1="1496.0" y1="950.7" x2="1516.3" y2="950.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="950.7" x2="1516.3" y2="942.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="942.6" x2="1496.0" y2="942.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1496.0" y1="942.6" x2="1496.0" y2="950.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="946.6" x2="1496.0" y2="946.6" stroke="#090" stroke-width="1.2"/>
+<line x1="1526.5" y1="946.6" x2="1516.3" y2="946.6" stroke="#090" stroke-width="1.2"/>
+<text x="1496.0" y="937.8" fill="#06c">R22</text>
+<text x="1496.0" y="962.6" fill="#06c">1k</text>
+<line x1="1496.0" y1="1001.5" x2="1516.3" y2="1001.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="1001.5" x2="1516.3" y2="993.4" stroke="#900" stroke-width="1.2"/>
+<line x1="1516.3" y1="993.4" x2="1496.0" y2="993.4" stroke="#900" stroke-width="1.2"/>
+<line x1="1496.0" y1="993.4" x2="1496.0" y2="1001.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="997.4" x2="1496.0" y2="997.4" stroke="#090" stroke-width="1.2"/>
+<line x1="1526.5" y1="997.4" x2="1516.3" y2="997.4" stroke="#090" stroke-width="1.2"/>
+<text x="1496.0" y="988.6" fill="#06c">R23</text>
+<text x="1496.0" y="1013.4" fill="#06c">1k</text>
+<line x1="1496.0" y1="1048.2" x2="1503.6" y2="1048.2" stroke="#900" stroke-width="1.2"/>
+<line x1="1508.7" y1="1048.2" x2="1516.3" y2="1048.2" stroke="#900" stroke-width="1.2"/>
+<line x1="1503.6" y1="1055.4" x2="1503.6" y2="1041.1" stroke="#900" stroke-width="1.2"/>
+<line x1="1508.7" y1="1055.4" x2="1508.7" y2="1041.1" stroke="#900" stroke-width="1.2"/>
+<line x1="1485.8" y1="1048.2" x2="1496.0" y2="1048.2" stroke="#090" stroke-width="1.2"/>
+<line x1="1526.5" y1="1048.2" x2="1516.3" y2="1048.2" stroke="#090" stroke-width="1.2"/>
+<text x="1496.0" y="1039.4" fill="#06c">C16</text>
+<text x="1496.0" y="1064.2" fill="#06c">10u 25V</text>
+<line x1="601.9" y1="1078.7" x2="609.5" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1078.7" x2="622.2" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="609.5" y1="1085.8" x2="609.5" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1085.8" x2="614.6" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="591.8" y1="1078.7" x2="601.9" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<line x1="632.4" y1="1078.7" x2="622.2" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<text x="601.9" y="1069.9" fill="#06c">C6</text>
+<text x="601.9" y="1094.7" fill="#06c">100n</text>
+<line x1="825.4" y1="1078.7" x2="833.1" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="838.1" y1="1078.7" x2="845.8" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="833.1" y1="1085.8" x2="833.1" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="838.1" y1="1085.8" x2="838.1" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="815.3" y1="1078.7" x2="825.4" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<line x1="855.9" y1="1078.7" x2="845.8" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<text x="825.4" y="1069.9" fill="#06c">C7</text>
+<text x="825.4" y="1094.7" fill="#06c">100n</text>
+<line x1="1049.0" y1="1078.7" x2="1056.6" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1061.7" y1="1078.7" x2="1069.3" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1056.6" y1="1085.8" x2="1056.6" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1061.7" y1="1085.8" x2="1061.7" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1038.8" y1="1078.7" x2="1049.0" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<line x1="1079.4" y1="1078.7" x2="1069.3" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<text x="1049.0" y="1069.9" fill="#06c">C8</text>
+<text x="1049.0" y="1094.7" fill="#06c">100n</text>
+<line x1="1272.5" y1="1078.7" x2="1280.1" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1285.2" y1="1078.7" x2="1292.8" y2="1078.7" stroke="#900" stroke-width="1.2"/>
+<line x1="1280.1" y1="1085.8" x2="1280.1" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1285.2" y1="1085.8" x2="1285.2" y2="1071.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1262.3" y1="1078.7" x2="1272.5" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<line x1="1303.0" y1="1078.7" x2="1292.8" y2="1078.7" stroke="#090" stroke-width="1.2"/>
+<text x="1272.5" y="1069.9" fill="#06c">C10</text>
+<text x="1272.5" y="1094.7" fill="#06c">100n</text>
+<line x1="601.9" y1="1133.6" x2="622.2" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="622.2" y1="1133.6" x2="622.2" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="622.2" y1="1125.5" x2="601.9" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="601.9" y1="1125.5" x2="601.9" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="591.8" y1="1129.5" x2="601.9" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<line x1="632.4" y1="1129.5" x2="622.2" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<text x="601.9" y="1120.7" fill="#06c">R1</text>
+<text x="601.9" y="1145.5" fill="#06c">10k</text>
+<line x1="825.4" y1="1133.6" x2="845.8" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="845.8" y1="1133.6" x2="845.8" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="845.8" y1="1125.5" x2="825.4" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="825.4" y1="1125.5" x2="825.4" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="815.3" y1="1129.5" x2="825.4" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<line x1="855.9" y1="1129.5" x2="845.8" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<text x="825.4" y="1120.7" fill="#06c">R2</text>
+<text x="825.4" y="1145.5" fill="#06c">10k</text>
+<line x1="1049.0" y1="1133.6" x2="1069.3" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1069.3" y1="1133.6" x2="1069.3" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1069.3" y1="1125.5" x2="1049.0" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1049.0" y1="1125.5" x2="1049.0" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1038.8" y1="1129.5" x2="1049.0" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<line x1="1079.4" y1="1129.5" x2="1069.3" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<text x="1049.0" y="1120.7" fill="#06c">R8</text>
+<text x="1049.0" y="1145.5" fill="#06c">100k</text>
+<line x1="1272.5" y1="1133.6" x2="1292.8" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1292.8" y1="1133.6" x2="1292.8" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1292.8" y1="1125.5" x2="1272.5" y2="1125.5" stroke="#900" stroke-width="1.2"/>
+<line x1="1272.5" y1="1125.5" x2="1272.5" y2="1133.6" stroke="#900" stroke-width="1.2"/>
+<line x1="1262.3" y1="1129.5" x2="1272.5" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<line x1="1303.0" y1="1129.5" x2="1292.8" y2="1129.5" stroke="#090" stroke-width="1.2"/>
+<text x="1272.5" y="1120.7" fill="#06c">R9</text>
+<text x="1272.5" y="1145.5" fill="#06c">10k</text>
+<line x1="236.2" y1="1195.6" x2="337.8" y2="1195.6" stroke="#900" stroke-width="1.2"/>
+<line x1="337.8" y1="1195.6" x2="337.8" y2="1368.3" stroke="#900" stroke-width="1.2"/>
+<line x1="337.8" y1="1368.3" x2="236.2" y2="1368.3" stroke="#900" stroke-width="1.2"/>
+<line x1="236.2" y1="1368.3" x2="236.2" y2="1195.6" stroke="#900" stroke-width="1.2"/>
 <line x1="215.8" y1="1210.8" x2="236.2" y2="1210.8" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1213.6" text-anchor="start" fill="#333">IO2</text>
-<line x1="215.8" y1="1221.0" x2="236.2" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1223.8" text-anchor="start" fill="#333">IO18</text>
+<text x="239.4" y="1213.6" text-anchor="start" fill="#333">VCC</text>
 <line x1="215.8" y1="1231.1" x2="236.2" y2="1231.1" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1233.9" text-anchor="start" fill="#333">IO19</text>
-<line x1="215.8" y1="1241.3" x2="236.2" y2="1241.3" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1244.1" text-anchor="start" fill="#333">IO20</text>
+<text x="239.4" y="1233.9" text-anchor="start" fill="#333">VBAT</text>
 <line x1="215.8" y1="1251.4" x2="236.2" y2="1251.4" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1254.2" text-anchor="start" fill="#333">IO21</text>
-<line x1="215.8" y1="1261.6" x2="236.2" y2="1261.6" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1264.4" text-anchor="start" fill="#333">IO22</text>
+<text x="239.4" y="1254.2" text-anchor="start" fill="#333">SDA</text>
 <line x1="215.8" y1="1271.8" x2="236.2" y2="1271.8" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1274.6" text-anchor="start" fill="#333">IO23</text>
-<line x1="215.8" y1="1281.9" x2="236.2" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1284.7" text-anchor="start" fill="#333">IO0</text>
+<text x="239.4" y="1274.6" text-anchor="start" fill="#333">SCL</text>
 <line x1="215.8" y1="1292.1" x2="236.2" y2="1292.1" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1294.9" text-anchor="start" fill="#333">IO1</text>
-<line x1="215.8" y1="1302.2" x2="236.2" y2="1302.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1305.0" text-anchor="start" fill="#333">IO3</text>
+<text x="239.4" y="1294.9" text-anchor="start" fill="#333">INT_SQW</text>
 <line x1="215.8" y1="1312.4" x2="236.2" y2="1312.4" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1315.2" text-anchor="start" fill="#333">IO4</text>
-<line x1="215.8" y1="1322.6" x2="236.2" y2="1322.6" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1325.4" text-anchor="start" fill="#333">IO5</text>
+<text x="239.4" y="1315.2" text-anchor="start" fill="#333">RST</text>
 <line x1="215.8" y1="1332.7" x2="236.2" y2="1332.7" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1335.5" text-anchor="start" fill="#333">IO6</text>
-<line x1="215.8" y1="1342.9" x2="236.2" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1345.7" text-anchor="start" fill="#333">IO7</text>
+<text x="239.4" y="1335.5" text-anchor="start" fill="#333">32KHZ</text>
 <line x1="215.8" y1="1353.0" x2="236.2" y2="1353.0" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1355.8" text-anchor="start" fill="#333">IO12</text>
-<line x1="215.8" y1="1363.2" x2="236.2" y2="1363.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1366.0" text-anchor="start" fill="#333">IO13</text>
-<line x1="215.8" y1="1373.4" x2="236.2" y2="1373.4" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1376.2" text-anchor="start" fill="#333">IO14</text>
-<line x1="215.8" y1="1383.5" x2="236.2" y2="1383.5" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1386.3" text-anchor="start" fill="#333">IO15</text>
-<line x1="215.8" y1="1393.7" x2="236.2" y2="1393.7" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1396.5" text-anchor="start" fill="#333">NC</text>
-<line x1="215.8" y1="1403.8" x2="236.2" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1406.6" text-anchor="start" fill="#333">NC</text>
-<line x1="215.8" y1="1414.0" x2="236.2" y2="1414.0" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1416.8" text-anchor="start" fill="#333">NC</text>
-<line x1="358.1" y1="1149.8" x2="337.8" y2="1149.8" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1152.6" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1160.0" x2="337.8" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1162.8" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1170.2" x2="337.8" y2="1170.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1173.0" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1180.3" x2="337.8" y2="1180.3" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1183.1" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1190.5" x2="337.8" y2="1190.5" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1193.3" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1200.6" x2="337.8" y2="1200.6" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1203.4" text-anchor="end" fill="#333">GND</text>
+<text x="239.4" y="1355.8" text-anchor="start" fill="#333">GND</text>
 <line x1="358.1" y1="1210.8" x2="337.8" y2="1210.8" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1213.6" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1221.0" x2="337.8" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1223.8" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1213.6" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1231.1" x2="337.8" y2="1231.1" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1233.9" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1241.3" x2="337.8" y2="1241.3" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1244.1" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1233.9" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1251.4" x2="337.8" y2="1251.4" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1254.2" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1261.6" x2="337.8" y2="1261.6" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1264.4" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1254.2" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1271.8" x2="337.8" y2="1271.8" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1274.6" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1281.9" x2="337.8" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1284.7" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1274.6" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1292.1" x2="337.8" y2="1292.1" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1294.9" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1302.2" x2="337.8" y2="1302.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1305.0" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1294.9" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1312.4" x2="337.8" y2="1312.4" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1315.2" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1322.6" x2="337.8" y2="1322.6" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1325.4" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1315.2" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1332.7" x2="337.8" y2="1332.7" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1335.5" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1342.9" x2="337.8" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1345.7" text-anchor="end" fill="#333">GND</text>
+<text x="334.6" y="1335.5" text-anchor="end" fill="#333">NC</text>
 <line x1="358.1" y1="1353.0" x2="337.8" y2="1353.0" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1355.8" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1363.2" x2="337.8" y2="1363.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1366.0" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1373.4" x2="337.8" y2="1373.4" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1376.2" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1383.5" x2="337.8" y2="1383.5" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1386.3" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1393.7" x2="337.8" y2="1393.7" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1396.5" text-anchor="end" fill="#333">GND</text>
-<line x1="358.1" y1="1403.8" x2="337.8" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1406.6" text-anchor="end" fill="#333">GND</text>
-<text x="236.2" y="1135.7" fill="#06c">U6</text>
-<text x="236.2" y="1435.4" fill="#06c">ESP32-C6-MINI-1-N4</text>
-<line x1="601.9" y1="1164.1" x2="622.2" y2="1164.1" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1164.1" x2="622.2" y2="1155.9" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1155.9" x2="601.9" y2="1155.9" stroke="#900" stroke-width="1.2"/>
-<line x1="601.9" y1="1155.9" x2="601.9" y2="1164.1" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1160.0" x2="601.9" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1160.0" x2="622.2" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1151.2" fill="#06c">R10</text>
-<text x="601.9" y="1176.0" fill="#06c">10k</text>
-<line x1="825.4" y1="1160.0" x2="833.1" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1160.0" x2="845.8" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="833.1" y1="1167.1" x2="833.1" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1167.1" x2="838.1" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1160.0" x2="825.4" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1160.0" x2="845.8" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1151.2" fill="#06c">C13</text>
-<text x="825.4" y="1176.0" fill="#06c">100n</text>
-<line x1="1049.0" y1="1160.0" x2="1056.6" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1061.7" y1="1160.0" x2="1069.3" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1056.6" y1="1167.1" x2="1056.6" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1061.7" y1="1167.1" x2="1061.7" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1160.0" x2="1049.0" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1160.0" x2="1069.3" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1151.2" fill="#06c">C11</text>
-<text x="1049.0" y="1176.0" fill="#06c">10u 25V</text>
-<line x1="1272.5" y1="1160.0" x2="1280.1" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1285.2" y1="1160.0" x2="1292.8" y2="1160.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1280.1" y1="1167.1" x2="1280.1" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1285.2" y1="1167.1" x2="1285.2" y2="1152.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1262.3" y1="1160.0" x2="1272.5" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1303.0" y1="1160.0" x2="1292.8" y2="1160.0" stroke="#090" stroke-width="1.2"/>
-<text x="1272.5" y="1151.2" fill="#06c">C12</text>
-<text x="1272.5" y="1176.0" fill="#06c">100n</text>
-<line x1="601.9" y1="1225.0" x2="622.2" y2="1225.0" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1225.0" x2="622.2" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1216.9" x2="601.9" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="601.9" y1="1216.9" x2="601.9" y2="1225.0" stroke="#900" stroke-width="1.2"/>
+<text x="334.6" y="1355.8" text-anchor="end" fill="#333">NC</text>
+<text x="236.2" y="1191.6" fill="#06c">U5</text>
+<text x="236.2" y="1379.5" fill="#06c">DS3231SN#</text>
+<line x1="601.9" y1="1221.0" x2="609.5" y2="1221.0" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1221.0" x2="622.2" y2="1221.0" stroke="#900" stroke-width="1.2"/>
+<line x1="609.5" y1="1228.1" x2="609.5" y2="1213.8" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1228.1" x2="614.6" y2="1213.8" stroke="#900" stroke-width="1.2"/>
 <line x1="591.8" y1="1221.0" x2="601.9" y2="1221.0" stroke="#090" stroke-width="1.2"/>
 <line x1="632.4" y1="1221.0" x2="622.2" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1212.2" fill="#06c">R11</text>
-<text x="601.9" y="1237.0" fill="#06c">10k</text>
+<text x="601.9" y="1212.2" fill="#06c">C14</text>
+<text x="601.9" y="1237.0" fill="#06c">100n</text>
 <line x1="825.4" y1="1225.0" x2="845.8" y2="1225.0" stroke="#900" stroke-width="1.2"/>
 <line x1="845.8" y1="1225.0" x2="845.8" y2="1216.9" stroke="#900" stroke-width="1.2"/>
 <line x1="845.8" y1="1216.9" x2="825.4" y2="1216.9" stroke="#900" stroke-width="1.2"/>
 <line x1="825.4" y1="1216.9" x2="825.4" y2="1225.0" stroke="#900" stroke-width="1.2"/>
 <line x1="815.3" y1="1221.0" x2="825.4" y2="1221.0" stroke="#090" stroke-width="1.2"/>
 <line x1="855.9" y1="1221.0" x2="845.8" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1212.2" fill="#06c">R12</text>
+<text x="825.4" y="1212.2" fill="#06c">R20</text>
 <text x="825.4" y="1237.0" fill="#06c">10k</text>
-<line x1="1049.0" y1="1225.0" x2="1069.3" y2="1225.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1225.0" x2="1069.3" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1216.9" x2="1049.0" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1049.0" y1="1216.9" x2="1049.0" y2="1225.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1221.0" x2="1049.0" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1221.0" x2="1069.3" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1212.2" fill="#06c">R13</text>
-<text x="1049.0" y="1237.0" fill="#06c">10k</text>
-<line x1="1272.5" y1="1225.0" x2="1292.8" y2="1225.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1292.8" y1="1225.0" x2="1292.8" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1292.8" y1="1216.9" x2="1272.5" y2="1216.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1272.5" y1="1216.9" x2="1272.5" y2="1225.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1262.3" y1="1221.0" x2="1272.5" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1303.0" y1="1221.0" x2="1292.8" y2="1221.0" stroke="#090" stroke-width="1.2"/>
-<text x="1272.5" y="1212.2" fill="#06c">R14</text>
-<text x="1272.5" y="1237.0" fill="#06c">10k</text>
-<line x1="601.9" y1="1286.0" x2="622.2" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1286.0" x2="622.2" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1277.9" x2="601.9" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="601.9" y1="1277.9" x2="601.9" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1281.9" x2="601.9" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1281.9" x2="622.2" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1273.1" fill="#06c">R15</text>
-<text x="601.9" y="1297.9" fill="#06c">10k</text>
-<line x1="825.4" y1="1286.0" x2="845.8" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1286.0" x2="845.8" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1277.9" x2="825.4" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="825.4" y1="1277.9" x2="825.4" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1281.9" x2="825.4" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1281.9" x2="845.8" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1273.1" fill="#06c">R16</text>
-<text x="825.4" y="1297.9" fill="#06c">10k</text>
-<line x1="1049.0" y1="1286.0" x2="1069.3" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1286.0" x2="1069.3" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1277.9" x2="1049.0" y2="1277.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1049.0" y1="1277.9" x2="1049.0" y2="1286.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1281.9" x2="1049.0" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1281.9" x2="1069.3" y2="1281.9" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1273.1" fill="#06c">R17</text>
-<text x="1049.0" y="1297.9" fill="#06c">10k</text>
-<circle cx="642.6" cy="1342.9" r="3.6" fill="none" stroke="#900" stroke-width="1.2"/>
-<line x1="632.4" y1="1342.9" x2="639.0" y2="1342.9" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1342.9" x2="632.4" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="632.4" y="1336.5" fill="#06c">TP6</text>
-<text x="632.4" y="1356.5" fill="#06c">C6 EN</text>
-<circle cx="866.1" cy="1342.9" r="3.6" fill="none" stroke="#900" stroke-width="1.2"/>
-<line x1="855.9" y1="1342.9" x2="862.5" y2="1342.9" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1342.9" x2="855.9" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="855.9" y="1336.5" fill="#06c">TP7</text>
-<text x="855.9" y="1356.5" fill="#06c">C6 TXD</text>
-<circle cx="1089.6" cy="1342.9" r="3.6" fill="none" stroke="#900" stroke-width="1.2"/>
-<line x1="1079.4" y1="1342.9" x2="1086.0" y2="1342.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1342.9" x2="1079.4" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="1079.4" y="1336.5" fill="#06c">TP8</text>
-<text x="1079.4" y="1356.5" fill="#06c">C6 RXD</text>
-<circle cx="1313.1" cy="1342.9" r="3.6" fill="none" stroke="#900" stroke-width="1.2"/>
-<line x1="1303.0" y1="1342.9" x2="1309.5" y2="1342.9" stroke="#900" stroke-width="1.2"/>
-<line x1="1292.8" y1="1342.9" x2="1303.0" y2="1342.9" stroke="#090" stroke-width="1.2"/>
-<text x="1303.0" y="1336.5" fill="#06c">TP9</text>
-<text x="1303.0" y="1356.5" fill="#06c">C6 BOOT</text>
-<line x1="601.9" y1="1403.8" x2="609.5" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1403.8" x2="622.2" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="609.5" y1="1411.0" x2="609.5" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1411.0" x2="614.6" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1403.8" x2="601.9" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1403.8" x2="622.2" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1395.0" fill="#06c">C6</text>
-<text x="601.9" y="1419.8" fill="#06c">100n</text>
-<line x1="825.4" y1="1403.8" x2="833.1" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1403.8" x2="845.8" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="833.1" y1="1411.0" x2="833.1" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1411.0" x2="838.1" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1403.8" x2="825.4" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1403.8" x2="845.8" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1395.0" fill="#06c">C7</text>
-<text x="825.4" y="1419.8" fill="#06c">100n</text>
-<line x1="1049.0" y1="1403.8" x2="1056.6" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1061.7" y1="1403.8" x2="1069.3" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1056.6" y1="1411.0" x2="1056.6" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1061.7" y1="1411.0" x2="1061.7" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1403.8" x2="1049.0" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1403.8" x2="1069.3" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1395.0" fill="#06c">C8</text>
-<text x="1049.0" y="1419.8" fill="#06c">100n</text>
-<line x1="1272.5" y1="1403.8" x2="1280.1" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1285.2" y1="1403.8" x2="1292.8" y2="1403.8" stroke="#900" stroke-width="1.2"/>
-<line x1="1280.1" y1="1411.0" x2="1280.1" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1285.2" y1="1411.0" x2="1285.2" y2="1396.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1262.3" y1="1403.8" x2="1272.5" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<line x1="1303.0" y1="1403.8" x2="1292.8" y2="1403.8" stroke="#090" stroke-width="1.2"/>
-<text x="1272.5" y="1395.0" fill="#06c">C10</text>
-<text x="1272.5" y="1419.8" fill="#06c">100n</text>
-<line x1="601.9" y1="1458.7" x2="622.2" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1458.7" x2="622.2" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="622.2" y1="1450.6" x2="601.9" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="601.9" y1="1450.6" x2="601.9" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1454.6" x2="601.9" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1454.6" x2="622.2" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1445.8" fill="#06c">R1</text>
-<text x="601.9" y="1470.6" fill="#06c">10k</text>
-<line x1="825.4" y1="1458.7" x2="845.8" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1458.7" x2="845.8" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1450.6" x2="825.4" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="825.4" y1="1450.6" x2="825.4" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1454.6" x2="825.4" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1454.6" x2="845.8" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1445.8" fill="#06c">R2</text>
-<text x="825.4" y="1470.6" fill="#06c">10k</text>
-<line x1="1049.0" y1="1458.7" x2="1069.3" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1458.7" x2="1069.3" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1069.3" y1="1450.6" x2="1049.0" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1049.0" y1="1450.6" x2="1049.0" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1454.6" x2="1049.0" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1454.6" x2="1069.3" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1445.8" fill="#06c">R8</text>
-<text x="1049.0" y="1470.6" fill="#06c">100k</text>
-<line x1="1272.5" y1="1458.7" x2="1292.8" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1292.8" y1="1458.7" x2="1292.8" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1292.8" y1="1450.6" x2="1272.5" y2="1450.6" stroke="#900" stroke-width="1.2"/>
-<line x1="1272.5" y1="1450.6" x2="1272.5" y2="1458.7" stroke="#900" stroke-width="1.2"/>
-<line x1="1262.3" y1="1454.6" x2="1272.5" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<line x1="1303.0" y1="1454.6" x2="1292.8" y2="1454.6" stroke="#090" stroke-width="1.2"/>
-<text x="1272.5" y="1445.8" fill="#06c">R9</text>
-<text x="1272.5" y="1470.6" fill="#06c">10k</text>
-<line x1="236.2" y1="1541.0" x2="337.8" y2="1541.0" stroke="#900" stroke-width="1.2"/>
-<line x1="337.8" y1="1541.0" x2="337.8" y2="1713.7" stroke="#900" stroke-width="1.2"/>
-<line x1="337.8" y1="1713.7" x2="236.2" y2="1713.7" stroke="#900" stroke-width="1.2"/>
-<line x1="236.2" y1="1713.7" x2="236.2" y2="1541.0" stroke="#900" stroke-width="1.2"/>
-<line x1="215.8" y1="1556.2" x2="236.2" y2="1556.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1559.0" text-anchor="start" fill="#333">VCC</text>
-<line x1="215.8" y1="1576.6" x2="236.2" y2="1576.6" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1579.4" text-anchor="start" fill="#333">VBAT</text>
-<line x1="215.8" y1="1596.9" x2="236.2" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1599.7" text-anchor="start" fill="#333">SDA</text>
-<line x1="215.8" y1="1617.2" x2="236.2" y2="1617.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1620.0" text-anchor="start" fill="#333">SCL</text>
-<line x1="215.8" y1="1637.5" x2="236.2" y2="1637.5" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1640.3" text-anchor="start" fill="#333">INT_SQW</text>
-<line x1="215.8" y1="1657.8" x2="236.2" y2="1657.8" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1660.6" text-anchor="start" fill="#333">RST</text>
-<line x1="215.8" y1="1678.2" x2="236.2" y2="1678.2" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1681.0" text-anchor="start" fill="#333">32KHZ</text>
-<line x1="215.8" y1="1698.5" x2="236.2" y2="1698.5" stroke="#090" stroke-width="1.2"/>
-<text x="239.4" y="1701.3" text-anchor="start" fill="#333">GND</text>
-<line x1="358.1" y1="1556.2" x2="337.8" y2="1556.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1559.0" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1576.6" x2="337.8" y2="1576.6" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1579.4" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1596.9" x2="337.8" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1599.7" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1617.2" x2="337.8" y2="1617.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1620.0" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1637.5" x2="337.8" y2="1637.5" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1640.3" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1657.8" x2="337.8" y2="1657.8" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1660.6" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1678.2" x2="337.8" y2="1678.2" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1681.0" text-anchor="end" fill="#333">NC</text>
-<line x1="358.1" y1="1698.5" x2="337.8" y2="1698.5" stroke="#090" stroke-width="1.2"/>
-<text x="334.6" y="1701.3" text-anchor="end" fill="#333">NC</text>
-<text x="236.2" y="1537.0" fill="#06c">U5</text>
-<text x="236.2" y="1724.9" fill="#06c">DS3231SN#</text>
-<line x1="601.9" y1="1525.8" x2="609.5" y2="1525.8" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1525.8" x2="622.2" y2="1525.8" stroke="#900" stroke-width="1.2"/>
-<line x1="609.5" y1="1532.9" x2="609.5" y2="1518.6" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1532.9" x2="614.6" y2="1518.6" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1525.8" x2="601.9" y2="1525.8" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1525.8" x2="622.2" y2="1525.8" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1517.0" fill="#06c">C14</text>
-<text x="601.9" y="1541.8" fill="#06c">100n</text>
-<line x1="825.4" y1="1529.8" x2="845.8" y2="1529.8" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1529.8" x2="845.8" y2="1521.7" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1521.7" x2="825.4" y2="1521.7" stroke="#900" stroke-width="1.2"/>
-<line x1="825.4" y1="1521.7" x2="825.4" y2="1529.8" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1525.8" x2="825.4" y2="1525.8" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1525.8" x2="845.8" y2="1525.8" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1517.0" fill="#06c">R20</text>
-<text x="825.4" y="1541.8" fill="#06c">10k</text>
-<line x1="601.9" y1="1596.9" x2="609.5" y2="1596.9" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1596.9" x2="622.2" y2="1596.9" stroke="#900" stroke-width="1.2"/>
-<line x1="609.5" y1="1606.0" x2="609.5" y2="1587.7" stroke="#900" stroke-width="1.2"/>
-<line x1="614.6" y1="1600.9" x2="614.6" y2="1592.8" stroke="#900" stroke-width="1.2"/>
-<text x="602.5" y="1593.3" fill="#900">+</text>
-<line x1="591.8" y1="1596.9" x2="601.9" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1596.9" x2="622.2" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1588.1" fill="#06c">BT1</text>
-<text x="601.9" y="1612.9" fill="#06c">CR2032 holder</text>
-<line x1="825.4" y1="1596.9" x2="833.1" y2="1596.9" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1596.9" x2="845.8" y2="1596.9" stroke="#900" stroke-width="1.2"/>
-<line x1="833.1" y1="1604.0" x2="833.1" y2="1589.8" stroke="#900" stroke-width="1.2"/>
-<line x1="838.1" y1="1604.0" x2="838.1" y2="1589.8" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1596.9" x2="825.4" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1596.9" x2="845.8" y2="1596.9" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1588.1" fill="#06c">C15</text>
-<text x="825.4" y="1612.9" fill="#06c">100n</text>
-<line x1="601.9" y1="1668.0" x2="607.0" y2="1668.0" stroke="#900" stroke-width="1.2"/>
-<line x1="617.2" y1="1668.0" x2="622.2" y2="1668.0" stroke="#900" stroke-width="1.2"/>
-<line x1="607.0" y1="1662.9" x2="607.0" y2="1673.1" stroke="#900" stroke-width="1.2"/>
-<line x1="607.0" y1="1673.1" x2="617.2" y2="1668.0" stroke="#900" stroke-width="1.2"/>
-<line x1="617.2" y1="1668.0" x2="607.0" y2="1662.9" stroke="#900" stroke-width="1.2"/>
-<line x1="617.2" y1="1662.9" x2="617.2" y2="1673.1" stroke="#900" stroke-width="1.2"/>
-<line x1="591.8" y1="1668.0" x2="601.9" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<line x1="632.4" y1="1668.0" x2="622.2" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<text x="601.9" y="1659.2" fill="#06c">D6</text>
-<text x="601.9" y="1684.0" fill="#06c">BAT54</text>
-<line x1="825.4" y1="1672.1" x2="845.8" y2="1672.1" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1672.1" x2="845.8" y2="1663.9" stroke="#900" stroke-width="1.2"/>
-<line x1="845.8" y1="1663.9" x2="825.4" y2="1663.9" stroke="#900" stroke-width="1.2"/>
-<line x1="825.4" y1="1663.9" x2="825.4" y2="1672.1" stroke="#900" stroke-width="1.2"/>
-<line x1="815.3" y1="1668.0" x2="825.4" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<line x1="855.9" y1="1668.0" x2="845.8" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<text x="825.4" y="1659.2" fill="#06c">R21</text>
-<text x="825.4" y="1684.0" fill="#06c">1k</text>
-<circle cx="1054.0" cy="1668.0" r="2.5" fill="none" stroke="#900" stroke-width="1.2"/>
-<circle cx="1064.2" cy="1668.0" r="2.5" fill="none" stroke="#900" stroke-width="1.2"/>
-<line x1="1049.0" y1="1668.0" x2="1051.5" y2="1668.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1066.7" y1="1668.0" x2="1069.3" y2="1668.0" stroke="#900" stroke-width="1.2"/>
-<line x1="1038.8" y1="1668.0" x2="1049.0" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<line x1="1079.4" y1="1668.0" x2="1069.3" y2="1668.0" stroke="#090" stroke-width="1.2"/>
-<text x="1049.0" y="1659.2" fill="#06c">JP2</text>
-<text x="1049.0" y="1684.0" fill="#06c">ML2032 CHARGE</text>
+<line x1="601.9" y1="1292.1" x2="609.5" y2="1292.1" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1292.1" x2="622.2" y2="1292.1" stroke="#900" stroke-width="1.2"/>
+<line x1="609.5" y1="1301.2" x2="609.5" y2="1282.9" stroke="#900" stroke-width="1.2"/>
+<line x1="614.6" y1="1296.1" x2="614.6" y2="1288.0" stroke="#900" stroke-width="1.2"/>
+<text x="602.5" y="1288.5" fill="#900">+</text>
+<line x1="591.8" y1="1292.1" x2="601.9" y2="1292.1" stroke="#090" stroke-width="1.2"/>
+<line x1="632.4" y1="1292.1" x2="622.2" y2="1292.1" stroke="#090" stroke-width="1.2"/>
+<text x="601.9" y="1283.3" fill="#06c">BT1</text>
+<text x="601.9" y="1308.1" fill="#06c">CR2032 holder</text>
+<line x1="825.4" y1="1292.1" x2="833.1" y2="1292.1" stroke="#900" stroke-width="1.2"/>
+<line x1="838.1" y1="1292.1" x2="845.8" y2="1292.1" stroke="#900" stroke-width="1.2"/>
+<line x1="833.1" y1="1299.2" x2="833.1" y2="1285.0" stroke="#900" stroke-width="1.2"/>
+<line x1="838.1" y1="1299.2" x2="838.1" y2="1285.0" stroke="#900" stroke-width="1.2"/>
+<line x1="815.3" y1="1292.1" x2="825.4" y2="1292.1" stroke="#090" stroke-width="1.2"/>
+<line x1="855.9" y1="1292.1" x2="845.8" y2="1292.1" stroke="#090" stroke-width="1.2"/>
+<text x="825.4" y="1283.3" fill="#06c">C15</text>
+<text x="825.4" y="1308.1" fill="#06c">100n</text>
+<line x1="601.9" y1="1363.2" x2="607.0" y2="1363.2" stroke="#900" stroke-width="1.2"/>
+<line x1="617.2" y1="1363.2" x2="622.2" y2="1363.2" stroke="#900" stroke-width="1.2"/>
+<line x1="607.0" y1="1358.1" x2="607.0" y2="1368.3" stroke="#900" stroke-width="1.2"/>
+<line x1="607.0" y1="1368.3" x2="617.2" y2="1363.2" stroke="#900" stroke-width="1.2"/>
+<line x1="617.2" y1="1363.2" x2="607.0" y2="1358.1" stroke="#900" stroke-width="1.2"/>
+<line x1="617.2" y1="1358.1" x2="617.2" y2="1368.3" stroke="#900" stroke-width="1.2"/>
+<line x1="591.8" y1="1363.2" x2="601.9" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<line x1="632.4" y1="1363.2" x2="622.2" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<text x="601.9" y="1354.4" fill="#06c">D6</text>
+<text x="601.9" y="1379.2" fill="#06c">BAT54</text>
+<line x1="825.4" y1="1367.3" x2="845.8" y2="1367.3" stroke="#900" stroke-width="1.2"/>
+<line x1="845.8" y1="1367.3" x2="845.8" y2="1359.1" stroke="#900" stroke-width="1.2"/>
+<line x1="845.8" y1="1359.1" x2="825.4" y2="1359.1" stroke="#900" stroke-width="1.2"/>
+<line x1="825.4" y1="1359.1" x2="825.4" y2="1367.3" stroke="#900" stroke-width="1.2"/>
+<line x1="815.3" y1="1363.2" x2="825.4" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<line x1="855.9" y1="1363.2" x2="845.8" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<text x="825.4" y="1354.4" fill="#06c">R21</text>
+<text x="825.4" y="1379.2" fill="#06c">1k</text>
+<circle cx="1054.0" cy="1363.2" r="2.5" fill="none" stroke="#900" stroke-width="1.2"/>
+<circle cx="1064.2" cy="1363.2" r="2.5" fill="none" stroke="#900" stroke-width="1.2"/>
+<line x1="1049.0" y1="1363.2" x2="1051.5" y2="1363.2" stroke="#900" stroke-width="1.2"/>
+<line x1="1066.7" y1="1363.2" x2="1069.3" y2="1363.2" stroke="#900" stroke-width="1.2"/>
+<line x1="1038.8" y1="1363.2" x2="1049.0" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<line x1="1079.4" y1="1363.2" x2="1069.3" y2="1363.2" stroke="#090" stroke-width="1.2"/>
+<text x="1049.0" y="1354.4" fill="#06c">JP2</text>
+<text x="1049.0" y="1379.2" fill="#06c">ML2032 CHARGE</text>
 <circle cx="1536.6" cy="265.9" r="3.6" fill="none" stroke="#900" stroke-width="1.2"/>
 <line x1="1526.5" y1="265.9" x2="1533.0" y2="265.9" stroke="#900" stroke-width="1.2"/>
 <line x1="1516.3" y1="265.9" x2="1526.5" y2="265.9" stroke="#090" stroke-width="1.2"/>
@@ -801,8 +597,8 @@
 <text x="295.1" y="268.3" text-anchor="end" fill="#070" font-weight="bold">+12V_IN</text>
 <line x1="510.5" y1="265.9" x2="500.3" y2="265.9" stroke="#060" stroke-width="1.2"/>
 <text x="498.3" y="268.3" text-anchor="end" fill="#070" font-weight="bold">+12V_IN</text>
-<line x1="1038.8" y1="1454.6" x2="1028.6" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1457.0" text-anchor="end" fill="#070" font-weight="bold">+12V_IN</text>
+<line x1="1038.8" y1="1129.5" x2="1028.6" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="1026.6" y="1131.9" text-anchor="end" fill="#070" font-weight="bold">+12V_IN</text>
 <line x1="551.1" y1="265.9" x2="561.3" y2="265.9" stroke="#060" stroke-width="1.2"/>
 <text x="563.3" y="268.3" text-anchor="start" fill="#070" font-weight="bold">+12V_PROT</text>
 <line x1="713.7" y1="265.9" x2="703.5" y2="265.9" stroke="#060" stroke-width="1.2"/>
@@ -821,66 +617,48 @@
 <text x="823.4" y="390.2" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
 <line x1="673.0" y1="459.0" x2="662.9" y2="459.0" stroke="#060" stroke-width="1.2"/>
 <text x="660.9" y="461.4" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
-<line x1="419.0" y1="459.0" x2="408.9" y2="459.0" stroke="#060" stroke-width="1.2"/>
-<text x="406.9" y="461.4" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
+<line x1="429.2" y1="459.0" x2="419.0" y2="459.0" stroke="#060" stroke-width="1.2"/>
+<text x="417.0" y="461.4" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
 <line x1="652.7" y1="682.5" x2="642.6" y2="682.5" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="684.9" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
-<line x1="591.8" y1="1403.8" x2="581.6" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1406.2" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
-<line x1="1485.8" y1="784.1" x2="1475.7" y2="784.1" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="786.5" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
+<line x1="591.8" y1="1078.7" x2="581.6" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="579.6" y="1081.1" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
 <line x1="1516.3" y1="306.6" x2="1506.2" y2="306.6" stroke="#060" stroke-width="1.2"/>
 <text x="1504.2" y="309.0" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
+<line x1="1465.5" y1="591.0" x2="1455.4" y2="591.0" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="593.4" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
+<line x1="1485.8" y1="1048.2" x2="1475.7" y2="1048.2" stroke="#060" stroke-width="1.2"/>
+<text x="1473.7" y="1050.6" text-anchor="end" fill="#070" font-weight="bold">+5V</text>
+<line x1="469.8" y1="459.0" x2="480.0" y2="459.0" stroke="#060" stroke-width="1.2"/>
+<text x="482.0" y="461.4" text-anchor="start" fill="#070" font-weight="bold">+5V_MCU</text>
+<line x1="368.2" y1="601.2" x2="378.4" y2="601.2" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="603.6" text-anchor="start" fill="#070" font-weight="bold">+5V_MCU</text>
 <line x1="713.7" y1="459.0" x2="723.8" y2="459.0" stroke="#060" stroke-width="1.2"/>
 <text x="725.8" y="461.4" text-anchor="start" fill="#070" font-weight="bold">+5V_CHAIN</text>
 <line x1="1059.1" y1="377.7" x2="1049.0" y2="377.7" stroke="#060" stroke-width="1.2"/>
 <text x="1047.0" y="380.1" text-anchor="end" fill="#070" font-weight="bold">+5V_CHAIN</text>
-<line x1="205.7" y1="967.0" x2="195.5" y2="967.0" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="969.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="368.2" y1="662.2" x2="378.4" y2="662.2" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="664.6" text-anchor="start" fill="#070" font-weight="bold">+3V3</text>
 <line x1="652.7" y1="662.2" x2="642.6" y2="662.2" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="664.6" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="815.3" y1="1403.8" x2="805.1" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1406.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="815.3" y1="1078.7" x2="805.1" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="803.1" y="1081.1" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
 <line x1="652.7" y1="865.4" x2="642.6" y2="865.4" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="867.8" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1038.8" y1="1403.8" x2="1028.6" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1406.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="815.3" y1="1454.6" x2="805.1" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1457.0" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="1038.8" y1="1078.7" x2="1028.6" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="1026.6" y="1081.1" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="815.3" y1="1129.5" x2="805.1" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="803.1" y="1131.9" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
 <line x1="1516.3" y1="347.2" x2="1506.2" y2="347.2" stroke="#060" stroke-width="1.2"/>
 <text x="1504.2" y="349.6" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="215.8" y1="1149.8" x2="205.7" y2="1149.8" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1152.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1038.8" y1="1160.0" x2="1028.6" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1162.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1262.3" y1="1160.0" x2="1252.2" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="1250.2" y="1162.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="591.8" y1="1160.0" x2="581.6" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1162.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="215.8" y1="1210.8" x2="205.7" y2="1210.8" stroke="#060" stroke-width="1.2"/>
+<text x="203.7" y="1213.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
 <line x1="591.8" y1="1221.0" x2="581.6" y2="1221.0" stroke="#060" stroke-width="1.2"/>
 <text x="579.6" y="1223.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
 <line x1="815.3" y1="1221.0" x2="805.1" y2="1221.0" stroke="#060" stroke-width="1.2"/>
 <text x="803.1" y="1223.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1038.8" y1="1221.0" x2="1028.6" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1223.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1262.3" y1="1221.0" x2="1252.2" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="1250.2" y="1223.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="591.8" y1="1281.9" x2="581.6" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1284.3" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="815.3" y1="1281.9" x2="805.1" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1284.3" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1038.8" y1="1281.9" x2="1028.6" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1284.3" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="215.8" y1="1556.2" x2="205.7" y2="1556.2" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1558.6" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="591.8" y1="1525.8" x2="581.6" y2="1525.8" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1528.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="815.3" y1="1525.8" x2="805.1" y2="1525.8" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1528.2" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="591.8" y1="1668.0" x2="581.6" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1670.4" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
-<line x1="1485.8" y1="743.4" x2="1475.7" y2="743.4" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="745.8" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
+<line x1="591.8" y1="1363.2" x2="581.6" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="579.6" y="1365.6" text-anchor="end" fill="#070" font-weight="bold">+3V3</text>
 <line x1="83.8" y1="255.8" x2="73.6" y2="255.8" stroke="#060" stroke-width="1.2"/>
 <text x="71.6" y="258.2" text-anchor="end" fill="#070" font-weight="bold">GND</text>
 <line x1="347.9" y1="265.9" x2="358.1" y2="265.9" stroke="#060" stroke-width="1.2"/>
@@ -901,14 +679,20 @@
 <text x="888.4" y="390.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="1059.1" y1="398.0" x2="1049.0" y2="398.0" stroke="#060" stroke-width="1.2"/>
 <text x="1047.0" y="400.4" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="419.0" y1="479.3" x2="408.9" y2="479.3" stroke="#060" stroke-width="1.2"/>
-<text x="406.9" y="481.7" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="205.7" y1="946.6" x2="195.5" y2="946.6" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="949.0" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="368.2" y1="946.6" x2="378.4" y2="946.6" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="949.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="368.2" y1="682.5" x2="378.4" y2="682.5" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="684.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="205.7" y1="621.5" x2="195.5" y2="621.5" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="623.9" text-anchor="end" fill="#070" font-weight="bold">GND</text>
+<line x1="205.7" y1="723.1" x2="195.5" y2="723.1" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="725.5" text-anchor="end" fill="#070" font-weight="bold">GND</text>
+<line x1="205.7" y1="824.7" x2="195.5" y2="824.7" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="827.1" text-anchor="end" fill="#070" font-weight="bold">GND</text>
+<line x1="205.7" y1="926.3" x2="195.5" y2="926.3" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="928.7" text-anchor="end" fill="#070" font-weight="bold">GND</text>
+<line x1="368.2" y1="926.3" x2="378.4" y2="926.3" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="928.7" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="368.2" y1="824.7" x2="378.4" y2="824.7" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="827.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="368.2" y1="723.1" x2="378.4" y2="723.1" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="725.5" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="368.2" y1="621.5" x2="378.4" y2="621.5" stroke="#060" stroke-width="1.2"/>
 <text x="380.4" y="623.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="652.7" y1="702.8" x2="642.6" y2="702.8" stroke="#060" stroke-width="1.2"/>
@@ -923,134 +707,88 @@
 <text x="1051.0" y="766.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="1018.5" y1="946.6" x2="1028.6" y2="946.6" stroke="#060" stroke-width="1.2"/>
 <text x="1030.6" y="949.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="632.4" y1="1403.8" x2="642.6" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1406.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="855.9" y1="1403.8" x2="866.1" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1406.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1079.4" y1="1403.8" x2="1089.6" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1406.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1303.0" y1="1403.8" x2="1313.1" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="1315.1" y="1406.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="632.4" y1="1454.6" x2="642.6" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1457.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1303.0" y1="1454.6" x2="1313.1" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="1315.1" y="1457.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="632.4" y1="1078.7" x2="642.6" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="644.6" y="1081.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="855.9" y1="1078.7" x2="866.1" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="868.1" y="1081.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1079.4" y1="1078.7" x2="1089.6" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="1091.6" y="1081.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1303.0" y1="1078.7" x2="1313.1" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="1315.1" y="1081.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="632.4" y1="1129.5" x2="642.6" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="644.6" y="1131.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1303.0" y1="1129.5" x2="1313.1" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="1315.1" y="1131.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="1516.3" y1="265.9" x2="1506.2" y2="265.9" stroke="#060" stroke-width="1.2"/>
 <text x="1504.2" y="268.3" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1190.5" x2="368.2" y2="1190.5" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1192.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1200.6" x2="368.2" y2="1200.6" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1203.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="215.8" y1="1353.0" x2="205.7" y2="1353.0" stroke="#060" stroke-width="1.2"/>
+<text x="203.7" y="1355.4" text-anchor="end" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1210.8" x2="368.2" y2="1210.8" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1213.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1221.0" x2="368.2" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1231.1" x2="368.2" y2="1231.1" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1233.5" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1241.3" x2="368.2" y2="1241.3" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1243.7" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1251.4" x2="368.2" y2="1251.4" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1253.8" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1261.6" x2="368.2" y2="1261.6" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1264.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1271.8" x2="368.2" y2="1271.8" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1274.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1281.9" x2="368.2" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1284.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1292.1" x2="368.2" y2="1292.1" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1294.5" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1302.2" x2="368.2" y2="1302.2" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1304.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1312.4" x2="368.2" y2="1312.4" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1314.8" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1322.6" x2="368.2" y2="1322.6" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1325.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1332.7" x2="368.2" y2="1332.7" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1335.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1342.9" x2="368.2" y2="1342.9" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1345.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
 <line x1="358.1" y1="1353.0" x2="368.2" y2="1353.0" stroke="#060" stroke-width="1.2"/>
 <text x="370.2" y="1355.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1363.2" x2="368.2" y2="1363.2" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1365.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1373.4" x2="368.2" y2="1373.4" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1375.8" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1383.5" x2="368.2" y2="1383.5" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1385.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1393.7" x2="368.2" y2="1393.7" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1396.1" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1403.8" x2="368.2" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1406.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1079.4" y1="1160.0" x2="1089.6" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1162.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1303.0" y1="1160.0" x2="1313.1" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="1315.1" y="1162.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="855.9" y1="1160.0" x2="866.1" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1162.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="215.8" y1="1698.5" x2="205.7" y2="1698.5" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1700.9" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1556.2" x2="368.2" y2="1556.2" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1558.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1576.6" x2="368.2" y2="1576.6" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1579.0" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1596.9" x2="368.2" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1599.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1617.2" x2="368.2" y2="1617.2" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1619.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1637.5" x2="368.2" y2="1637.5" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1639.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1657.8" x2="368.2" y2="1657.8" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1660.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1678.2" x2="368.2" y2="1678.2" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1680.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="358.1" y1="1698.5" x2="368.2" y2="1698.5" stroke="#060" stroke-width="1.2"/>
-<text x="370.2" y="1700.9" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="632.4" y1="1525.8" x2="642.6" y2="1525.8" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1528.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="632.4" y1="1596.9" x2="642.6" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1599.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="855.9" y1="1596.9" x2="866.1" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1599.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="1475.7" y1="611.4" x2="1465.5" y2="611.4" stroke="#060" stroke-width="1.2"/>
-<text x="1463.5" y="613.8" text-anchor="end" fill="#070" font-weight="bold">GND</text>
-<line x1="1526.5" y1="956.8" x2="1536.6" y2="956.8" stroke="#060" stroke-width="1.2"/>
-<text x="1538.6" y="959.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
-<line x1="368.2" y1="743.4" x2="378.4" y2="743.4" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="745.8" text-anchor="start" fill="#070" font-weight="bold">ECU_TX</text>
+<line x1="632.4" y1="1221.0" x2="642.6" y2="1221.0" stroke="#060" stroke-width="1.2"/>
+<text x="644.6" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="632.4" y1="1292.1" x2="642.6" y2="1292.1" stroke="#060" stroke-width="1.2"/>
+<text x="644.6" y="1294.5" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="855.9" y1="1292.1" x2="866.1" y2="1292.1" stroke="#060" stroke-width="1.2"/>
+<text x="868.1" y="1294.5" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1465.5" y1="611.4" x2="1455.4" y2="611.4" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="613.8" text-anchor="end" fill="#070" font-weight="bold">GND</text>
+<line x1="1526.5" y1="1048.2" x2="1536.6" y2="1048.2" stroke="#060" stroke-width="1.2"/>
+<text x="1538.6" y="1050.6" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1546.8" y1="834.9" x2="1557.0" y2="834.9" stroke="#060" stroke-width="1.2"/>
+<text x="1559.0" y="837.3" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="1526.5" y1="895.8" x2="1536.6" y2="895.8" stroke="#060" stroke-width="1.2"/>
+<text x="1538.6" y="898.2" text-anchor="start" fill="#070" font-weight="bold">GND</text>
+<line x1="368.2" y1="702.8" x2="378.4" y2="702.8" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="705.2" text-anchor="start" fill="#070" font-weight="bold">ECU_TX</text>
 <line x1="652.7" y1="601.2" x2="642.6" y2="601.2" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="603.6" text-anchor="end" fill="#070" font-weight="bold">ECU_TX</text>
-<line x1="368.2" y1="763.8" x2="378.4" y2="763.8" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="766.2" text-anchor="start" fill="#070" font-weight="bold">ECU_RX</text>
+<line x1="368.2" y1="743.4" x2="378.4" y2="743.4" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="745.8" text-anchor="start" fill="#070" font-weight="bold">ECU_RX</text>
 <line x1="652.7" y1="621.5" x2="642.6" y2="621.5" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="623.9" text-anchor="end" fill="#070" font-weight="bold">ECU_RX</text>
-<line x1="368.2" y1="784.1" x2="378.4" y2="784.1" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="786.5" text-anchor="start" fill="#070" font-weight="bold">ECU_SILENT</text>
+<line x1="368.2" y1="763.8" x2="378.4" y2="763.8" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="766.2" text-anchor="start" fill="#070" font-weight="bold">ECU_SILENT</text>
 <line x1="652.7" y1="641.8" x2="642.6" y2="641.8" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="644.2" text-anchor="end" fill="#070" font-weight="bold">ECU_SILENT</text>
-<line x1="591.8" y1="1454.6" x2="581.6" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1457.0" text-anchor="end" fill="#070" font-weight="bold">ECU_SILENT</text>
-<line x1="368.2" y1="804.4" x2="378.4" y2="804.4" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="806.8" text-anchor="start" fill="#070" font-weight="bold">GAUGE_TX</text>
+<line x1="591.8" y1="1129.5" x2="581.6" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="579.6" y="1131.9" text-anchor="end" fill="#070" font-weight="bold">ECU_SILENT</text>
+<line x1="368.2" y1="865.4" x2="378.4" y2="865.4" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="867.8" text-anchor="start" fill="#070" font-weight="bold">GAUGE_TX</text>
 <line x1="652.7" y1="784.1" x2="642.6" y2="784.1" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="786.5" text-anchor="end" fill="#070" font-weight="bold">GAUGE_TX</text>
-<line x1="855.9" y1="1454.6" x2="866.1" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1457.0" text-anchor="start" fill="#070" font-weight="bold">GAUGE_TX</text>
-<line x1="368.2" y1="824.7" x2="378.4" y2="824.7" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="827.1" text-anchor="start" fill="#070" font-weight="bold">GAUGE_RX</text>
+<line x1="855.9" y1="1129.5" x2="866.1" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="868.1" y="1131.9" text-anchor="start" fill="#070" font-weight="bold">GAUGE_TX</text>
+<line x1="368.2" y1="885.7" x2="378.4" y2="885.7" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="888.1" text-anchor="start" fill="#070" font-weight="bold">GAUGE_RX</text>
 <line x1="652.7" y1="804.4" x2="642.6" y2="804.4" stroke="#060" stroke-width="1.2"/>
 <text x="640.6" y="806.8" text-anchor="end" fill="#070" font-weight="bold">GAUGE_RX</text>
-<line x1="368.2" y1="723.1" x2="378.4" y2="723.1" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="725.5" text-anchor="start" fill="#070" font-weight="bold">VBAT_SENSE</text>
-<line x1="1079.4" y1="1454.6" x2="1089.6" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1457.0" text-anchor="start" fill="#070" font-weight="bold">VBAT_SENSE</text>
-<line x1="1262.3" y1="1454.6" x2="1252.2" y2="1454.6" stroke="#060" stroke-width="1.2"/>
-<text x="1250.2" y="1457.0" text-anchor="end" fill="#070" font-weight="bold">VBAT_SENSE</text>
-<line x1="1262.3" y1="1403.8" x2="1252.2" y2="1403.8" stroke="#060" stroke-width="1.2"/>
-<text x="1250.2" y="1406.2" text-anchor="end" fill="#070" font-weight="bold">VBAT_SENSE</text>
+<line x1="368.2" y1="682.5" x2="378.4" y2="682.5" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="684.9" text-anchor="start" fill="#070" font-weight="bold">VBAT_SENSE</text>
+<line x1="1079.4" y1="1129.5" x2="1089.6" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="1091.6" y="1131.9" text-anchor="start" fill="#070" font-weight="bold">VBAT_SENSE</text>
+<line x1="1262.3" y1="1129.5" x2="1252.2" y2="1129.5" stroke="#060" stroke-width="1.2"/>
+<text x="1250.2" y="1131.9" text-anchor="end" fill="#070" font-weight="bold">VBAT_SENSE</text>
+<line x1="1262.3" y1="1078.7" x2="1252.2" y2="1078.7" stroke="#060" stroke-width="1.2"/>
+<text x="1250.2" y="1081.1" text-anchor="end" fill="#070" font-weight="bold">VBAT_SENSE</text>
 <line x1="1516.3" y1="387.8" x2="1506.2" y2="387.8" stroke="#060" stroke-width="1.2"/>
 <text x="1504.2" y="390.2" text-anchor="end" fill="#070" font-weight="bold">VBAT_SENSE</text>
-<line x1="368.2" y1="702.8" x2="378.4" y2="702.8" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="705.2" text-anchor="start" fill="#070" font-weight="bold">RST</text>
+<line x1="368.2" y1="784.1" x2="378.4" y2="784.1" stroke="#060" stroke-width="1.2"/>
+<text x="380.4" y="786.5" text-anchor="start" fill="#070" font-weight="bold">RST</text>
 <line x1="1516.3" y1="428.5" x2="1506.2" y2="428.5" stroke="#060" stroke-width="1.2"/>
 <text x="1504.2" y="430.9" text-anchor="end" fill="#070" font-weight="bold">RST</text>
 <line x1="83.8" y1="276.1" x2="73.6" y2="276.1" stroke="#060" stroke-width="1.2"/>
@@ -1103,141 +841,73 @@
 <text x="1168.9" y="898.2" text-anchor="end" fill="#070" font-weight="bold">TERM_MID</text>
 <line x1="977.8" y1="946.6" x2="967.7" y2="946.6" stroke="#060" stroke-width="1.2"/>
 <text x="965.7" y="949.0" text-anchor="end" fill="#070" font-weight="bold">TERM_MID</text>
-<line x1="205.7" y1="601.2" x2="195.5" y2="601.2" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="603.6" text-anchor="end" fill="#070" font-weight="bold">SDIO_CLK</text>
-<line x1="215.8" y1="1231.1" x2="205.7" y2="1231.1" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1233.5" text-anchor="end" fill="#070" font-weight="bold">SDIO_CLK</text>
-<line x1="205.7" y1="580.9" x2="195.5" y2="580.9" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="583.3" text-anchor="end" fill="#070" font-weight="bold">SDIO_CMD</text>
-<line x1="215.8" y1="1221.0" x2="205.7" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1223.4" text-anchor="end" fill="#070" font-weight="bold">SDIO_CMD</text>
-<line x1="632.4" y1="1221.0" x2="642.6" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">SDIO_CMD</text>
-<line x1="205.7" y1="682.5" x2="195.5" y2="682.5" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="684.9" text-anchor="end" fill="#070" font-weight="bold">SDIO_D0</text>
-<line x1="215.8" y1="1241.3" x2="205.7" y2="1241.3" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1243.7" text-anchor="end" fill="#070" font-weight="bold">SDIO_D0</text>
-<line x1="855.9" y1="1221.0" x2="866.1" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">SDIO_D0</text>
-<line x1="205.7" y1="662.2" x2="195.5" y2="662.2" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="664.6" text-anchor="end" fill="#070" font-weight="bold">SDIO_D1</text>
+<line x1="205.7" y1="906.0" x2="195.5" y2="906.0" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="908.4" text-anchor="end" fill="#070" font-weight="bold">I2C_SDA</text>
 <line x1="215.8" y1="1251.4" x2="205.7" y2="1251.4" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1253.8" text-anchor="end" fill="#070" font-weight="bold">SDIO_D1</text>
-<line x1="1079.4" y1="1221.0" x2="1089.6" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">SDIO_D1</text>
-<line x1="205.7" y1="641.8" x2="195.5" y2="641.8" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="644.2" text-anchor="end" fill="#070" font-weight="bold">SDIO_D2</text>
-<line x1="215.8" y1="1261.6" x2="205.7" y2="1261.6" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1264.0" text-anchor="end" fill="#070" font-weight="bold">SDIO_D2</text>
-<line x1="1303.0" y1="1221.0" x2="1313.1" y2="1221.0" stroke="#060" stroke-width="1.2"/>
-<text x="1315.1" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">SDIO_D2</text>
-<line x1="205.7" y1="621.5" x2="195.5" y2="621.5" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="623.9" text-anchor="end" fill="#070" font-weight="bold">SDIO_D3</text>
-<line x1="215.8" y1="1271.8" x2="205.7" y2="1271.8" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1274.2" text-anchor="end" fill="#070" font-weight="bold">SDIO_D3</text>
-<line x1="632.4" y1="1281.9" x2="642.6" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1284.3" text-anchor="start" fill="#070" font-weight="bold">SDIO_D3</text>
-<line x1="368.2" y1="926.3" x2="378.4" y2="926.3" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="928.7" text-anchor="start" fill="#070" font-weight="bold">C6_EN</text>
-<line x1="215.8" y1="1160.0" x2="205.7" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1162.4" text-anchor="end" fill="#070" font-weight="bold">C6_EN</text>
-<line x1="632.4" y1="1160.0" x2="642.6" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1162.4" text-anchor="start" fill="#070" font-weight="bold">C6_EN</text>
-<line x1="815.3" y1="1160.0" x2="805.1" y2="1160.0" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1162.4" text-anchor="end" fill="#070" font-weight="bold">C6_EN</text>
-<line x1="622.2" y1="1342.9" x2="612.1" y2="1342.9" stroke="#060" stroke-width="1.2"/>
-<text x="610.1" y="1345.3" text-anchor="end" fill="#070" font-weight="bold">C6_EN</text>
-<line x1="205.7" y1="845.0" x2="195.5" y2="845.0" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="847.4" text-anchor="end" fill="#070" font-weight="bold">C6_WAKE</text>
-<line x1="215.8" y1="1210.8" x2="205.7" y2="1210.8" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1213.2" text-anchor="end" fill="#070" font-weight="bold">C6_WAKE</text>
-<line x1="215.8" y1="1200.6" x2="205.7" y2="1200.6" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1203.0" text-anchor="end" fill="#070" font-weight="bold">C6_TXD</text>
-<line x1="205.7" y1="865.4" x2="195.5" y2="865.4" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="867.8" text-anchor="end" fill="#070" font-weight="bold">C6_TXD</text>
-<line x1="845.8" y1="1342.9" x2="835.6" y2="1342.9" stroke="#060" stroke-width="1.2"/>
-<text x="833.6" y="1345.3" text-anchor="end" fill="#070" font-weight="bold">C6_TXD</text>
-<line x1="215.8" y1="1190.5" x2="205.7" y2="1190.5" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1192.9" text-anchor="end" fill="#070" font-weight="bold">C6_RXD</text>
+<text x="203.7" y="1253.8" text-anchor="end" fill="#070" font-weight="bold">I2C_SDA</text>
 <line x1="205.7" y1="885.7" x2="195.5" y2="885.7" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="888.1" text-anchor="end" fill="#070" font-weight="bold">C6_RXD</text>
-<line x1="1069.3" y1="1342.9" x2="1059.1" y2="1342.9" stroke="#060" stroke-width="1.2"/>
-<text x="1057.1" y="1345.3" text-anchor="end" fill="#070" font-weight="bold">C6_RXD</text>
-<line x1="215.8" y1="1180.3" x2="205.7" y2="1180.3" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1182.7" text-anchor="end" fill="#070" font-weight="bold">C6_BOOT</text>
-<line x1="368.2" y1="906.0" x2="378.4" y2="906.0" stroke="#060" stroke-width="1.2"/>
-<text x="380.4" y="908.4" text-anchor="start" fill="#070" font-weight="bold">C6_BOOT</text>
-<line x1="855.9" y1="1281.9" x2="866.1" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1284.3" text-anchor="start" fill="#070" font-weight="bold">C6_BOOT</text>
-<line x1="1292.8" y1="1342.9" x2="1282.6" y2="1342.9" stroke="#060" stroke-width="1.2"/>
-<text x="1280.6" y="1345.3" text-anchor="end" fill="#070" font-weight="bold">C6_BOOT</text>
-<line x1="215.8" y1="1170.2" x2="205.7" y2="1170.2" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1172.6" text-anchor="end" fill="#070" font-weight="bold">C6_IO8</text>
-<line x1="1079.4" y1="1281.9" x2="1089.6" y2="1281.9" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1284.3" text-anchor="start" fill="#070" font-weight="bold">C6_IO8</text>
-<line x1="205.7" y1="824.7" x2="195.5" y2="824.7" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="827.1" text-anchor="end" fill="#070" font-weight="bold">I2C_SDA</text>
-<line x1="215.8" y1="1596.9" x2="205.7" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1599.3" text-anchor="end" fill="#070" font-weight="bold">I2C_SDA</text>
-<line x1="205.7" y1="804.4" x2="195.5" y2="804.4" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="806.8" text-anchor="end" fill="#070" font-weight="bold">I2C_SCL</text>
-<line x1="215.8" y1="1617.2" x2="205.7" y2="1617.2" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1619.6" text-anchor="end" fill="#070" font-weight="bold">I2C_SCL</text>
-<line x1="205.7" y1="784.1" x2="195.5" y2="784.1" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="786.5" text-anchor="end" fill="#070" font-weight="bold">RTC_INT</text>
-<line x1="215.8" y1="1637.5" x2="205.7" y2="1637.5" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1639.9" text-anchor="end" fill="#070" font-weight="bold">RTC_INT</text>
-<line x1="855.9" y1="1525.8" x2="866.1" y2="1525.8" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1528.2" text-anchor="start" fill="#070" font-weight="bold">RTC_INT</text>
-<line x1="215.8" y1="1576.6" x2="205.7" y2="1576.6" stroke="#060" stroke-width="1.2"/>
-<text x="203.7" y="1579.0" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
-<line x1="591.8" y1="1596.9" x2="581.6" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="579.6" y="1599.3" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
-<line x1="815.3" y1="1596.9" x2="805.1" y2="1596.9" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1599.3" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
-<line x1="1079.4" y1="1668.0" x2="1089.6" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="1091.6" y="1670.4" text-anchor="start" fill="#070" font-weight="bold">RTC_VBAT</text>
-<line x1="632.4" y1="1668.0" x2="642.6" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="644.6" y="1670.4" text-anchor="start" fill="#070" font-weight="bold">RTC_CHG_A</text>
-<line x1="815.3" y1="1668.0" x2="805.1" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="803.1" y="1670.4" text-anchor="end" fill="#070" font-weight="bold">RTC_CHG_A</text>
-<line x1="855.9" y1="1668.0" x2="866.1" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="868.1" y="1670.4" text-anchor="start" fill="#070" font-weight="bold">RTC_CHG_B</text>
-<line x1="1038.8" y1="1668.0" x2="1028.6" y2="1668.0" stroke="#060" stroke-width="1.2"/>
-<text x="1026.6" y="1670.4" text-anchor="end" fill="#070" font-weight="bold">RTC_CHG_B</text>
-<line x1="1485.8" y1="763.8" x2="1475.7" y2="763.8" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="766.2" text-anchor="end" fill="#070" font-weight="bold">GPS_VCC</text>
-<line x1="1475.7" y1="591.0" x2="1465.5" y2="591.0" stroke="#060" stroke-width="1.2"/>
-<text x="1463.5" y="593.4" text-anchor="end" fill="#070" font-weight="bold">GPS_VCC</text>
-<line x1="1485.8" y1="956.8" x2="1475.7" y2="956.8" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="959.2" text-anchor="end" fill="#070" font-weight="bold">GPS_VCC</text>
-<line x1="1475.7" y1="631.7" x2="1465.5" y2="631.7" stroke="#060" stroke-width="1.2"/>
-<text x="1463.5" y="634.1" text-anchor="end" fill="#070" font-weight="bold">GPS_TXD</text>
-<line x1="1485.8" y1="855.2" x2="1475.7" y2="855.2" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="857.6" text-anchor="end" fill="#070" font-weight="bold">GPS_TXD</text>
-<line x1="1526.5" y1="855.2" x2="1536.6" y2="855.2" stroke="#060" stroke-width="1.2"/>
-<text x="1538.6" y="857.6" text-anchor="start" fill="#070" font-weight="bold">GPS_RX</text>
-<line x1="205.7" y1="763.8" x2="195.5" y2="763.8" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="766.2" text-anchor="end" fill="#070" font-weight="bold">GPS_RX</text>
-<line x1="1475.7" y1="652.0" x2="1465.5" y2="652.0" stroke="#060" stroke-width="1.2"/>
-<text x="1463.5" y="654.4" text-anchor="end" fill="#070" font-weight="bold">GPS_RXD</text>
+<text x="193.5" y="888.1" text-anchor="end" fill="#070" font-weight="bold">I2C_SCL</text>
+<line x1="215.8" y1="1271.8" x2="205.7" y2="1271.8" stroke="#060" stroke-width="1.2"/>
+<text x="203.7" y="1274.2" text-anchor="end" fill="#070" font-weight="bold">I2C_SCL</text>
+<line x1="205.7" y1="641.8" x2="195.5" y2="641.8" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="644.2" text-anchor="end" fill="#070" font-weight="bold">RTC_INT</text>
+<line x1="215.8" y1="1292.1" x2="205.7" y2="1292.1" stroke="#060" stroke-width="1.2"/>
+<text x="203.7" y="1294.5" text-anchor="end" fill="#070" font-weight="bold">RTC_INT</text>
+<line x1="855.9" y1="1221.0" x2="866.1" y2="1221.0" stroke="#060" stroke-width="1.2"/>
+<text x="868.1" y="1223.4" text-anchor="start" fill="#070" font-weight="bold">RTC_INT</text>
+<line x1="215.8" y1="1231.1" x2="205.7" y2="1231.1" stroke="#060" stroke-width="1.2"/>
+<text x="203.7" y="1233.5" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
+<line x1="591.8" y1="1292.1" x2="581.6" y2="1292.1" stroke="#060" stroke-width="1.2"/>
+<text x="579.6" y="1294.5" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
+<line x1="815.3" y1="1292.1" x2="805.1" y2="1292.1" stroke="#060" stroke-width="1.2"/>
+<text x="803.1" y="1294.5" text-anchor="end" fill="#070" font-weight="bold">RTC_VBAT</text>
+<line x1="1079.4" y1="1363.2" x2="1089.6" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="1091.6" y="1365.6" text-anchor="start" fill="#070" font-weight="bold">RTC_VBAT</text>
+<line x1="632.4" y1="1363.2" x2="642.6" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="644.6" y="1365.6" text-anchor="start" fill="#070" font-weight="bold">RTC_CHG_A</text>
+<line x1="815.3" y1="1363.2" x2="805.1" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="803.1" y="1365.6" text-anchor="end" fill="#070" font-weight="bold">RTC_CHG_A</text>
+<line x1="855.9" y1="1363.2" x2="866.1" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="868.1" y="1365.6" text-anchor="start" fill="#070" font-weight="bold">RTC_CHG_B</text>
+<line x1="1038.8" y1="1363.2" x2="1028.6" y2="1363.2" stroke="#060" stroke-width="1.2"/>
+<text x="1026.6" y="1365.6" text-anchor="end" fill="#070" font-weight="bold">RTC_CHG_B</text>
+<line x1="1465.5" y1="652.0" x2="1455.4" y2="652.0" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="654.4" text-anchor="end" fill="#070" font-weight="bold">GPS_TX</text>
+<line x1="1485.8" y1="946.6" x2="1475.7" y2="946.6" stroke="#060" stroke-width="1.2"/>
+<text x="1473.7" y="949.0" text-anchor="end" fill="#070" font-weight="bold">GPS_TX</text>
+<line x1="1526.5" y1="946.6" x2="1536.6" y2="946.6" stroke="#060" stroke-width="1.2"/>
+<text x="1538.6" y="949.0" text-anchor="start" fill="#070" font-weight="bold">GPS_TX_IN</text>
+<line x1="205.7" y1="702.8" x2="195.5" y2="702.8" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="705.2" text-anchor="end" fill="#070" font-weight="bold">GPS_TX_IN</text>
+<line x1="1465.5" y1="631.7" x2="1455.4" y2="631.7" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="634.1" text-anchor="end" fill="#070" font-weight="bold">GPS_RX</text>
+<line x1="205.7" y1="682.5" x2="195.5" y2="682.5" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="684.9" text-anchor="end" fill="#070" font-weight="bold">GPS_RX</text>
+<line x1="1465.5" y1="570.7" x2="1455.4" y2="570.7" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="573.1" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS</text>
+<line x1="1485.8" y1="997.4" x2="1475.7" y2="997.4" stroke="#060" stroke-width="1.2"/>
+<text x="1473.7" y="999.8" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS</text>
+<line x1="1526.5" y1="997.4" x2="1536.6" y2="997.4" stroke="#060" stroke-width="1.2"/>
+<text x="1538.6" y="999.8" text-anchor="start" fill="#070" font-weight="bold">GPS_PPS_IN</text>
+<line x1="205.7" y1="662.2" x2="195.5" y2="662.2" stroke="#060" stroke-width="1.2"/>
+<text x="193.5" y="664.6" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS_IN</text>
+<line x1="1465.5" y1="713.0" x2="1455.4" y2="713.0" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="715.4" text-anchor="end" fill="#070" font-weight="bold">GPS_EN</text>
+<line x1="1546.8" y1="814.6" x2="1557.0" y2="814.6" stroke="#060" stroke-width="1.2"/>
+<text x="1559.0" y="817.0" text-anchor="start" fill="#070" font-weight="bold">GPS_EN</text>
 <line x1="205.7" y1="743.4" x2="195.5" y2="743.4" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="745.8" text-anchor="end" fill="#070" font-weight="bold">GPS_RXD</text>
-<line x1="1475.7" y1="672.3" x2="1465.5" y2="672.3" stroke="#060" stroke-width="1.2"/>
-<text x="1463.5" y="674.7" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS</text>
-<line x1="1485.8" y1="906.0" x2="1475.7" y2="906.0" stroke="#060" stroke-width="1.2"/>
-<text x="1473.7" y="908.4" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS</text>
-<line x1="1526.5" y1="906.0" x2="1536.6" y2="906.0" stroke="#060" stroke-width="1.2"/>
-<text x="1538.6" y="908.4" text-anchor="start" fill="#070" font-weight="bold">GPS_PPS_IN</text>
-<line x1="205.7" y1="723.1" x2="195.5" y2="723.1" stroke="#060" stroke-width="1.2"/>
-<text x="193.5" y="725.5" text-anchor="end" fill="#070" font-weight="bold">GPS_PPS_IN</text>
-<text x="22.8" y="36.0" font-size="10.2" fill="#222">Haltech gauges: hub carrier, ESP32-P4 variant (Olimex ESP32-P4-DevKit)</text>
+<text x="193.5" y="745.8" text-anchor="end" fill="#070" font-weight="bold">GPS_OFF</text>
+<line x1="1465.5" y1="814.6" x2="1455.4" y2="814.6" stroke="#060" stroke-width="1.2"/>
+<text x="1453.4" y="817.0" text-anchor="end" fill="#070" font-weight="bold">GPS_OFF</text>
+<line x1="1485.8" y1="895.8" x2="1475.7" y2="895.8" stroke="#060" stroke-width="1.2"/>
+<text x="1473.7" y="898.2" text-anchor="end" fill="#070" font-weight="bold">GPS_OFF</text>
+<text x="22.8" y="36.0" font-size="10.2" fill="#222">Haltech gauges: hub carrier, ESP32-P4 variant (Waveshare ESP32-P4-WIFI6)</text>
 <text x="22.8" y="60.0" font-size="7.1" fill="#222">J10 is the ECU side: 1 +12V switched, 2 GND, 3 CAN H, 4 CAN L. J11 is the gauge chain: 1 +5V, 2 GND, 3 CAN H, 4 CAN L.</text>
-<text x="22.8" y="72.0" font-size="7.1" fill="#222">U4 is the Olimex ESP32-P4-DevKit (rev C), pins down, USB-C end at EXT pin 1. It takes its 3.3 V rail to the carrier on EXT1-1.</text>
-<text x="22.8" y="84.0" font-size="7.1" fill="#222">J13 feeds the DevKit: wire J13-1 to POE_PWR1 pin 4 (+5VP) and J13-2 to pin 3 (GND). Leave POE_PWR1 pins 1 and 2 open.</text>
-<text x="22.8" y="96.0" font-size="7.1" fill="#222">Do not feed the DevKit through EXT2-1 (+5V): with USB plugged in, that pin back-feeds the PC.</text>
-<text x="22.8" y="108.0" font-size="7.1" fill="#222">U6 is the Wi-Fi radio (ESP-Hosted over SDIO, the pins Espressif's own P4 board uses). Antenna at a board edge, no copper under it.</text>
-<text x="22.8" y="120.0" font-size="7.1" fill="#222">U5 is the clock. BT1 is a CR2032; fit JP2 only with a rechargeable ML2032, never with a CR2032.</text>
-<text x="22.8" y="132.0" font-size="7.1" fill="#222">J12 is the optional GPS header: 1 VCC (JP3 picks 3.3 V or 5 V), 2 GND, 3 TXD from the module, 4 RXD to it, 5 PPS.</text>
-<text x="22.8" y="144.0" font-size="7.1" fill="#222">The DevKit already has 2.2 k pull-ups on SDA and SCL (GPIO7, GPIO8). Footprints are generic or placeholders.</text>
+<text x="22.8" y="72.0" font-size="7.1" fill="#222">U4 is the Waveshare ESP32-P4-WIFI6 (SKU 32020) on two 1x20 sockets: Raspberry Pi Pico pin pattern, USB-C end at pins 1 and 40.</text>
+<text x="22.8" y="84.0" font-size="7.1" fill="#222">Its Wi-Fi (an ESP32-C6) is on the board, with the antenna at the far end: keep the carrier's copper away from that end.</text>
+<text x="22.8" y="96.0" font-size="7.1" fill="#222">The carrier's 5 V reaches the board's VSYS pin through D3. Never connect VBUS (pin 40): it is the board's USB 5 V.</text>
+<text x="22.8" y="108.0" font-size="7.1" fill="#222">U5 is the clock, on the board's own I2C bus (GPIO7, GPIO8; 2.2 k pull-ups on the board). BT1 is a CR2032; fit JP2 only with a rechargeable ML2032.</text>
+<text x="22.8" y="120.0" font-size="7.1" fill="#222">J12 takes an Adafruit Ultimate GPS (product 746) by its 9-pin header. It uses an external active antenna, through a u.FL-to-SMA lead to a socket in the case.</text>
+<text x="22.8" y="132.0" font-size="7.1" fill="#222">Q1 turns the GPS off while GPIO50 is high (it pulls the GPS board's EN low); R24 keeps the GPS on while the P4 is in reset.</text>
+<text x="22.8" y="144.0" font-size="7.1" fill="#222">Footprints are generic or placeholders, except U4's pins and outline and J12's pins and holes, which come from the makers' files.</text>
 </svg>

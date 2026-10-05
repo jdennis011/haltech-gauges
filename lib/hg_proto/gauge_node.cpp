@@ -29,6 +29,10 @@ void GaugeNode::init(const XferLink& link, const uint8_t mac[6], uint32_t node, 
     receiver_.init(link, node, Dir::HubToGauge, handler.transfer);
 }
 
+void GaugeNode::setThemeColours(const uint32_t colours[kThemeColourCount]) {
+    memcpy(themeColours_, colours, sizeof(themeColours_));
+}
+
 void GaugeNode::setNode(uint32_t node) {
     node_ = node;
     conflict_ = false;
@@ -100,6 +104,20 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
             sender_.onFrame(frame, nowMs);
             break;
 
+        case Msg::ThemeColours: {
+            uint32_t next[kThemeColourCount];
+            memcpy(next, themeColours_, sizeof(next));
+            if (!unpackThemeColours(frame, next)) break;
+            if (memcmp(next, themeColours_, sizeof(next)) != 0) {
+                memcpy(themeColours_, next, sizeof(next));
+                themeDirty_ = true;
+                themeChangedMs_ = nowMs;
+            }
+            // Told once per set: after its last frame, or by poll() if that was lost.
+            if (themeDirty_ && frame.data[0] == kThemeColourFrames - 1) notifyThemeColours();
+            break;
+        }
+
         case Msg::Alert:
             if (alerts_.onFrame(frame, nowMs) && handler_.alert) handler_.alert(alerts_.current(), handler_.ctx);
             break;
@@ -109,7 +127,13 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
     }
 }
 
+void GaugeNode::notifyThemeColours() {
+    themeDirty_ = false;
+    if (handler_.themeColours) handler_.themeColours(themeColours_, handler_.ctx);
+}
+
 void GaugeNode::poll(uint32_t nowMs) {
+    if (themeDirty_ && uint32_t(nowMs - themeChangedMs_) >= 500) notifyThemeColours();
     // An alert the hub has stopped repeating comes down, hub or no hub.
     if (alerts_.poll(nowMs) && handler_.alert) handler_.alert(alerts_.current(), handler_.ctx);
     hubPresent_ = haveBeacon_ && uint32_t(nowMs - lastBeaconMs_) < kBeaconTimeoutMs;

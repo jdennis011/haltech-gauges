@@ -145,7 +145,22 @@ bool parseHex(const char* s, Color& out) {
     return true;
 }
 
-// A colour is "#RRGGBB", "#RGB", or the name of a theme role.
+// "themecolour1" to "themecolour8" (or "themecolor"): the index, -1 for a
+// different word, -2 for a theme colour number out of range.
+int themeColourName(const char* s) {
+    const char* rest = nullptr;
+    if (strncmp(s, "themecolour", 11) == 0) {
+        rest = s + 11;
+    } else if (strncmp(s, "themecolor", 10) == 0) {
+        rest = s + 10;
+    } else {
+        return -1;
+    }
+    if (rest[0] >= '1' && rest[0] <= '0' + int(kThemeColours) && rest[1] == 0) return rest[0] - '1';
+    return -2;
+}
+
+// A colour is "#RRGGBB", "#RGB", the name of a theme role, or a hub theme colour.
 Color readColor(JsonObjectConst obj, const char* key, Color fallback, Ctx& ctx) {
     JsonVariantConst v = obj[key];
     if (v.isNull()) return fallback;
@@ -160,9 +175,15 @@ Color readColor(JsonObjectConst obj, const char* key, Color fallback, Ctx& ctx) 
     if (strcmp(s, "dim") == 0) return ctx.theme.dim;
     if (strcmp(s, "warn") == 0) return ctx.theme.warn;
     if (strcmp(s, "alert") == 0) return ctx.theme.alert;
+    const int index = themeColourName(s);
+    if (index >= 0) return themeColourRef(size_t(index));
+    if (index == -2) {
+        ctx.fail("'%s': theme colours are themecolour1 to themecolour8", key);
+        return fallback;
+    }
     Color c;
     if (!parseHex(s, c)) {
-        ctx.fail("'%s': '%.20s' is not a colour (use #RRGGBB or a theme role)", key, s);
+        ctx.fail("'%s': '%.20s' is not a colour (use #RRGGBB, a theme role or themecolour1 to 8)", key, s);
         return fallback;
     }
     return c;
@@ -575,7 +596,8 @@ void parseTheme(JsonVariantConst v, Ctx& ctx) {
         ctx.fail("'theme' must be a preset name or an object of colours");
         return;
     }
-    // Roles are not usable inside the theme itself, so each entry must be a hex colour.
+    // Roles are not usable inside the theme itself: each entry is a hex colour or a
+    // hub theme colour.
     struct Role {
         const char* key;
         Color* slot;
@@ -586,8 +608,14 @@ void parseTheme(JsonVariantConst v, Ctx& ctx) {
     for (const Role& r : roles) {
         JsonVariantConst c = obj[r.key];
         if (c.isNull()) continue;
-        if (!parseHex(c.as<const char*>(), *r.slot)) {
-            ctx.fail("theme '%s' must be a #RRGGBB colour", r.key);
+        const char* s = c.as<const char*>();
+        const int index = s ? themeColourName(s) : -1;
+        if (index >= 0) {
+            *r.slot = themeColourRef(size_t(index));
+            continue;
+        }
+        if (!parseHex(s, *r.slot)) {
+            ctx.fail("theme '%s' must be a #RRGGBB colour or themecolour1 to 8", r.key);
             return;
         }
     }
@@ -600,6 +628,46 @@ const ThemePreset* themePresets(size_t& count) {
     count = sizeof(kPresets) / sizeof(kPresets[0]);
     return kPresets;
 }
+
+ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& out) {
+    ParseResult result;
+    JsonDocument doc;
+    if (deserializeJson(doc, json, size)) {
+        result.error = "not valid JSON";
+        return result;
+    }
+    JsonVariantConst root = doc.as<JsonVariantConst>();
+    JsonArrayConst list = root.is<JsonObjectConst>() ? root["colours"].as<JsonArrayConst>()
+                                                      : root.as<JsonArrayConst>();
+    if (list.isNull() || list.size() != kThemeColours) {
+        result.error = "theme colours must be a list of 8";
+        return result;
+    }
+    ThemeColours tc;
+    char buf[64];
+    size_t i = 0;
+    for (JsonVariantConst item : list) {
+        const char* value = item["value"].as<const char*>();
+        if (!parseHex(value, tc.value[i])) {
+            snprintf(buf, sizeof(buf), "theme colour %u: 'value' must look like #FF8C00", unsigned(i + 1));
+            result.error = buf;
+            return result;
+        }
+        const char* name = item["name"] | "";
+        if (strlen(name) > kMaxThemeColourName) {
+            snprintf(buf, sizeof(buf), "theme colour %u: 'name' is longer than 16 characters", unsigned(i + 1));
+            result.error = buf;
+            return result;
+        }
+        tc.name[i] = name;
+        i++;
+    }
+    out = tc;
+    result.ok = true;
+    return result;
+}
+
+void formatColor(Color c, char out[8]) { snprintf(out, 8, "#%06lX", (unsigned long)(c & 0xFFFFFF)); }
 
 const char* widgetTypeName(WidgetType type) { return nameOf(kWidgetTypes, uint8_t(type)); }
 const char* fontName(Font font) { return nameOf(kFonts, uint8_t(font)); }

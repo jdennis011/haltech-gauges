@@ -38,6 +38,7 @@ enum class Msg : uint8_t {
     Command = 4,
     CommandAck = 5,
     Alert = 6,  // hub to gauge: a message to show over the face, in up to six frames
+    ThemeColours = 7,  // hub to gauges: the hub's theme colours, in four frames
     XferBegin = 8,
     XferData = 9,
     XferEnd = 10,
@@ -145,6 +146,14 @@ struct Alert {
     char text[kAlertMaxText + 1] = {};
 };
 
+// The hub's theme colours, the "themecolour1" to "themecolour8" a config can
+// use. Four frames: the frame number (0 to 3), then colours 2k and 2k+1 as
+// three bytes each. The hub sends them when they change, to a gauge that comes
+// online, and every kThemeColourRepeatMs; each frame stands on its own.
+constexpr size_t kThemeColourCount = 8;
+constexpr size_t kThemeColourFrames = kThemeColourCount / 2;
+constexpr uint32_t kThemeColourRepeatMs = 10000;
+
 struct XferBegin {
     uint8_t session = 0;
     XferKind kind = XferKind::Config;
@@ -181,6 +190,10 @@ CanFrame pack(const Request& m, uint32_t node);
 // Fills `out` with the frames of one alert and returns how many. `seq` (0..15)
 // tells one message from the next.
 size_t packAlert(const Alert& m, uint8_t seq, uint32_t node, CanFrame out[kAlertMaxFrames]);
+size_t packThemeColours(const uint32_t colours[kThemeColourCount], uint32_t node,
+                        CanFrame out[kThemeColourFrames]);
+// Writes the two colours one frame carries into `colours`. False if malformed.
+bool unpackThemeColours(const CanFrame& f, uint32_t colours[kThemeColourCount]);
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node);
 CanFrame pack(const XferEnd& m, Dir dir, uint32_t node);
 CanFrame pack(const XferAck& m, Dir dir, uint32_t node);

@@ -28,7 +28,29 @@ constexpr size_t kMaxTextLength = 32;
 constexpr size_t kMaxPathLength = 1024;   // SVG path data of a path widget
 constexpr size_t kMaxPolygonPoints = 16;
 
-typedef uint32_t Color;  // 0xRRGGBB
+typedef uint32_t Color;  // 0xRRGGBB, or a reference to one of the hub's theme colours
+
+// Theme colours: eight colours kept on the hub and shared by every config and
+// gauge. A config names them "themecolour1" to "themecolour8"; the parser keeps
+// the reference, and whatever draws the face looks it up with resolveColor(),
+// so changing one on the hub recolours every widget that uses it.
+constexpr size_t kThemeColours = 8;
+constexpr size_t kMaxThemeColourName = 16;
+constexpr Color kThemeColourRef = 0x80000000u;
+constexpr Color themeColourRef(size_t index) { return kThemeColourRef | Color(index); }
+constexpr bool isThemeColourRef(Color c) { return (c & kThemeColourRef) != 0; }
+constexpr size_t themeColourIndex(Color c) { return size_t(c & 0x7); }
+// The colour to draw: a theme colour reference looked up, anything else as it is.
+inline Color resolveColor(Color c, const Color themeColours[kThemeColours]) {
+    return isThemeColourRef(c) ? themeColours[themeColourIndex(c)] : c;
+}
+
+struct ThemeColours {
+    Color value[kThemeColours] = {0xFFFFFF, 0xFF8C00, 0xFF3B30, 0xFFCC00,
+                                  0x30D158, 0x0A84FF, 0x8E8E93, 0x000000};
+    std::string name[kThemeColours] = {"White", "Orange", "Red",  "Yellow",
+                                       "Green", "Blue",   "Grey", "Black"};
+};
 
 enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
@@ -185,6 +207,12 @@ struct ParseResult {
 // Parses and validates a configuration. On failure `out` is left in an
 // unspecified state and must not be used.
 ParseResult parseConfig(const uint8_t* json, size_t size, Config& out);
+
+// Parses the hub's theme colours: a list of eight {"value": "#RRGGBB", "name": "..."},
+// bare or as {"colours": [...]}. `out` is only changed on success.
+ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& out);
+// "#RRGGBB" into `out`, which must hold 8 characters.
+void formatColor(Color c, char out[8]);
 
 const char* widgetTypeName(WidgetType type);
 const char* fontName(Font font);

@@ -227,6 +227,24 @@ bool AlertReceiver::poll(uint32_t nowMs) {
     return true;
 }
 
+size_t packThemeColours(const uint32_t colours[kThemeColourCount], uint32_t node,
+                        CanFrame out[kThemeColourFrames]) {
+    for (size_t k = 0; k < kThemeColourFrames; k++) {
+        out[k] = makeFrame(Msg::ThemeColours, Dir::HubToGauge, node, 7);
+        out[k].data[0] = uint8_t(k);
+        put24(out[k].data + 1, colours[2 * k] & 0xFFFFFF);
+        put24(out[k].data + 4, colours[2 * k + 1] & 0xFFFFFF);
+    }
+    return kThemeColourFrames;
+}
+
+bool unpackThemeColours(const CanFrame& f, uint32_t colours[kThemeColourCount]) {
+    if (f.len < 7 || f.data[0] >= kThemeColourFrames) return false;
+    colours[2 * f.data[0]] = get24(f.data + 1);
+    colours[2 * f.data[0] + 1] = get24(f.data + 4);
+    return true;
+}
+
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node) {
     CanFrame f = makeFrame(Msg::XferBegin, dir, node, 6);
     f.data[0] = m.session;

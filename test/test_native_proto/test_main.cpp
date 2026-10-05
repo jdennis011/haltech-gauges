@@ -330,6 +330,27 @@ void test_alert_survives_lost_frames_and_times_out() {
     TEST_ASSERT_FALSE(deaf.current().show);
 }
 
+void test_theme_colours_round_trip() {
+    const uint32_t colours[kThemeColourCount] = {0xFFFFFF, 0xFF8C00, 0x123456, 0xABCDEF,
+                                                 0x000001, 0x800000, 0x00FF00, 0x000000};
+    CanFrame frames[kThemeColourFrames];
+    TEST_ASSERT_EQUAL(4, packThemeColours(colours, kBroadcastNode, frames));
+    uint32_t got[kThemeColourCount] = {};
+    for (const CanFrame& f : frames) {
+        TEST_ASSERT_EQUAL(int(Msg::ThemeColours), int(idMsg(f.id)));
+        TEST_ASSERT_EQUAL_HEX32(kBroadcastNode, idNode(f.id));
+        TEST_ASSERT_TRUE(unpackThemeColours(f, got));
+    }
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(colours, got, kThemeColourCount);
+
+    CanFrame bad = frames[0];
+    bad.data[0] = 4;
+    TEST_ASSERT_FALSE(unpackThemeColours(bad, got));
+    bad = frames[0];
+    bad.len = 6;
+    TEST_ASSERT_FALSE(unpackThemeColours(bad, got));
+}
+
 void test_xfer_small_payload() {
     Rig rig;
     auto payload = makePayload(10);
@@ -513,6 +534,7 @@ int main(int, char**) {
     RUN_TEST(test_request_round_trip);
     RUN_TEST(test_alert_round_trip);
     RUN_TEST(test_alert_survives_lost_frames_and_times_out);
+    RUN_TEST(test_theme_colours_round_trip);
     RUN_TEST(test_xfer_small_payload);
     RUN_TEST(test_xfer_edge_sizes);
     RUN_TEST(test_xfer_4k_config_is_fast_on_a_clean_link);

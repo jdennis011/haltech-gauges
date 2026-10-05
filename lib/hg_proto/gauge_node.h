@@ -23,6 +23,8 @@ public:
         // The message to show over the face changed; `show` is false when
         // there is none any more. May be null.
         void (*alert)(const Alert& alert, void* ctx);
+        // The hub's theme colours changed. May be null.
+        void (*themeColours)(const uint32_t colours[kThemeColourCount], void* ctx);
         void* ctx;
     };
 
@@ -38,6 +40,10 @@ public:
     // True while beacons are arriving. Nothing is transmitted otherwise, so a
     // gauge plugged straight into a Haltech bus never sends a frame.
     bool hubPresent() const { return hubPresent_; }
+
+    // The theme colours to start from, e.g. the last ones the hub sent, kept in flash.
+    void setThemeColours(const uint32_t colours[kThemeColourCount]);
+    const uint32_t* themeColours() const { return themeColours_; }
     uint32_t node() const { return node_; }
 
     // Set when another device was seen transmitting with this node id. The
@@ -62,6 +68,7 @@ public:
 
 private:
     bool send(const CanFrame& frame) { return link_.send(frame, link_.ctx); }
+    void notifyThemeColours();
 
     XferLink link_ = {};
     Handler handler_ = {};
@@ -85,6 +92,9 @@ private:
     XferReceiver receiver_;
     XferSender sender_;
     AlertReceiver alerts_;
+    uint32_t themeColours_[kThemeColourCount] = {};
+    bool themeDirty_ = false;
+    uint32_t themeChangedMs_ = 0;
 };
 
 }  // namespace proto

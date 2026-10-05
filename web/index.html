@@ -75,6 +75,10 @@ input[type=range]{width:110px}
 .wrow input[type=text]{width:150px}
 .wrow select.chan{max-width:230px}
 .colorctl{display:inline-flex;gap:4px;align-items:center}
+.tcol{display:flex;flex-wrap:wrap;gap:8px 16px}
+.tcol .tc{display:inline-flex;gap:5px;align-items:center}
+.tcol input[type=text]{width:100px;padding:4px 8px;font-size:13px}
+.tcol input[type=color]{width:36px;height:28px;padding:1px 2px;border-radius:6px}
 .wrow details.more{margin-top:6px}
 .wrow details.more summary{cursor:pointer;color:var(--dim);font-size:13px;margin-bottom:6px}
 .wrow .zones{display:inline-flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
@@ -178,6 +182,12 @@ input[type=range]{width:110px}
     </div>
     <table id="config-table" style="margin-top:10px"><thead><tr><th>Name</th><th>Title</th><th>Faces</th><th>Size</th><th>Assigned to</th><th></th></tr></thead><tbody></tbody></table>
   </div>
+  <div class="card" id="theme-card">
+    <div class="row"><strong>Theme colours</strong><span class="muted">kept on the hub, shared by every config and gauge</span></div>
+    <div class="muted" style="font-size:13px;margin:6px 0">Pick one from a widget's colour list, or write <span class="mono">themecolour1</span> to <span class="mono">themecolour8</span> in the JSON. Change one here and every widget using it changes with it, on every face of every gauge.</div>
+    <div class="tcol" id="theme-colours"></div>
+    <div class="msg" id="theme-msg"></div>
+  </div>
   <div class="card" id="editor" style="display:none">
     <div class="row">
       <label class="inline">Name <input type="text" id="edit-name" maxlength="32" size="18"></label>
@@ -260,11 +270,17 @@ function el(tag, attrs, ...children) {
 const btn = (label, onclick, disabled, cls, title) => el('button', { class: 'btn' + (cls ? ' ' + cls : ''), onclick, disabled: disabled ? '' : null, title: title || null }, label);
 const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2); };
 
+// The hub's theme colours until it says otherwise: the same defaults the hub starts with.
+const DEFAULT_THEME_COLOURS = [['#FFFFFF', 'White'], ['#FF8C00', 'Orange'], ['#FF3B30', 'Red'], ['#FFCC00', 'Yellow'],
+  ['#30D158', 'Green'], ['#0A84FF', 'Blue'], ['#8E8E93', 'Grey'], ['#000000', 'Black']].map(([value, name]) => ({ value, name }));
+const themeColourIndex = c => { const m = /^themecolou?r([1-8])$/.exec(c || ''); return m ? +m[1] - 1 : -1; };
+
 const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
   editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [], user: null,
   alerts: [], alertStates: [],
+  themeColours: DEFAULT_THEME_COLOURS.map(c => Object.assign({}, c)),
 };
 
 // Signed in to the online copy: these paths go to the account's storage.
@@ -378,6 +394,11 @@ function onMessage(m) {
   else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGaugesIfIdle(); renderTryGauges(); }
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
   else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
+  else if (m.t === 'themeColours' && Array.isArray(m.colours) && m.colours.length === 8) {
+    state.themeColours = m.colours;
+    renderThemeColours();
+    themeColoursChanged();
+  }
 }
 
 // ---------------------------------------------------------------- gauges
@@ -800,7 +821,8 @@ async function buildBackup() {
   const configs = {};
   for (const c of list) configs[c.name] = await api.get('/api/configs/' + c.name);
   return { kind: 'haltech-gauges-backup', schema: 1, exported: new Date().toISOString(),
-    hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments, alerts: alerts.rules || [] };
+    hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments, alerts: alerts.rules || [],
+    themeColours: (await api.get('/api/theme-colours')).colours };
 }
 
 async function exportAll() {
@@ -852,6 +874,10 @@ async function importAll(file) {
   for (const [mac, name] of Object.entries(assignments)) {
     try { await api.put('/api/assignments/' + (macMap[mac] || mac), { name }); done.assignments++; }
     catch (e) { errors.push('assignment ' + mac + ': ' + e.message); }
+  }
+  if (Array.isArray(bundle.themeColours) && bundle.themeColours.length === 8) {
+    try { await api.put('/api/theme-colours', bundle.themeColours); state.themeColours = bundle.themeColours; renderThemeColours(); themeColoursChanged(); }
+    catch (e) { errors.push('theme colours: ' + e.message); }
   }
   if (alerts) {
     // An alert aimed at one planned gauge follows that gauge to its MAC here.
@@ -1019,22 +1045,24 @@ function hex6(c) {
   if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c || '')) return '#ffffff';
   return c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c.toLowerCase();
 }
-// A theme role or a custom colour: a dropdown of roles plus a colour picker that
-// shows the current colour either way and is live when "custom" is chosen.
+// A theme role, one of the hub's theme colours, or a custom colour: a dropdown
+// plus a colour picker that shows the current colour and is live for "custom".
 // `set` receives the new value ('' for the default). `same` is the colour the
 // default follows when it is another property of the widget, not a theme role.
 function colorPicker(val, defaultRole, set, same) {
   const theme = resolveTheme(state.previewCfg ? state.previewCfg.theme : null);
   val = val || '';
   const custom = /^#/.test(val);
-  const fallback = same ? (/^#/.test(same) ? same : theme[same]) : theme[defaultRole];
-  const pick = el('input', { type: 'color', value: hex6(custom ? val : val ? theme[val] : fallback), disabled: custom ? null : '',
+  const fallback = color(same || defaultRole, theme, '#FFFFFF');
+  const pick = el('input', { type: 'color', value: hex6(custom ? val : val ? color(val, theme, fallback) : fallback), disabled: custom ? null : '',
     onchange: ev => set(ev.target.value.toUpperCase()) });
   const sel = el('select', { onchange: ev => {
     if (ev.target.value === 'custom') { pick.disabled = false; set(pick.value.toUpperCase()); }
     else set(ev.target.value);
   } }, el('option', { value: '' }, same ? 'default (same)' : 'default (' + defaultRole + ')'),
     ...ROLES.map(r => el('option', { value: r, selected: r === val ? '' : null }, r)),
+    ...state.themeColours.map((c, k) => el('option', { value: 'themecolour' + (k + 1), selected: themeColourIndex(val) === k ? '' : null },
+      'theme ' + (k + 1) + (c.name ? ': ' + c.name : ''))),
     el('option', { value: 'custom', selected: custom ? '' : null }, 'custom'));
   return el('span', { class: 'colorctl' }, sel, pick);
 }
@@ -1269,6 +1297,77 @@ $('#all-fonts').addEventListener('change', ev => {
   ev.target.value = '';
 });
 
+
+// --------------------------------------------------------- theme colours
+// Eight colours kept on the hub and shared by every config and gauge. A config
+// uses them as "themecolour1" to "themecolour8"; change one and every widget
+// using it changes with it.
+
+async function loadThemeColours() {
+  try {
+    const r = await api.get('/api/theme-colours');
+    if (Array.isArray(r.colours) && r.colours.length === 8) state.themeColours = r.colours;
+  } catch (e) { /* the defaults until the hub answers */ }
+  renderThemeColours();
+  themeColoursChanged();
+  await pullCloudThemeColours();
+}
+
+// Saves run one after another so a later change is never overtaken.
+let themeSave = Promise.resolve();
+function saveThemeColours() {
+  const list = state.themeColours.map(c => ({ value: c.value, name: c.name || '' }));
+  themeColoursChanged();
+  themeSave = themeSave.then(async () => {
+    const msg = $('#theme-msg');
+    try {
+      await api.put('/api/theme-colours', list);
+      msg.textContent = 'Saved: every widget using it, on every gauge, changes with it.';
+      msg.className = 'msg ok';
+      if (signedIn()) api.put('/api/settings/themecolours', list).catch(() => { /* the next change retries */ });
+    } catch (e) { msg.textContent = 'Not saved: ' + e.message; msg.className = 'msg bad'; }
+  });
+  return themeSave;
+}
+
+// The previews redraw by themselves; the colour lists in the widget rows carry the names.
+function themeColoursChanged() {
+  const focused = document.activeElement;
+  if (state.previewCfg && !(focused && $('#widget-list').contains(focused))) renderWidgetTable();
+}
+
+function renderThemeColours() {
+  const root = $('#theme-colours');
+  if (!root || root.contains(document.activeElement)) return;  // not under the user's hand
+  root.innerHTML = '';
+  state.themeColours.forEach((c, k) => {
+    root.append(el('span', { class: 'tc', title: 'themecolour' + (k + 1) + ' in a config' },
+      el('span', { class: 'muted' }, String(k + 1)),
+      el('input', { type: 'color', value: hex6(c.value),
+        oninput: ev => { c.value = ev.target.value.toUpperCase(); },
+        onchange: ev => { c.value = ev.target.value.toUpperCase(); saveThemeColours(); } }),
+      el('input', { type: 'text', maxlength: 16, value: c.name || '', placeholder: 'name',
+        onchange: ev => { c.name = ev.target.value.trim(); saveThemeColours(); } })));
+  });
+}
+
+// On the account's first signed-in visit to a browser, its theme colours replace this browser's.
+let cloudThemePulled = false;
+async function pullCloudThemeColours() {
+  if (!signedIn() || cloudThemePulled) return;
+  cloudThemePulled = true;
+  try {
+    const list = await api.get('/api/settings/themecolours');
+    if (!Array.isArray(list) || list.length !== 8) {
+      await api.put('/api/settings/themecolours', state.themeColours);
+      return;
+    }
+    await api.put('/api/theme-colours', list);
+    state.themeColours = list;
+    renderThemeColours();
+    themeColoursChanged();
+  } catch (e) { /* keep this browser's */ }
+}
 
 // ---------------------------------------------------------------- alerts
 // Rules the hub checks against the live data: while one holds, the gauges show
@@ -1767,12 +1866,17 @@ const rad = d => d * Math.PI / 180;
 const clamp = (v, a, b) => v == null ? a : Math.min(b, Math.max(a, v));
 
 function resolveTheme(t) {
-  if (!t) return Object.assign({}, PRESETS.white);
-  if (typeof t === 'string') return Object.assign({}, PRESETS[t] || PRESETS.white);
-  return Object.assign({}, PRESETS.white, t);
+  const out = !t ? Object.assign({}, PRESETS.white)
+    : typeof t === 'string' ? Object.assign({}, PRESETS[t] || PRESETS.white)
+    : Object.assign({}, PRESETS.white, t);
+  // A config's own theme may point its roles at the hub's theme colours.
+  for (const k of Object.keys(out)) { const tc = themeColourIndex(out[k]); if (tc >= 0) out[k] = state.themeColours[tc].value; }
+  return out;
 }
 function color(c, theme, dflt) {
   if (c == null) return dflt;
+  const tc = themeColourIndex(c);
+  if (tc >= 0) return state.themeColours[tc].value;
   if (theme[c] != null) return theme[c];
   if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c)) return c;
   return dflt;
@@ -2520,6 +2624,7 @@ async function signOut() {
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* cookie may already be gone */ }
   cloudSimPulled = false;
   cloudAlertsPulled = false;
+  cloudThemePulled = false;
   await loadUser();
   await loadConfigs();
   await loadRecordings();
@@ -2546,6 +2651,7 @@ async function afterSignIn() {
   await loadRecordings();
   await pullCloudSim();
   await pullCloudAlerts();
+  await pullCloudThemeColours();
 }
 
 // The demo's gauge cards read planned gauges and assignments from the account
@@ -2567,6 +2673,7 @@ const mock = {
   displays: { brightness: -1, off: false },
   recordings: {}, library: {}, playback: null,
   alerts: [], alertRun: [],
+  themeColours: DEFAULT_THEME_COLOURS.map(c => Object.assign({}, c)),
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -2732,13 +2839,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts })); }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts, themeColours: this.themeColours })); }
     catch (e) { /* no storage */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (Array.isArray(s.themeColours) && s.themeColours.length === 8) this.themeColours = s.themeColours; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -2805,6 +2912,21 @@ const mock = {
       if (!this.alerts[body.index]) throw new Error('no such alert');
       (this.alertRun[body.index] || (this.alertRun[body.index] = { active: false, count: 0 })).testUntil = Date.now() + (body.seconds || 5) * 1000;
       return { ok: true };
+    }
+    if (path === '/api/theme-colours') {
+      if (method === 'PUT') {
+        const list = parse();
+        if (!Array.isArray(list) || list.length !== 8) throw new Error('theme colours must be a list of 8');
+        list.forEach((c, k) => {
+          if (!c || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.value)) throw new Error('theme colour ' + (k + 1) + ": 'value' must look like #FF8C00");
+          if (String(c.name || '').length > 16) throw new Error('theme colour ' + (k + 1) + ": 'name' is longer than 16 characters");
+        });
+        this.themeColours = list.map(c => ({ value: hex6(c.value).toUpperCase(), name: c.name || '' }));
+        const copy = JSON.parse(JSON.stringify(this.themeColours));
+        setTimeout(() => onMessage({ t: 'themeColours', colours: copy }), 0);
+        return { ok: true };
+      }
+      return { colours: JSON.parse(JSON.stringify(this.themeColours)) };
     }
     if (path === '/api/alerts') {
       if (method === 'PUT') {
@@ -2885,6 +3007,7 @@ async function init() {
   const metaReady = loadMeta(6);
   await loadConfigs();
   await loadAlerts();
+  await loadThemeColours();
   connect();
   await metaReady;
   if (MOCK && location.hash === '#configs-demo') openEditor('demo', mock.templates['classic-tach'], true);

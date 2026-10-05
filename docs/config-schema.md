@@ -34,7 +34,8 @@ newer configs still load on older firmware as long as `schema` matches.
 - **Geometry** is in pixels on the 466 x 466 round panel, origin top-left. `x`, `y` are the
   widget's centre and default to the middle of the screen (233, 233).
 - **Angles** are degrees, 0 at 3 o'clock, clockwise. A classic dial is `start` 135, `sweep` 270.
-- **Colours** are `#RRGGBB`, `#RGB`, or a theme role: `bg`, `fg`, `accent`, `dim`, `warn`, `alert`.
+- **Colours** are `#RRGGBB`, `#RGB`, a theme role (`bg`, `fg`, `accent`, `dim`, `warn`, `alert`),
+  or one of the hub's theme colours, `themecolour1` to `themecolour8` (below).
 - **Channels** are the names in `lib/hg_haltech/haltech_channels.def` (`rpm`, `oil_pressure`,
   `coolant_temp`, ...).
 - **Units** are optional. Without one the channel's native unit is used. `min`, `max`, zones and
@@ -55,7 +56,27 @@ newer configs still load on older firmware as long as `schema` matches.
   `trade` (Trade Winds). Characters a family lacks are drawn in `sans`.
   The hub's editor lists them, drawn with the real files, and offers them per widget.
 - **Theme**: a preset name (`white`, `red`, `amber`, `green`, `cyan`, `nfs`) or an object giving any of the six
-  roles as hex colours.
+  roles as hex colours or theme colours.
+
+### Theme colours
+
+The hub keeps eight colours of its own, shared by every config and every gauge: by
+default 1 white, 2 orange, 3 red, 4 yellow, 5 green, 6 blue, 7 grey and 8 black, each with
+a name of up to 16 characters. A config uses them as `themecolour1` to `themecolour8` (the
+US spelling `themecolor1` also works) anywhere a colour goes: a widget's `color`,
+`needleColor`, `trackColor`, `offColor` or `strokeColor`, a zone or warn colour, a face's
+`bg`, or a role in the config's own theme object, so that `"theme": {"fg": "themecolour1"}`
+puts every widget in its default colour onto hub colour 1.
+
+Change a theme colour on the hub (the Theme colours card on the Configs tab, or
+`PUT /api/theme-colours`) and every widget that uses it changes with it, on every face of
+every gauge, without pushing any config again. A config's own theme roles stay per
+config; theme colours are the way to share a colour across configs.
+
+The gauges get the colours over the bus (message `ThemeColours`, type 7: four frames, each
+the frame number then two colours as 3-byte RGB) when they change, when a gauge comes
+online, and every 10 seconds. A gauge keeps the last ones in flash, so it shows the same
+colours when running without a hub.
 
 ## Top level and faces
 

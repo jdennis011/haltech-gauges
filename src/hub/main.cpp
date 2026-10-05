@@ -16,6 +16,7 @@
 #include "playback.h"
 #include "recorder.h"
 #include "simulator.h"
+#include "theme_colours.h"
 #include "virtual_gauges.h"
 #include "web_server.h"
 #include "wifi_ap.h"
@@ -61,6 +62,12 @@ proto::XferStatus refuseUpload(proto::XferKind, uint32_t, uint8_t**, void*) {
 bool ignoreUpload(proto::XferKind, const uint8_t*, uint32_t, void*) { return false; }
 
 void onRosterChanged(void*) { rosterChanges++; }
+
+// A gauge that has just appeared gets the shared settings.
+void onGaugeOnline(const HubManager::Gauge& gauge, void* ctx) {
+    display_control::onOnline(gauge, ctx);
+    theme_colours::onOnline(gauge, ctx);
+}
 
 #if HG_HAS_ECU_PORT
 // Forwards Haltech broadcast frames from the ECU bus to the gauge bus. With
@@ -108,6 +115,7 @@ void gaugeBusTask(void*) {
         gaugesOnline = online > 0;
         simulator::poll(now, liveStore, gaugesOnline ? &gaugePort : nullptr);
         alert_monitor::poll(now, liveStore);
+        theme_colours::poll(now);
     }
 }
 
@@ -269,12 +277,13 @@ void setup() {
     display_control::begin();
     recorder::begin();
     alert_monitor::begin();
+    theme_colours::begin();
 
     HubManager::Handler handler = {};
     handler.desired = library_store::desired;
     handler.upload = {refuseUpload, ignoreUpload, nullptr, nullptr};
     handler.changed = onRosterChanged;
-    handler.online = display_control::onOnline;
+    handler.online = onGaugeOnline;
     handler.request = display_control::onRequest;
     hubManager.init({managementSend, nullptr}, handler, millis());
 

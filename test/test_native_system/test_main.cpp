@@ -92,6 +92,8 @@ struct SimGauge {
     int rejectCount = 0;
     bool rejectConfigs = false;
     bool alertShown = false;
+    int themeChanges = 0;
+    uint32_t theme[kThemeColourCount] = {};
     std::string alertText;
     int alertChanges = 0;
 
@@ -110,6 +112,11 @@ struct SimGauge {
         g->alertShown = a.show;
         g->alertText = a.text;
         g->alertChanges++;
+    }
+    static void onThemeColours(const uint32_t colours[kThemeColourCount], void* ctx) {
+        SimGauge* g = static_cast<SimGauge*>(ctx);
+        memcpy(g->theme, colours, sizeof(g->theme));
+        g->themeChanges++;
     }
     static void onStatus(Status& s, void* ctx) {
         SimGauge* g = static_cast<SimGauge*>(ctx);
@@ -153,6 +160,7 @@ struct SimGauge {
         h.status = onStatus;
         h.transfer = {onAccept, onComplete, nullptr, this};
         h.alert = onAlert;
+        h.themeColours = onThemeColours;
         h.ctx = this;
         Info info;
         info.fwMajor = 1;
@@ -595,6 +603,40 @@ void test_higher_alert_takes_over_the_message() {
     TEST_ASSERT_EQUAL(3, w.g1.activeFace);
 }
 
+void test_theme_colours_reach_every_gauge() {
+    World w;
+    TEST_ASSERT_FALSE(w.hub.mgr.themeColours(kBroadcastNode, w.g1.theme));  // nobody online yet
+    w.run(1500);
+
+    uint32_t colours[kThemeColourCount] = {0xFFFFFF, 0xFF8C00, 0xFF3B30, 0xFFCC00,
+                                           0x30D158, 0x0A84FF, 0x8E8E93, 0x000000};
+    TEST_ASSERT_TRUE(w.hub.mgr.themeColours(kBroadcastNode, colours));
+    w.run(20);
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(colours, w.g1.theme, kThemeColourCount);
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(colours, w.g2.theme, kThemeColourCount);
+    TEST_ASSERT_EQUAL(1, w.g1.themeChanges);
+
+    // The regular repeat changes nothing, so the gauges are not told again.
+    TEST_ASSERT_TRUE(w.hub.mgr.themeColours(kBroadcastNode, colours));
+    w.run(20);
+    TEST_ASSERT_EQUAL(1, w.g1.themeChanges);
+
+    // One colour changed on the hub reaches both.
+    colours[1] = 0x00AAFF;
+    TEST_ASSERT_TRUE(w.hub.mgr.themeColours(kBroadcastNode, colours));
+    w.run(20);
+    TEST_ASSERT_EQUAL_HEX32(0x00AAFF, w.g1.theme[1]);
+    TEST_ASSERT_EQUAL_HEX32(0x00AAFF, w.g2.theme[1]);
+    TEST_ASSERT_EQUAL(2, w.g2.themeChanges);
+
+    // Sent to one gauge, only that one hears it.
+    colours[0] = 0x111111;
+    TEST_ASSERT_TRUE(w.hub.mgr.themeColours(w.g1.node.node(), colours));
+    w.run(20);
+    TEST_ASSERT_EQUAL_HEX32(0x111111, w.g1.theme[0]);
+    TEST_ASSERT_EQUAL_HEX32(0xFFFFFF, w.g2.theme[0]);
+}
+
 void test_try_config_is_shown_but_not_stored() {
     World w;
     const Bytes a = makeConfig("stored config");
@@ -727,6 +769,7 @@ int main(int, char**) {
     RUN_TEST(test_alert_message_stays_up_only_while_the_hub_repeats_it);
     RUN_TEST(test_alert_rules_are_carried_out_on_the_gauges);
     RUN_TEST(test_higher_alert_takes_over_the_message);
+    RUN_TEST(test_theme_colours_reach_every_gauge);
     RUN_TEST(test_try_config_is_shown_but_not_stored);
     RUN_TEST(test_refused_config_is_not_retried_until_the_gauge_changes);
     RUN_TEST(test_config_newer_than_gauge_firmware_is_not_sent);

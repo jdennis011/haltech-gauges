@@ -32,6 +32,8 @@ std::atomic<bool> reboot{false};
 // Written by the CAN task, read by the UI loop.
 portMUX_TYPE alertMux = portMUX_INITIALIZER_UNLOCKED;
 proto::Alert alertNow;
+uint32_t themeNow[proto::kThemeColourCount];
+const char* kThemeKey = "tcolours";
 
 const char* kPrefsNamespace = "gauge";
 const char* kNodeKey = "node";
@@ -74,6 +76,17 @@ void onAlert(const proto::Alert& alert, void*) {
     } else {
         Serial.println("Alert cleared");
     }
+}
+
+void onThemeColours(const uint32_t colours[proto::kThemeColourCount], void*) {
+    portENTER_CRITICAL(&alertMux);
+    memcpy(themeNow, colours, sizeof(themeNow));
+    portEXIT_CRITICAL(&alertMux);
+    Preferences prefs;
+    prefs.begin(kPrefsNamespace, false);
+    prefs.putBytes(kThemeKey, colours, sizeof(themeNow));
+    prefs.end();
+    Serial.println("Theme colours updated by the hub");
 }
 
 void onStatus(proto::Status& status, void*) {
@@ -177,8 +190,19 @@ void begin() {
     handler.command = onCommand;
     handler.status = onStatus;
     handler.alert = onAlert;
+    handler.themeColours = onThemeColours;
     handler.transfer = {refuseTransfer, ignoreTransfer, nullptr, nullptr};
     node.init({canSend, nullptr}, mac, id, info, cfg::kSchemaVersion, handler);
+    {
+        // The last theme colours the hub sent, or the defaults.
+        const cfg::ThemeColours defaults;
+        memcpy(themeNow, defaults.value, sizeof(themeNow));
+        Preferences prefs;
+        prefs.begin(kPrefsNamespace, true);
+        if (prefs.getBytesLength(kThemeKey) == sizeof(themeNow)) prefs.getBytes(kThemeKey, themeNow, sizeof(themeNow));
+        prefs.end();
+        node.setThemeColours(themeNow);
+    }
 
     xTaskCreatePinnedToCore(task, "can", 6144, nullptr, 18, nullptr, 0);
 }
@@ -191,6 +215,12 @@ void setVbusMillivolts(uint16_t millivolts) { vbus = millivolts; }
 uint32_t identifyUntilMs() { return identifyUntil; }
 int takeBrightnessRequest() { return brightnessRequest.exchange(-1); }
 bool rebootRequested() { return reboot; }
+
+void themeColours(uint32_t out[8]) {
+    portENTER_CRITICAL(&alertMux);
+    memcpy(out, themeNow, sizeof(themeNow));
+    portEXIT_CRITICAL(&alertMux);
+}
 
 bool alertMessage(char* text, uint32_t& color) {
     portENTER_CRITICAL(&alertMux);

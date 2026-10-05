@@ -23,6 +23,7 @@
 #include "playback.h"
 #include "recorder.h"
 #include "simulator.h"
+#include "theme_colours.h"
 #include "units.h"
 #include "virtual_gauges.h"
 #include "web_assets.h"
@@ -57,6 +58,7 @@ uint32_t lastLiveMs = 0;
 uint32_t sentRosterVersion = 0;
 uint32_t lastAlertsMs = 0;
 uint32_t sentAlertVersion = 0;
+uint32_t sentThemeVersion = 0;
 uint32_t skippedPushes = 0;
 
 // ------------------------------------------------------------ request helpers
@@ -379,6 +381,14 @@ void alertsMessage(String& out) {
     JsonDocument doc;
     doc["t"] = "alerts";
     alert_monitor::statesJson(doc["states"].to<JsonArray>());
+    serializeJson(doc, out);
+}
+
+// The theme colours, as {"t":"themeColours","colours":[{"value":"#FFFFFF","name":"White"},...]}.
+void themeColoursMessage(String& out) {
+    JsonDocument doc;
+    doc["t"] = "themeColours";
+    theme_colours::json(doc["colours"].to<JsonArray>());
     serializeJson(doc, out);
 }
 
@@ -887,6 +897,20 @@ void handleAlerts(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
+// GET gives the eight theme colours; PUT replaces them with the list in the body.
+void handleThemeColours(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_PUT) {
+        const Body* b = bodyOf(r);
+        if (!b || b->len == 0) return sendError(r, 400, "send the eight theme colours as the request body");
+        std::string error;
+        if (!theme_colours::set(b->data, b->len, error)) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    JsonDocument doc;
+    theme_colours::json(doc["colours"].to<JsonArray>());
+    sendJson(r, doc);
+}
+
 // POST {index, seconds?}: puts one alert in force for a few seconds to see what it does.
 void handleAlertTest(AsyncWebServerRequest* r) {
     JsonDocument body;
@@ -940,6 +964,9 @@ void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType type,
     client->text(s);
     alertsMessage(s);
     client->text(s);
+    s = String();
+    themeColoursMessage(s);
+    client->text(s);
 }
 
 // Pushes to every client unless a client is backed up or memory is short;
@@ -987,6 +1014,7 @@ void begin() {
     server.on("/api/playback", HTTP_POST, handlePlayback, nullptr, collectBody);
     server.on("/api/simulator", HTTP_GET | HTTP_POST, handleSimulator, nullptr, collectBody);
     server.on("/api/alerts/test", HTTP_POST, handleAlertTest, nullptr, collectBody);
+    server.on("/api/theme-colours", HTTP_GET | HTTP_PUT, handleThemeColours, nullptr, collectBody);
     server.on("/api/alerts", HTTP_GET | HTTP_PUT, handleAlerts, nullptr, collectBody);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.onNotFound(handleNotFound);
@@ -1000,7 +1028,14 @@ void loop() {
     if (ws.count() == 0) {
         sentRosterVersion = hub::rosterVersion();
         sentAlertVersion = alert_monitor::version();
+        sentThemeVersion = theme_colours::version();
         return;
+    }
+    const uint32_t themeVersion = theme_colours::version();
+    if (themeVersion != sentThemeVersion) {
+        String s;
+        themeColoursMessage(s);
+        if (pushAll(s)) sentThemeVersion = themeVersion;
     }
     // Promptly when an alert fires or ends; otherwise once a second, for the readings.
     const uint32_t alertVersion = alert_monitor::version();

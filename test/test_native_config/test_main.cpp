@@ -311,6 +311,52 @@ void test_shapes_paths_and_unit_position() {
     TEST_ASSERT_EQUAL(-12, c.faces[0].widgets[0].unitDx);
 }
 
+void test_theme_colours() {
+    Config c;
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour2"})"), c).ok);
+    const Color col = c.faces[0].widgets[0].color;
+    TEST_ASSERT_TRUE(isThemeColourRef(col));
+    TEST_ASSERT_EQUAL(1, themeColourIndex(col));
+
+    // Drawn in whatever the hub has; plain colours pass through.
+    ThemeColours tc;
+    TEST_ASSERT_EQUAL_HEX32(0xFF8C00, resolveColor(col, tc.value));
+    tc.value[1] = 0x123456;
+    TEST_ASSERT_EQUAL_HEX32(0x123456, resolveColor(col, tc.value));
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, resolveColor(0xFF0000, tc.value));
+
+    // In a config's own theme, every widget using that role follows the hub colour. US spelling too.
+    TEST_ASSERT_TRUE(parse(R"({"schema":1,"theme":{"fg":"themecolor8"},"faces":[{"widgets":[{"type":"number","channel":"rpm"}]}]})", c).ok);
+    TEST_ASSERT_EQUAL_HEX32(themeColourRef(7), c.faces[0].widgets[0].color);
+
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour9"})"), "themecolour1 to themecolour8");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour12"})"), "themecolour1 to themecolour8");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolours"})"), "themecolour1 to themecolour8");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"purple"})"), "not a colour");
+
+    // The hub's list.
+    std::string list = "[";
+    for (int i = 0; i < 8; i++) list += std::string(i ? "," : "") + R"({"value":"#F80","name":"Orange"})";
+    list += "]";
+    ThemeColours parsed;
+    TEST_ASSERT_TRUE(parseThemeColours(reinterpret_cast<const uint8_t*>(list.data()), list.size(), parsed).ok);
+    TEST_ASSERT_EQUAL_HEX32(0xFF8800, parsed.value[7]);
+    TEST_ASSERT_EQUAL_STRING("Orange", parsed.name[0].c_str());
+    char hex[8];
+    formatColor(parsed.value[0], hex);
+    TEST_ASSERT_EQUAL_STRING("#FF8800", hex);
+
+    const char* seven = R"([{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"}])";
+    ParseResult r = parseThemeColours(reinterpret_cast<const uint8_t*>(seven), strlen(seven), parsed);
+    TEST_ASSERT_FALSE(r.ok);
+    TEST_ASSERT_NOT_NULL(strstr(r.error.c_str(), "list of 8"));
+    std::string bad = list;
+    bad.replace(bad.find("#F80"), 4, "red!");
+    r = parseThemeColours(reinterpret_cast<const uint8_t*>(bad.data()), bad.size(), parsed);
+    TEST_ASSERT_NOT_NULL(strstr(r.error.c_str(), "theme colour 1: 'value'"));
+    TEST_ASSERT_EQUAL_HEX32(0xFF8800, parsed.value[0]);  // unchanged on failure
+}
+
 void test_theme_presets_exist() {
     size_t count = 0;
     const ThemePreset* presets = themePresets(count);
@@ -338,6 +384,7 @@ int main(int, char**) {
     RUN_TEST(test_nfs_options);
     RUN_TEST(test_arc_label);
     RUN_TEST(test_shapes_paths_and_unit_position);
+    RUN_TEST(test_theme_colours);
     RUN_TEST(test_theme_presets_exist);
     return UNITY_END();
 }

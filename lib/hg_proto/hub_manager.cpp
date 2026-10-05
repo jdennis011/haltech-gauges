@@ -96,6 +96,21 @@ bool HubManager::alert(uint32_t node, const Alert& alert, uint8_t seq) {
     return true;
 }
 
+bool HubManager::themeColours(uint32_t node, const uint32_t colours[kThemeColourCount]) {
+    if (node == kBroadcastNode) {
+        if (!anyOnline()) return false;
+    } else {
+        const Gauge* g = find(node);
+        if (!g || !g->online) return false;
+    }
+    CanFrame frames[kThemeColourFrames];
+    const size_t count = packThemeColours(colours, node, frames);
+    for (size_t i = 0; i < count; i++) {
+        if (!send(frames[i])) return false;
+    }
+    return true;
+}
+
 bool HubManager::tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs) {
     const Gauge* g = find(node);
     if (!g || !g->online || sender_.busy()) return false;

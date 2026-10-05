@@ -45,11 +45,12 @@ textarea{width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace
 canvas{width:100%;max-width:466px;aspect-ratio:1;display:block;margin:0 auto;border-radius:50%;background:#000}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
 .gcard{margin:0;display:flex;flex-direction:column;gap:8px}
-.gcard .face{display:flex;gap:12px;align-items:flex-start}
-.gcard canvas{width:170px;flex:none;margin:0}
-.gcard .nocfg{width:170px;height:170px;flex:none;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
+.gcard .gpreview{display:flex;justify-content:center;margin:4px 0}
+.gcard canvas{width:240px;max-width:100%;flex:none;margin:0}
+.gcard .nocfg{width:240px;max-width:100%;aspect-ratio:1;flex:none;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
 .gcard .title{font-size:16px;font-weight:600}
-.gcard .face > .row{min-width:0;flex:1}
+.gfields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center}
+.gfields select,.gfields input[type=range]{width:100%}
 .gcard select{max-width:100%}
 .msg{min-height:22px;font-size:14px;margin:6px 0}
 label.inline{display:inline-flex;gap:6px;align-items:center}
@@ -506,8 +507,7 @@ function faceControl(g) {
       const name = cfg && cfg.faces[i] ? cfg.faces[i].name || 'face' : 'face';
       options.push(el('option', { value: i, selected: i === g.face ? '' : null }, (i + 1) + ': ' + name));
     }
-    return el('label', { class: 'inline' }, 'Face ',
-      el('select', { onchange: ev => { ev.target.blur(); planned('PUT', '/api/virtual/' + g.id, { face: +ev.target.value }); } }, ...options));
+    return el('select', { onchange: ev => { ev.target.blur(); planned('PUT', '/api/virtual/' + g.id, { face: +ev.target.value }); } }, ...options);
   }
   const off = !g.online;
   return el('span', { class: 'row' },
@@ -565,21 +565,24 @@ function renderGauges() {
         g.duplicate ? el('span', { class: 'chip bad' }, 'duplicate id') : null,
         g.trying ? el('span', { class: 'chip' }, 'trial config') : null),
       el('div', { class: 'muted', style: 'font-size:13px' }, details),
-      el('div', { class: 'face' }, preview,
-        el('div', { class: 'row', style: 'flex-direction:column;align-items:flex-start;flex:1' },
-          el('label', { class: 'inline' }, 'Config ', assignSelect(g)),
-          faceControl(g),
-          pushChip(g),
-          g.assigned ? btn('Edit config', () => { showTab('configs'); openStored(g.assigned); }, false, 'small') : null)),
+      el('div', { class: 'gpreview' }, preview),
+      // Labels down the left, controls filling the rest of the width.
+      el('div', { class: 'gfields' },
+        el('span', { class: 'muted' }, 'Config'), assignSelect(g),
+        el('span', { class: 'muted' }, 'Face'), faceControl(g),
+        g.virtual ? null : el('span', { class: 'muted' }, 'Brightness'),
+        g.virtual ? null : el('input', { type: 'range', min: 10, max: 255, value: 200, disabled: off ? '' : null,
+          onchange: ev => act(g, 'brightness', { level: +ev.target.value }) })),
+      el('div', { class: 'row' },
+        pushChip(g),
+        el('span', { class: 'spacer' }),
+        g.assigned ? btn('Edit config', () => { showTab('configs'); openStored(g.assigned); }, false, 'small') : null),
       g.virtual
         ? el('div', { class: 'row' },
             btn('Link to hardware…', () => linkHardware(g), false, 'small'),
             btn('Remove', () => { if (confirm('Remove planned gauge "' + gaugeTitle(g) + '"?')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small danger'))
         : el('div', { class: 'row' },
             btn('Identify', () => act(g, 'identify', { seconds: 5 }), off, 'small'),
-            el('label', { class: 'inline' }, 'Brightness ',
-              el('input', { type: 'range', min: 10, max: 255, value: 200, disabled: off ? '' : null,
-                onchange: ev => act(g, 'brightness', { level: +ev.target.value }) })),
             g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
             btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
             btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),

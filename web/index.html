@@ -184,7 +184,7 @@ input[type=range]{width:110px}
   </div>
   <div class="card" id="theme-card">
     <div class="row"><strong>Theme colours</strong><span class="muted">kept on the hub, shared by every config and gauge</span></div>
-    <div class="muted" style="font-size:13px;margin:6px 0">Pick one from a widget's colour list, or write <span class="mono">themecolour1</span> to <span class="mono">themecolour8</span> in the JSON. Change one here and every widget using it changes with it, on every face of every gauge.</div>
+    <div class="muted" style="font-size:13px;margin:6px 0">Pick one from a widget's colour list, or write <span class="mono">themecolour1</span>, <span class="mono">themecolour2</span> and so on in the JSON. Change one here and every widget using it changes with it, on every face of every gauge. <b>Add colour</b> adds up to 32; only the last can be removed, so a number always means the same colour.</div>
     <div class="tcol" id="theme-colours"></div>
     <div class="msg" id="theme-msg"></div>
   </div>
@@ -273,7 +273,13 @@ const fmt = v => { const a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 1
 // The hub's theme colours until it says otherwise: the same defaults the hub starts with.
 const DEFAULT_THEME_COLOURS = [['#FFFFFF', 'White'], ['#FF8C00', 'Orange'], ['#FF3B30', 'Red'], ['#FFCC00', 'Yellow'],
   ['#30D158', 'Green'], ['#0A84FF', 'Blue'], ['#8E8E93', 'Grey'], ['#000000', 'Black']].map(([value, name]) => ({ value, name }));
-const themeColourIndex = c => { const m = /^themecolou?r([1-8])$/.exec(c || ''); return m ? +m[1] - 1 : -1; };
+const MIN_THEME_COLOURS = 8, MAX_THEME_COLOURS = 32;
+const themeColourIndex = c => { const m = /^themecolou?r([1-9][0-9]?)$/.exec(c || ''); return m && +m[1] <= MAX_THEME_COLOURS ? +m[1] - 1 : -1; };
+const themeListOk = l => Array.isArray(l) && l.length >= MIN_THEME_COLOURS && l.length <= MAX_THEME_COLOURS;
+// What a theme colour draws as; a slot the hub has not filled is white, as on the gauge.
+const themeColourValue = k => state.themeColours[k] ? state.themeColours[k].value : '#FFFFFF';
+// Suggestions for added colours, after the first eight.
+const EXTRA_THEME_COLOURS = ['#BF5AF2', '#FF375F', '#64D2FF', '#5E5CE6', '#66D4CF', '#A2845E', '#FF9F0A', '#AC8E68'];
 
 const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
@@ -394,7 +400,7 @@ function onMessage(m) {
   else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGaugesIfIdle(); renderTryGauges(); }
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
   else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
-  else if (m.t === 'themeColours' && Array.isArray(m.colours) && m.colours.length === 8) {
+  else if (m.t === 'themeColours' && themeListOk(m.colours)) {
     state.themeColours = m.colours;
     renderThemeColours();
     themeColoursChanged();
@@ -875,7 +881,7 @@ async function importAll(file) {
     try { await api.put('/api/assignments/' + (macMap[mac] || mac), { name }); done.assignments++; }
     catch (e) { errors.push('assignment ' + mac + ': ' + e.message); }
   }
-  if (Array.isArray(bundle.themeColours) && bundle.themeColours.length === 8) {
+  if (themeListOk(bundle.themeColours)) {
     try { await api.put('/api/theme-colours', bundle.themeColours); state.themeColours = bundle.themeColours; renderThemeColours(); themeColoursChanged(); }
     catch (e) { errors.push('theme colours: ' + e.message); }
   }
@@ -1063,6 +1069,9 @@ function colorPicker(val, defaultRole, set, same) {
     ...ROLES.map(r => el('option', { value: r, selected: r === val ? '' : null }, r)),
     ...state.themeColours.map((c, k) => el('option', { value: 'themecolour' + (k + 1), selected: themeColourIndex(val) === k ? '' : null },
       'theme ' + (k + 1) + (c.name ? ': ' + c.name : ''))),
+    // A colour this hub does not have (removed, or from another hub's config) still shows as chosen.
+    themeColourIndex(val) >= state.themeColours.length
+      ? el('option', { value: val, selected: '' }, 'theme ' + (themeColourIndex(val) + 1) + ' (not on this hub)') : null,
     el('option', { value: 'custom', selected: custom ? '' : null }, 'custom'));
   return el('span', { class: 'colorctl' }, sel, pick);
 }
@@ -1299,14 +1308,14 @@ $('#all-fonts').addEventListener('change', ev => {
 
 
 // --------------------------------------------------------- theme colours
-// Eight colours kept on the hub and shared by every config and gauge. A config
-// uses them as "themecolour1" to "themecolour8"; change one and every widget
+// 8 to 32 colours kept on the hub and shared by every config and gauge. A config
+// uses them as "themecolour1" to "themecolour32"; change one and every widget
 // using it changes with it.
 
 async function loadThemeColours() {
   try {
     const r = await api.get('/api/theme-colours');
-    if (Array.isArray(r.colours) && r.colours.length === 8) state.themeColours = r.colours;
+    if (themeListOk(r.colours)) state.themeColours = r.colours;
   } catch (e) { /* the defaults until the hub answers */ }
   renderThemeColours();
   themeColoursChanged();
@@ -1340,15 +1349,38 @@ function renderThemeColours() {
   const root = $('#theme-colours');
   if (!root || root.contains(document.activeElement)) return;  // not under the user's hand
   root.innerHTML = '';
+  const n = state.themeColours.length;
   state.themeColours.forEach((c, k) => {
+    // Only the last added colour can go, so the numbers of the others never change.
+    const removable = k === n - 1 && n > MIN_THEME_COLOURS;
     root.append(el('span', { class: 'tc', title: 'themecolour' + (k + 1) + ' in a config' },
       el('span', { class: 'muted' }, String(k + 1)),
       el('input', { type: 'color', value: hex6(c.value),
         oninput: ev => { c.value = ev.target.value.toUpperCase(); },
         onchange: ev => { c.value = ev.target.value.toUpperCase(); saveThemeColours(); } }),
       el('input', { type: 'text', maxlength: 16, value: c.name || '', placeholder: 'name',
-        onchange: ev => { c.name = ev.target.value.trim(); saveThemeColours(); } })));
+        onchange: ev => { c.name = ev.target.value.trim(); saveThemeColours(); } }),
+      removable ? btn('\u00d7', removeThemeColour, false, 'small', 'Remove theme colour ' + (k + 1)) : null));
   });
+  root.append(btn('Add colour', addThemeColour, n >= MAX_THEME_COLOURS, 'small',
+    n >= MAX_THEME_COLOURS ? 'The hub holds up to 32 theme colours' : 'Add theme colour ' + (n + 1)));
+}
+
+function addThemeColour() {
+  const n = state.themeColours.length;
+  if (n >= MAX_THEME_COLOURS) return;
+  state.themeColours.push({ value: EXTRA_THEME_COLOURS[(n - MIN_THEME_COLOURS) % EXTRA_THEME_COLOURS.length], name: '' });
+  renderThemeColours();
+  saveThemeColours();
+}
+
+function removeThemeColour() {
+  const n = state.themeColours.length;
+  if (n <= MIN_THEME_COLOURS) return;
+  if (!confirm('Remove theme colour ' + n + '? Widgets that use themecolour' + n + ' are drawn white until it is added back.')) return;
+  state.themeColours.pop();
+  renderThemeColours();
+  saveThemeColours();
 }
 
 // On the account's first signed-in visit to a browser, its theme colours replace this browser's.
@@ -1358,7 +1390,7 @@ async function pullCloudThemeColours() {
   cloudThemePulled = true;
   try {
     const list = await api.get('/api/settings/themecolours');
-    if (!Array.isArray(list) || list.length !== 8) {
+    if (!themeListOk(list)) {
       await api.put('/api/settings/themecolours', state.themeColours);
       return;
     }
@@ -1870,13 +1902,13 @@ function resolveTheme(t) {
     : typeof t === 'string' ? Object.assign({}, PRESETS[t] || PRESETS.white)
     : Object.assign({}, PRESETS.white, t);
   // A config's own theme may point its roles at the hub's theme colours.
-  for (const k of Object.keys(out)) { const tc = themeColourIndex(out[k]); if (tc >= 0) out[k] = state.themeColours[tc].value; }
+  for (const k of Object.keys(out)) { const tc = themeColourIndex(out[k]); if (tc >= 0) out[k] = themeColourValue(tc); }
   return out;
 }
 function color(c, theme, dflt) {
   if (c == null) return dflt;
   const tc = themeColourIndex(c);
-  if (tc >= 0) return state.themeColours[tc].value;
+  if (tc >= 0) return themeColourValue(tc);
   if (theme[c] != null) return theme[c];
   if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c)) return c;
   return dflt;
@@ -2845,7 +2877,7 @@ const mock = {
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (Array.isArray(s.themeColours) && s.themeColours.length === 8) this.themeColours = s.themeColours; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (themeListOk(s.themeColours)) this.themeColours = s.themeColours; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -2916,7 +2948,7 @@ const mock = {
     if (path === '/api/theme-colours') {
       if (method === 'PUT') {
         const list = parse();
-        if (!Array.isArray(list) || list.length !== 8) throw new Error('theme colours must be a list of 8');
+        if (!themeListOk(list)) throw new Error('theme colours must be a list of 8 to 32');
         list.forEach((c, k) => {
           if (!c || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.value)) throw new Error('theme colour ' + (k + 1) + ": 'value' must look like #FF8C00");
           if (String(c.name || '').length > 16) throw new Error('theme colour ' + (k + 1) + ": 'name' is longer than 16 characters");

@@ -38,7 +38,7 @@ enum class Msg : uint8_t {
     Command = 4,
     CommandAck = 5,
     Alert = 6,  // hub to gauge: a message to show over the face, in up to six frames
-    ThemeColours = 7,  // hub to gauges: the hub's theme colours, in four frames
+    ThemeColours = 7,  // hub to gauges: the hub's theme colours, in sixteen frames
     XferBegin = 8,
     XferData = 9,
     XferEnd = 10,
@@ -146,11 +146,13 @@ struct Alert {
     char text[kAlertMaxText + 1] = {};
 };
 
-// The hub's theme colours, the "themecolour1" to "themecolour8" a config can
-// use. Four frames: the frame number (0 to 3), then colours 2k and 2k+1 as
-// three bytes each. The hub sends them when they change, to a gauge that comes
-// online, and every kThemeColourRepeatMs; each frame stands on its own.
-constexpr size_t kThemeColourCount = 8;
+// The hub's theme colours, the "themecolour1" to "themecolour32" a config can
+// use. All 32 slots go out, the ones the hub has not filled as white, so a
+// gauge always matches the hub. Sixteen frames: the frame number (0 to 15),
+// then colours 2k and 2k+1 as three bytes each. The hub sends them when they
+// change, to a gauge that comes online, and every kThemeColourRepeatMs; each
+// frame stands on its own.
+constexpr size_t kThemeColourCount = 32;
 constexpr size_t kThemeColourFrames = kThemeColourCount / 2;
 constexpr uint32_t kThemeColourRepeatMs = 10000;
 

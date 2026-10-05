@@ -30,8 +30,8 @@ bool rebootRequested();
 // none; otherwise fills `text` (at least 33 bytes) and `color` (0xRRGGBB).
 bool alertMessage(char* text, uint32_t& color);
 
-// The hub's theme colours (0xRRGGBB), for resolving "themecolour1" to 8 in a face.
-// The last ones the hub sent are kept in flash for running without a hub.
-void themeColours(uint32_t out[8]);
+// The hub's 32 theme colour slots (0xRRGGBB), for resolving "themecolour1" to 32
+// in a face. The last ones the hub sent are kept in flash for running without a hub.
+void themeColours(uint32_t out[32]);
 
 }  // namespace can_task

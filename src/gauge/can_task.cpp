@@ -216,7 +216,7 @@ uint32_t identifyUntilMs() { return identifyUntil; }
 int takeBrightnessRequest() { return brightnessRequest.exchange(-1); }
 bool rebootRequested() { return reboot; }
 
-void themeColours(uint32_t out[8]) {
+void themeColours(uint32_t out[32]) {
     portENTER_CRITICAL(&alertMux);
     memcpy(out, themeNow, sizeof(themeNow));
     portEXIT_CRITICAL(&alertMux);

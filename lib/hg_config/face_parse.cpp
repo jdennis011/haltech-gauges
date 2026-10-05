@@ -145,7 +145,7 @@ bool parseHex(const char* s, Color& out) {
     return true;
 }
 
-// "themecolour1" to "themecolour8" (or "themecolor"): the index, -1 for a
+// "themecolour1" to "themecolour32" (or "themecolor"): the index, -1 for a
 // different word, -2 for a theme colour number out of range.
 int themeColourName(const char* s) {
     const char* rest = nullptr;
@@ -156,8 +156,13 @@ int themeColourName(const char* s) {
     } else {
         return -1;
     }
-    if (rest[0] >= '1' && rest[0] <= '0' + int(kThemeColours) && rest[1] == 0) return rest[0] - '1';
-    return -2;
+    if (rest[0] < '1' || rest[0] > '9') return -2;
+    int n = 0;
+    for (size_t i = 0; rest[i]; i++) {
+        if (rest[i] < '0' || rest[i] > '9' || i >= 2) return -2;
+        n = n * 10 + (rest[i] - '0');
+    }
+    return n <= int(kMaxThemeColours) ? n - 1 : -2;
 }
 
 // A colour is "#RRGGBB", "#RGB", the name of a theme role, or a hub theme colour.
@@ -178,12 +183,12 @@ Color readColor(JsonObjectConst obj, const char* key, Color fallback, Ctx& ctx) 
     const int index = themeColourName(s);
     if (index >= 0) return themeColourRef(size_t(index));
     if (index == -2) {
-        ctx.fail("'%s': theme colours are themecolour1 to themecolour8", key);
+        ctx.fail("'%s': theme colours are themecolour1 to themecolour32", key);
         return fallback;
     }
     Color c;
     if (!parseHex(s, c)) {
-        ctx.fail("'%s': '%.20s' is not a colour (use #RRGGBB, a theme role or themecolour1 to 8)", key, s);
+        ctx.fail("'%s': '%.20s' is not a colour (use #RRGGBB, a theme role or themecolour1 to 32)", key, s);
         return fallback;
     }
     return c;
@@ -615,7 +620,7 @@ void parseTheme(JsonVariantConst v, Ctx& ctx) {
             continue;
         }
         if (!parseHex(s, *r.slot)) {
-            ctx.fail("theme '%s' must be a #RRGGBB colour or themecolour1 to 8", r.key);
+            ctx.fail("theme '%s' must be a #RRGGBB colour or themecolour1 to 32", r.key);
             return;
         }
     }
@@ -629,6 +634,17 @@ const ThemePreset* themePresets(size_t& count) {
     return kPresets;
 }
 
+ThemeColours::ThemeColours() {
+    static const Color kValues[kMinThemeColours] = {0xFFFFFF, 0xFF8C00, 0xFF3B30, 0xFFCC00,
+                                                    0x30D158, 0x0A84FF, 0x8E8E93, 0x000000};
+    static const char* const kNames[kMinThemeColours] = {"White", "Orange", "Red",  "Yellow",
+                                                         "Green", "Blue",   "Grey", "Black"};
+    for (size_t i = 0; i < kMaxThemeColours; i++) {
+        value[i] = i < kMinThemeColours ? kValues[i] : kUnsetThemeColour;
+        name[i] = i < kMinThemeColours ? kNames[i] : "";
+    }
+}
+
 ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& out) {
     ParseResult result;
     JsonDocument doc;
@@ -639,11 +655,12 @@ ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& ou
     JsonVariantConst root = doc.as<JsonVariantConst>();
     JsonArrayConst list = root.is<JsonObjectConst>() ? root["colours"].as<JsonArrayConst>()
                                                       : root.as<JsonArrayConst>();
-    if (list.isNull() || list.size() != kThemeColours) {
-        result.error = "theme colours must be a list of 8";
+    if (list.isNull() || list.size() < kMinThemeColours || list.size() > kMaxThemeColours) {
+        result.error = "theme colours must be a list of 8 to 32";
         return result;
     }
     ThemeColours tc;
+    tc.count = list.size();
     char buf[64];
     size_t i = 0;
     for (JsonVariantConst item : list) {

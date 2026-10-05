@@ -331,10 +331,10 @@ void test_alert_survives_lost_frames_and_times_out() {
 }
 
 void test_theme_colours_round_trip() {
-    const uint32_t colours[kThemeColourCount] = {0xFFFFFF, 0xFF8C00, 0x123456, 0xABCDEF,
-                                                 0x000001, 0x800000, 0x00FF00, 0x000000};
+    uint32_t colours[kThemeColourCount];
+    for (size_t i = 0; i < kThemeColourCount; i++) colours[i] = (0x0F0F0F * (i + 1)) & 0xFFFFFF;
     CanFrame frames[kThemeColourFrames];
-    TEST_ASSERT_EQUAL(4, packThemeColours(colours, kBroadcastNode, frames));
+    TEST_ASSERT_EQUAL(16, packThemeColours(colours, kBroadcastNode, frames));
     uint32_t got[kThemeColourCount] = {};
     for (const CanFrame& f : frames) {
         TEST_ASSERT_EQUAL(int(Msg::ThemeColours), int(idMsg(f.id)));
@@ -344,7 +344,7 @@ void test_theme_colours_round_trip() {
     TEST_ASSERT_EQUAL_HEX32_ARRAY(colours, got, kThemeColourCount);
 
     CanFrame bad = frames[0];
-    bad.data[0] = 4;
+    bad.data[0] = 16;
     TEST_ASSERT_FALSE(unpackThemeColours(bad, got));
     bad = frames[0];
     bad.len = 6;

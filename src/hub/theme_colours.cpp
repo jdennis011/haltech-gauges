@@ -18,6 +18,8 @@ namespace {
 
 const char* kFile = "/theme-colours.json";
 
+static_assert(proto::kThemeColourCount == cfg::kMaxThemeColours, "the bus carries every slot");
+
 cfg::ThemeColours colours;
 std::atomic<uint32_t> changes{0};
 uint32_t sentVersion = 0xFFFFFFFF;  // nothing sent yet
@@ -30,7 +32,7 @@ void values(uint32_t out[proto::kThemeColourCount]) {
 }
 
 void write(JsonArray out) {
-    for (size_t i = 0; i < cfg::kThemeColours; i++) {
+    for (size_t i = 0; i < colours.count; i++) {
         JsonObject o = out.add<JsonObject>();
         char hex[8];
         cfg::formatColor(colours.value[i], hex);

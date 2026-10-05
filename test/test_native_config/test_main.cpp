@@ -329,9 +329,14 @@ void test_theme_colours() {
     TEST_ASSERT_TRUE(parse(R"({"schema":1,"theme":{"fg":"themecolor8"},"faces":[{"widgets":[{"type":"number","channel":"rpm"}]}]})", c).ok);
     TEST_ASSERT_EQUAL_HEX32(themeColourRef(7), c.faces[0].widgets[0].color);
 
-    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour9"})"), "themecolour1 to themecolour8");
-    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour12"})"), "themecolour1 to themecolour8");
-    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolours"})"), "themecolour1 to themecolour8");
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour32"})"), c).ok);
+    TEST_ASSERT_EQUAL(31, themeColourIndex(c.faces[0].widgets[0].color));
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour33"})"), "themecolour1 to themecolour32");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour0"})"), "themecolour1 to themecolour32");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolour05"})"), "themecolour1 to themecolour32");
+    assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"themecolours"})"), "themecolour1 to themecolour32");
+    // A slot the hub has not filled is drawn white.
+    TEST_ASSERT_EQUAL_HEX32(kUnsetThemeColour, resolveColor(themeColourRef(20), ThemeColours().value));
     assertRejected(withWidget(R"({"type":"number","channel":"rpm","color":"purple"})"), "not a colour");
 
     // The hub's list.
@@ -349,7 +354,19 @@ void test_theme_colours() {
     const char* seven = R"([{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"},{"value":"#FFF"}])";
     ParseResult r = parseThemeColours(reinterpret_cast<const uint8_t*>(seven), strlen(seven), parsed);
     TEST_ASSERT_FALSE(r.ok);
-    TEST_ASSERT_NOT_NULL(strstr(r.error.c_str(), "list of 8"));
+    TEST_ASSERT_NOT_NULL(strstr(r.error.c_str(), "list of 8 to 32"));
+
+    // Added colours after the first eight; more than 32 is refused.
+    std::string nine = list.substr(0, list.size() - 1) + R"(,{"value":"#123456","name":"Extra"}])";
+    TEST_ASSERT_TRUE(parseThemeColours(reinterpret_cast<const uint8_t*>(nine.data()), nine.size(), parsed).ok);
+    TEST_ASSERT_EQUAL(9, parsed.count);
+    TEST_ASSERT_EQUAL_HEX32(0x123456, parsed.value[8]);
+    TEST_ASSERT_EQUAL_HEX32(kUnsetThemeColour, parsed.value[9]);
+    std::string many = "[";
+    for (int i = 0; i < 33; i++) many += std::string(i ? "," : "") + R"({"value":"#F80"})";
+    many += "]";
+    r = parseThemeColours(reinterpret_cast<const uint8_t*>(many.data()), many.size(), parsed);
+    TEST_ASSERT_FALSE(r.ok);
     std::string bad = list;
     bad.replace(bad.find("#F80"), 4, "red!");
     r = parseThemeColours(reinterpret_cast<const uint8_t*>(bad.data()), bad.size(), parsed);

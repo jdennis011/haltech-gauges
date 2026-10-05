@@ -304,8 +304,8 @@ async function userApi(request, env, path, user) {
     let body;
     try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'bad request' }, 400); }
     const hex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-    if (!Array.isArray(body) || body.length !== 8 || !body.every(c => c && hex.test(c.value) && String(c.name || '').length <= 16)) {
-      return json({ ok: false, error: 'theme colours must be a list of 8, each {value: "#RRGGBB", name}' }, 400);
+    if (!Array.isArray(body) || body.length < 8 || body.length > 32 || !body.every(c => c && hex.test(c.value) && String(c.name || '').length <= 16)) {
+      return json({ ok: false, error: 'theme colours must be a list of 8 to 32, each {value: "#RRGGBB", name}' }, 400);
     }
     idx.settings = { ...(idx.settings || {}), themeColours: body.map(c => ({ value: c.value, name: String(c.name || '') })) };
     await writeIndex(env, user, idx);

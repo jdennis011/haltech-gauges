@@ -76,6 +76,15 @@ input[type=range]{width:110px}
 .wrow select.chan{max-width:230px}
 .colorctl{display:inline-flex;gap:4px;align-items:center}
 .tcol{display:flex;flex-wrap:wrap;gap:8px 16px}
+.wheelcard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wheelcard summary::-webkit-details-marker{display:none}
+.wheelcard summary::before{content:'\25B8';color:var(--dim);display:inline-block;transition:transform .15s}
+.wheelcard[open] summary::before{transform:rotate(90deg)}
+.wheelrow{display:flex;flex-wrap:wrap;gap:20px;align-items:center;margin-top:12px}
+canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-action:none;cursor:crosshair}
+.wheelside{display:flex;flex-direction:column;gap:12px;min-width:200px}
+.wheelside input[type=range]{width:160px}
+.swatch{width:36px;height:36px;border-radius:8px;border:1px solid #3a3a3c;display:inline-block}
 .tcol .tc{display:inline-flex;gap:5px;align-items:center}
 .tcol input[type=text]{width:100px;padding:4px 8px;font-size:13px}
 .tcol input[type=color]{width:36px;height:28px;padding:1px 2px;border-radius:6px}
@@ -128,6 +137,18 @@ input[type=range]{width:110px}
       <span class="muted" id="all-note"></span>
     </div>
   </div>
+  <details class="card wheelcard" id="wheel-card">
+    <summary><strong>Theme colours</strong><span class="muted">change a shared colour: every widget using it, on every gauge, follows</span></summary>
+    <div class="wheelrow">
+      <canvas id="wheel" width="220" height="220" aria-label="Colour wheel"></canvas>
+      <div class="wheelside">
+        <label class="inline">Colour <select id="wheel-pick"></select></label>
+        <div class="row"><span class="swatch" id="wheel-swatch"></span><input type="text" id="wheel-hex" maxlength="7" size="8" class="mono" title="Or type a colour, e.g. #FF8C00"></div>
+        <label class="inline">Brightness <input type="range" id="wheel-v" min="0" max="100"></label>
+        <span class="muted" id="wheel-note"></span>
+      </div>
+    </div>
+  </details>
   <div id="gauges" class="grid"></div>
 </section>
 
@@ -401,6 +422,7 @@ function onMessage(m) {
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
   else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
   else if (m.t === 'themeColours' && themeListOk(m.colours)) {
+    if (Date.now() < wheel.busyUntil) return;  // the wheel is ahead of what the hub last saved
     state.themeColours = m.colours;
     renderThemeColours();
     themeColoursChanged();
@@ -1346,6 +1368,7 @@ function themeColoursChanged() {
 }
 
 function renderThemeColours() {
+  renderWheel();
   const root = $('#theme-colours');
   if (!root || root.contains(document.activeElement)) return;  // not under the user's hand
   root.innerHTML = '';
@@ -1400,6 +1423,136 @@ async function pullCloudThemeColours() {
     themeColoursChanged();
   } catch (e) { /* keep this browser's */ }
 }
+
+// ------------------------------------------------------------ colour wheel
+// On the Gauges tab: pick one of the theme colours and change it on a wheel.
+// The previews follow as it moves; the hub, and so the gauges, get it at most
+// twice a second while dragging and once more on letting go.
+
+const wheel = { index: 0, h: 0, s: 0, v: 1, dragging: false, lastSave: 0, image: null, imageV: -1, busyUntil: 0 };
+
+function hexToHsv(hex) {
+  const n = parseInt(hex6(hex).slice(1), 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: (h * 60 + 360) % 360, s: max ? d / max : 0, v: max };
+}
+
+function hsvToRgb(h, s, v) {
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r + m, g + m, b + m].map(u => Math.round(u * 255));
+}
+const hsvToHex = (h, s, v) => '#' + hsvToRgb(h, s, v).map(u => u.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+// Hue round the rim, white in the middle, at the brightness the slider sets.
+function drawWheel() {
+  const cv = $('#wheel');
+  if (!cv || !$('#wheel-card').open) return;
+  const ctx = cv.getContext('2d'), S = cv.width, c = S / 2, R = c - 6;
+  if (wheel.imageV !== wheel.v) {
+    const img = ctx.createImageData(S, S);
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const dx = x - c, dy = y - c, r = Math.hypot(dx, dy);
+        if (r > R + 1) continue;
+        const [rr, gg, bb] = hsvToRgb((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, Math.min(1, r / R), wheel.v);
+        const i = (y * S + x) * 4;
+        img.data[i] = rr; img.data[i + 1] = gg; img.data[i + 2] = bb;
+        img.data[i + 3] = r <= R ? 255 : Math.round(255 * (R + 1 - r));
+      }
+    }
+    wheel.image = img;
+    wheel.imageV = wheel.v;
+  }
+  ctx.clearRect(0, 0, S, S);
+  ctx.putImageData(wheel.image, 0, 0);
+  const a = wheel.h * Math.PI / 180, mx = c + wheel.s * R * Math.cos(a), my = c + wheel.s * R * Math.sin(a);
+  for (const [w, col] of [[4, '#000'], [2, '#fff']]) {
+    ctx.lineWidth = w; ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// The list of theme colours, and the wheel set to the chosen one.
+function renderWheel() {
+  const sel = $('#wheel-pick');
+  if (!sel) return;
+  wheel.index = Math.max(0, Math.min(wheel.index, state.themeColours.length - 1));
+  if (document.activeElement !== sel) {
+    sel.innerHTML = '';
+    state.themeColours.forEach((c, k) => sel.append(el('option', { value: k, selected: k === wheel.index ? '' : null },
+      (k + 1) + ': ' + (c.name || 'theme colour ' + (k + 1)))));
+  }
+  if (!wheel.dragging) Object.assign(wheel, hexToHsv(themeColourValue(wheel.index)));
+  showWheelColour();
+}
+
+function showWheelColour() {
+  const hex = hsvToHex(wheel.h, wheel.s, wheel.v);
+  $('#wheel-swatch').style.background = hex;
+  if (document.activeElement !== $('#wheel-hex')) $('#wheel-hex').value = hex;
+  if (document.activeElement !== $('#wheel-v')) $('#wheel-v').value = Math.round(wheel.v * 100);
+  $('#wheel-v').style.accentColor = hsvToHex(wheel.h, wheel.s, 1);
+  $('#wheel-note').textContent = 'themecolour' + (wheel.index + 1) + ' in a config';
+  drawWheel();
+}
+
+// The chosen colour has moved: show it at once, tell the hub now and then.
+function wheelChanged(final) {
+  const c = state.themeColours[wheel.index];
+  if (!c) return;
+  c.value = hsvToHex(wheel.h, wheel.s, wheel.v);
+  wheel.busyUntil = Date.now() + 1500;  // the hub's echo of an earlier save must not pull the wheel back
+  showWheelColour();
+  const now = Date.now();
+  if (final || now - wheel.lastSave >= 500) {
+    wheel.lastSave = now;
+    saveThemeColours();
+    renderThemeColours();
+  }
+}
+
+function wheelPoint(ev) {
+  const cv = $('#wheel'), box = cv.getBoundingClientRect(), S = cv.width, R = S / 2 - 6;
+  const x = (ev.clientX - box.left) * S / box.width - S / 2, y = (ev.clientY - box.top) * S / box.height - S / 2;
+  wheel.h = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  // Snap at the rim and in the middle, so a full colour or white is easy to hit.
+  const s = Math.min(1, Math.hypot(x, y) / R);
+  wheel.s = s > 0.96 ? 1 : s < 0.04 ? 0 : s;
+}
+
+$('#wheel').addEventListener('pointerdown', ev => {
+  wheel.dragging = true;
+  try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic event */ }
+  if (wheel.v < 0.1) wheel.v = 1;  // a hue picked on black would stay black
+  wheelPoint(ev);
+  wheelChanged(false);
+});
+$('#wheel').addEventListener('pointermove', ev => { if (!wheel.dragging) return; wheelPoint(ev); wheelChanged(false); });
+const wheelUp = () => { if (!wheel.dragging) return; wheel.dragging = false; wheelChanged(true); };
+$('#wheel').addEventListener('pointerup', wheelUp);
+$('#wheel').addEventListener('pointercancel', wheelUp);
+$('#wheel-v').addEventListener('input', ev => { wheel.dragging = true; wheel.v = +ev.target.value / 100; wheelChanged(false); });
+$('#wheel-v').addEventListener('change', ev => { wheel.dragging = false; wheel.v = +ev.target.value / 100; wheelChanged(true); });
+$('#wheel-hex').addEventListener('change', ev => {
+  const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(ev.target.value.trim());
+  if (!m) { ev.target.value = hsvToHex(wheel.h, wheel.s, wheel.v); return; }
+  Object.assign(wheel, hexToHsv('#' + m[1]));
+  wheelChanged(true);
+});
+$('#wheel-pick').addEventListener('change', ev => {
+  wheel.index = +ev.target.value;
+  Object.assign(wheel, hexToHsv(themeColourValue(wheel.index)));
+  showWheelColour();
+});
+$('#wheel-card').addEventListener('toggle', () => {
+  try { localStorage.setItem('wheelOpen', $('#wheel-card').open ? '1' : ''); } catch (e) { /* private mode */ }
+  if ($('#wheel-card').open) renderWheel();
+});
+try { if (localStorage.getItem('wheelOpen')) $('#wheel-card').open = true; } catch (e) { /* private mode */ }
 
 // ---------------------------------------------------------------- alerts
 // Rules the hub checks against the live data: while one holds, the gauges show

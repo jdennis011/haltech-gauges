@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <unity.h>
 
@@ -526,6 +527,118 @@ void test_xfer_no_receiver_times_out() {
     TEST_ASSERT_LESS_THAN(5000, ms);
 }
 
+void test_asset_query_and_reply_round_trip() {
+    AssetQuery q;
+    q.crc = 0x89ABCDEF;
+    const CanFrame f = pack(q, 0x040506);
+    TEST_ASSERT_EQUAL(int(Msg::Asset), int(idMsg(f.id)));
+    TEST_ASSERT_EQUAL(int(Dir::HubToGauge), int(idDir(f.id)));
+    AssetQuery q2;
+    TEST_ASSERT_TRUE(unpack(f, q2));
+    TEST_ASSERT_EQUAL(int(XferKind::Image), int(q2.kind));
+    TEST_ASSERT_EQUAL_HEX32(0x89ABCDEF, q2.crc);
+
+    AssetReply r;
+    r.crc = 0x01020304;
+    r.have = true;
+    const CanFrame g = pack(r, 0x040506);
+    TEST_ASSERT_EQUAL(int(Dir::GaugeToHub), int(idDir(g.id)));
+    AssetReply r2;
+    TEST_ASSERT_TRUE(unpack(g, r2));
+    TEST_ASSERT_EQUAL_HEX32(0x01020304, r2.crc);
+    TEST_ASSERT_TRUE(r2.have);
+
+    // A query is not a reply and the other way round; short frames are refused.
+    TEST_ASSERT_FALSE(unpack(f, r2));
+    TEST_ASSERT_FALSE(unpack(g, q2));
+    CanFrame cut = g;
+    cut.len = 6;
+    TEST_ASSERT_FALSE(unpack(cut, r2));
+}
+
+namespace {
+
+// A payload read a block at a time, as the hub reads an image file.
+struct Store {
+    std::vector<uint8_t> data;
+    int reads = 0;
+    int failAfter = -1;  // read number that fails
+
+    static bool read(uint32_t offset, uint8_t* out, uint32_t len, void* ctx) {
+        Store* s = static_cast<Store*>(ctx);
+        if (s->failAfter >= 0 && s->reads >= s->failAfter) return false;
+        s->reads++;
+        if (offset > s->data.size() || len > s->data.size() - offset) return false;
+        memcpy(out, s->data.data() + offset, len);
+        return true;
+    }
+};
+
+void startFrom(Rig& rig, Store& store) {
+    rig.sender.start({Wire::send, &rig.toReceiver}, kNode, Dir::HubToGauge, 1, XferKind::Image,
+                     XferSource{Store::read, &store}, uint32_t(store.data.size()),
+                     crc32(store.data.data(), store.data.size()), rig.now);
+}
+
+}  // namespace
+
+void test_xfer_streams_from_storage() {
+    for (size_t size : {size_t(0), size_t(5), size_t(224), size_t(225), size_t(30000)}) {
+        Rig rig;
+        Store store;
+        store.data = makePayload(size, uint32_t(size));
+        startFrom(rig, store);
+        rig.run();
+        assertDelivered(rig, store.data);
+        TEST_ASSERT_EQUAL(int(XferKind::Image), int(rig.sink.kind));
+        // One read per 32-frame block, not one per frame.
+        TEST_ASSERT_TRUE(store.reads <= int(size / 224 + 1));
+    }
+}
+
+void test_xfer_streams_with_loss() {
+    for (uint32_t seed = 1; seed <= 10; seed++) {
+        Rig rig;
+        rig.toReceiver.rng = seed;
+        rig.toSender.rng = seed * 31;
+        rig.toReceiver.dropPermille = rig.toSender.dropPermille = 20;
+        Store store;
+        store.data = makePayload(20000, seed);
+        startFrom(rig, store);
+        rig.run(600000);
+        assertDelivered(rig, store.data);
+    }
+}
+
+void test_xfer_read_failure_stops_the_transfer() {
+    Rig rig;
+    Store store;
+    store.data = makePayload(5000);
+    store.failAfter = 3;
+    startFrom(rig, store);
+    rig.run();
+    TEST_ASSERT_EQUAL(int(XferSender::State::Failed), int(rig.sender.state()));
+    TEST_ASSERT_EQUAL(int(XferStatus::ReadFail), int(rig.sender.result()));
+    TEST_ASSERT_EQUAL(0, rig.sink.completed);
+    for (int i = 0; i < 50; i++) rig.step();  // the abort reaches the receiver
+    TEST_ASSERT_FALSE(rig.receiver.active());
+    TEST_ASSERT_EQUAL(1, rig.sink.dropped);
+}
+
+void test_xfer_image_speed_on_a_clean_link() {
+    // A 100 KB image with the bus to itself; live data shares it in the car.
+    Rig rig;
+    Store store;
+    store.data = makePayload(100 * 1024);
+    startFrom(rig, store);
+    const uint32_t ms = rig.run(600000);
+    assertDelivered(rig, store.data);
+    char msg[80];
+    snprintf(msg, sizeof(msg), "100 KB image in %u ms (%u KB/s)", unsigned(ms), unsigned(100 * 1000 / ms));
+    TEST_MESSAGE(msg);
+    TEST_ASSERT_LESS_THAN(10000, ms);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_crc32_known_vector);
@@ -549,5 +662,10 @@ int main(int, char**) {
     RUN_TEST(test_xfer_sender_vanishes_mid_transfer);
     RUN_TEST(test_xfer_new_session_replaces_stale_one);
     RUN_TEST(test_xfer_no_receiver_times_out);
+    RUN_TEST(test_asset_query_and_reply_round_trip);
+    RUN_TEST(test_xfer_streams_from_storage);
+    RUN_TEST(test_xfer_streams_with_loss);
+    RUN_TEST(test_xfer_read_failure_stops_the_transfer);
+    RUN_TEST(test_xfer_image_speed_on_a_clean_link);
     return UNITY_END();
 }

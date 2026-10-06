@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <ESP32-TWAI-CAN.hpp>
 #include <Preferences.h>
+#include <esp_heap_caps.h>
 #include <esp_mac.h>
 
 #include <atomic>
@@ -10,6 +11,7 @@
 #include "board_pins.h"
 #include "face_model.h"
 #include "gauge_node.h"
+#include "image_store.h"
 #include "version.h"
 
 using namespace hg;
@@ -97,10 +99,37 @@ void onStatus(proto::Status& status, void*) {
     status.flags = 0;
 }
 
-proto::XferStatus refuseTransfer(proto::XferKind, uint32_t, uint8_t**, void*) {
-    return proto::XferStatus::Busy;
+// Images are taken in to PSRAM and handed to the image store, which writes
+// them to flash in the background. Configs arrive with the face builder.
+uint8_t* rxBuffer = nullptr;
+
+void freeRxBuffer() {
+    free(rxBuffer);
+    rxBuffer = nullptr;
 }
-bool ignoreTransfer(proto::XferKind, const uint8_t*, uint32_t, void*) { return false; }
+
+proto::XferStatus onTransferAccept(proto::XferKind kind, uint32_t size, uint8_t** buffer, void*) {
+    if (kind != proto::XferKind::Image) return proto::XferStatus::Busy;
+    if (size > proto::kMaxImageBytes || !image_store::roomFor(size)) return proto::XferStatus::TooBig;
+    freeRxBuffer();
+    const size_t bytes = size ? size : 1;
+    rxBuffer = static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!rxBuffer) rxBuffer = static_cast<uint8_t*>(malloc(bytes));  // a board without PSRAM
+    if (!rxBuffer) return proto::XferStatus::Busy;
+    *buffer = rxBuffer;
+    return proto::XferStatus::Ok;
+}
+
+bool onTransferComplete(proto::XferKind kind, const uint8_t*, uint32_t size, void*) {
+    if (kind != proto::XferKind::Image || !rxBuffer) return false;
+    uint8_t* data = rxBuffer;
+    rxBuffer = nullptr;
+    return image_store::submit(data, size);  // the store owns the buffer now
+}
+
+void onTransferDropped(void*) { freeRxBuffer(); }
+
+bool onHasImage(uint32_t crc, void*) { return image_store::has(crc); }
 
 uint32_t loadNode(const uint8_t mac[6]) {
     Preferences prefs;
@@ -176,6 +205,8 @@ void begin() {
     ESP32Can.setTxQueueSize(16);
     if (!ESP32Can.begin(TWAI_SPEED_1000KBPS)) Serial.println("CAN start failed");
 
+    if (!image_store::begin()) Serial.println("Image storage failed to mount");
+
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     const uint32_t id = loadNode(mac);
@@ -191,7 +222,8 @@ void begin() {
     handler.status = onStatus;
     handler.alert = onAlert;
     handler.themeColours = onThemeColours;
-    handler.transfer = {refuseTransfer, ignoreTransfer, nullptr, nullptr};
+    handler.transfer = {onTransferAccept, onTransferComplete, onTransferDropped, nullptr};
+    handler.hasImage = onHasImage;
     node.init({canSend, nullptr}, mac, id, info, cfg::kSchemaVersion, handler);
     {
         // The last theme colours the hub sent, or the defaults.

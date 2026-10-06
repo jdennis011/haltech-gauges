@@ -22,6 +22,23 @@ uint32_t frameCountFor(uint32_t size) {
 void XferSender::start(const XferLink& link, uint32_t node, Dir dir, uint8_t session,
                        XferKind kind, const uint8_t* data, uint32_t size, uint32_t nowMs,
                        const XferTiming& timing) {
+    data_ = data;
+    source_ = {};
+    crc_ = crc32(data, size);
+    begin(link, node, dir, session, kind, size, nowMs, timing);
+}
+
+void XferSender::start(const XferLink& link, uint32_t node, Dir dir, uint8_t session,
+                       XferKind kind, const XferSource& source, uint32_t size, uint32_t crc,
+                       uint32_t nowMs, const XferTiming& timing) {
+    data_ = nullptr;
+    source_ = source;
+    crc_ = crc;
+    begin(link, node, dir, session, kind, size, nowMs, timing);
+}
+
+void XferSender::begin(const XferLink& link, uint32_t node, Dir dir, uint8_t session,
+                       XferKind kind, uint32_t size, uint32_t nowMs, const XferTiming& timing) {
     link_ = link;
     timing_ = timing;
     if (timing_.blockFrames < 1) timing_.blockFrames = 1;
@@ -31,9 +48,8 @@ void XferSender::start(const XferLink& link, uint32_t node, Dir dir, uint8_t ses
     dir_ = dir;
     session_ = session;
     kind_ = kind;
-    data_ = data;
+    haveBlock_ = false;
     size_ = size;
-    crc_ = crc32(data, size);
     total_ = frameCountFor(size);
     blockStart_ = 0;
     cursor_ = 0;
@@ -60,6 +76,21 @@ bool XferSender::retry() {
     }
     retries_++;
     return true;
+}
+
+const uint8_t* XferSender::payloadAt(uint32_t index) {
+    const uint32_t offset = index * kXferPayloadPerFrame;
+    if (!source_.read) return data_ + offset;
+    // Read the block the first time one of its frames goes out. A resend
+    // after a loss starts a new block where the receiver says it is.
+    if (!haveBlock_ || index < blockLoaded_ || index >= blockLoaded_ + timing_.blockFrames) {
+        uint32_t len = size_ - blockStart_ * kXferPayloadPerFrame;
+        if (len > timing_.blockFrames * kXferPayloadPerFrame) len = timing_.blockFrames * kXferPayloadPerFrame;
+        haveBlock_ = source_.read(blockStart_ * kXferPayloadPerFrame, block_, len, source_.ctx);
+        if (!haveBlock_) return nullptr;
+        blockLoaded_ = blockStart_;
+    }
+    return block_ + (offset - blockLoaded_ * kXferPayloadPerFrame);
 }
 
 void XferSender::abort() {
@@ -110,8 +141,17 @@ void XferSender::poll(uint32_t nowMs) {
                 uint32_t len = size_ - offset;
                 if (len > kXferPayloadPerFrame) len = kXferPayloadPerFrame;
                 const bool last = cursor_ + 1 == blockEnd;
+                const uint8_t* payload = payloadAt(cursor_);
+                if (!payload) {
+                    // Tell the receiver to let go, then give up.
+                    XferAbort m;
+                    m.session = session_;
+                    link_.send(pack(m, dir_, node_), link_.ctx);
+                    fail(XferStatus::ReadFail);
+                    return;
+                }
                 const CanFrame f =
-                    packXferData(dir_, node_, uint8_t(cursor_), data_ + offset, uint8_t(len), last);
+                    packXferData(dir_, node_, uint8_t(cursor_), payload, uint8_t(len), last);
                 if (!link_.send(f, link_.ctx)) break;
                 cursor_++;
             }

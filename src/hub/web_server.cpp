@@ -19,6 +19,7 @@
 #include "haltech.h"
 #include "hub_config.h"
 #include "hub_state.h"
+#include "image_store.h"
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
@@ -217,6 +218,16 @@ const char* xferName(proto::XferStatus s) {
         case proto::XferStatus::NoSession: return "no session";
         case proto::XferStatus::Rejected: return "rejected";
         case proto::XferStatus::Timeout: return "timeout";
+        case proto::XferStatus::ReadFail: return "read failed";
+    }
+    return "?";
+}
+
+const char* kindName(proto::XferKind k) {
+    switch (k) {
+        case proto::XferKind::Config: return "config";
+        case proto::XferKind::TryConfig: return "try";
+        case proto::XferKind::Image: return "image";
     }
     return "?";
 }
@@ -270,6 +281,7 @@ void buildStatus(JsonObject o) {
             char node[8];
             snprintf(node, sizeof(node), "%06lX", (unsigned long)m.pushNode());
             push["node"] = node;
+            push["kind"] = kindName(m.pushKind());
             push["acked"] = m.pushFramesAcked();
             push["total"] = m.pushFramesTotal();
         }
@@ -333,6 +345,30 @@ void buildGauges(JsonArray arr) {
             push["failed"] = g.pushFailed;
             push["result"] = xferName(g.pushResult);
             push["active"] = m.pushBusy() && m.pushNode() == g.node;
+            if (push["active"]) {
+                push["kind"] = kindName(m.pushKind());
+                push["acked"] = m.pushFramesAcked();
+                push["total"] = m.pushFramesTotal();
+            }
+            // What the gauge should hold: the config's CRC with its image map,
+            // and how many of its images it has.
+            HubManager::Desired d;
+            if (g.haveHello && library_store::desired(g, d, nullptr)) {
+                snprintf(buf, sizeof(buf), "%08lX", (unsigned long)d.crc);
+                o["desired_crc"] = buf;
+                if (d.imageCount) {
+                    JsonObject images = o["images"].to<JsonObject>();
+                    uint8_t have = 0, refused = 0;
+                    for (uint8_t k = 0; k < d.imageCount; k++) {
+                        const HubManager::ImageState s = HubManager::imageState(g, d.images[k]);
+                        if (s == HubManager::ImageState::Have) have++;
+                        if (s == HubManager::ImageState::Refused) refused++;
+                    }
+                    images["need"] = d.imageCount;
+                    images["have"] = have;
+                    images["refused"] = refused;
+                }
+            }
         }
     }
 
@@ -530,13 +566,19 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
     if (action == "try") {
         cfg::Config parsed;
         if (!parseConfigBody(r, parsed)) return;
+        if (parsed.hasImageMap) return sendError(r, 400, "'images' is filled in by the hub: leave it out");
         const Body* b = bodyOf(r);
+        std::vector<uint8_t> withMap;
+        std::vector<uint32_t> images;
+        library_store::withImageMap(b->data, b->len, withMap, images);
         hub::Lock lock;
         HubManager& m = hub::manager();
         if (!m.find(node)) return sendError(r, 404, "unknown gauge");
         if (m.pushBusy()) return sendError(r, 409, "a transfer is already running; try again in a moment");
-        tryBuffer.assign(b->data, b->data + b->len);
-        if (!m.tryConfig(node, tryBuffer.data(), uint32_t(tryBuffer.size()), millis())) {
+        tryBuffer.swap(withMap);
+        // Any images the gauge lacks go first; the config follows.
+        if (!m.tryConfig(node, tryBuffer.data(), uint32_t(tryBuffer.size()), millis(), images.data(),
+                         images.size())) {
             return sendError(r, 409, "gauge is offline");
         }
         return sendOk(r);
@@ -751,6 +793,84 @@ void simulatorJson(JsonDocument& doc) {
 
 // GET returns the simulator's settings. POST changes any of them: enabled,
 // paused, speed, clear, and overrides as {channel: {hold: v} | {min, max} | null}.
+// ---- images: GET /api/images lists them; GET, PUT (the file as the body)
+// and DELETE /api/images/{name} for one.
+
+File imageUpload;
+struct ImageMark {  // malloc'd, so the server's free() of _tempObject is right
+    bool ok;
+    char error[96];
+};
+
+void imageBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t index, size_t total) {
+    if (index == 0) {
+        ImageMark* m = static_cast<ImageMark*>(malloc(sizeof(ImageMark)));
+        if (!m) return;
+        m->ok = false;
+        m->error[0] = 0;
+        r->_tempObject = m;
+        std::string error;
+        if (imageUpload) {
+            snprintf(m->error, sizeof(m->error), "another image is uploading; try again in a moment");
+            return;
+        }
+        if (!image_store::roomFor(uint32_t(total), error)) {
+            snprintf(m->error, sizeof(m->error), "%s", error.c_str());
+            return;
+        }
+        imageUpload = LittleFS.open(image_store::uploadPath(), "w");
+        if (!imageUpload) return;
+        m->ok = true;
+    }
+    ImageMark* m = static_cast<ImageMark*>(r->_tempObject);
+    if (!m || !m->ok) return;
+    if (imageUpload.write(data, len) != len) {
+        m->ok = false;
+        snprintf(m->error, sizeof(m->error), "not enough room on the hub");
+        imageUpload.close();
+        return;
+    }
+    if (index + len >= total) imageUpload.close();
+}
+
+void handleImages(AsyncWebServerRequest* r) {
+    JsonDocument doc;
+    image_store::listJson(doc["images"].to<JsonArray>());
+    doc["free"] = LittleFS.totalBytes() - LittleFS.usedBytes();
+    doc["total"] = LittleFS.totalBytes();
+    doc["max_bytes"] = image_store::kMaxBytes;
+    doc["max_count"] = image_store::kMaxCount;
+    sendJson(r, doc);
+}
+
+void handleImage(AsyncWebServerRequest* r) {
+    const String name = segment(r->url(), 2);
+    if (r->method() == HTTP_PUT) {
+        ImageMark* m = static_cast<ImageMark*>(r->_tempObject);
+        if (imageUpload) imageUpload.close();
+        if (!m || !m->ok) {
+            LittleFS.remove(image_store::uploadPath());
+            return sendError(r, 400, m && m->error[0] ? m->error : "send the image file as the request body");
+        }
+        std::string error;
+        if (!image_store::accept(name.c_str(), error)) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    if (r->method() == HTTP_DELETE) {
+        if (!image_store::remove(name.c_str())) return sendError(r, 404, "no such image");
+        return sendOk(r);
+    }
+    std::string path;
+    const char* type = nullptr;
+    if (!image_store::file(name.c_str(), path, type)) return sendError(r, 404, "no such image");
+    if (heapLow(r) || tooBusy(r)) return;
+    auto guard = std::make_shared<BigTransfer>();
+    AsyncWebServerResponse* res = r->beginResponse(LittleFS, path.c_str(), type);
+    res->addHeader("Cache-Control", "no-cache");
+    r->onDisconnect([guard]() {});  // counts as a large transfer until the client has it
+    r->send(res);
+}
+
 // ---- recordings: files streamed to and from the filesystem
 
 const size_t kMaxRecordingBytes = 1024 * 1024;
@@ -1007,6 +1127,9 @@ void begin() {
     server.on("/api/fonts", HTTP_GET, handleFonts);
     server.on("/api/virtual/*", HTTP_PUT | HTTP_DELETE, handleVirtual, nullptr, collectBody);
     server.on("/api/virtual", HTTP_GET | HTTP_POST, handleVirtual, nullptr, collectBody);
+    server.on("/api/images/*", HTTP_GET | HTTP_DELETE, handleImage);
+    server.on("/api/images/*", HTTP_PUT, handleImage, nullptr, imageBody);
+    server.on("/api/images", HTTP_GET, handleImages);
     server.on("/api/recordings/*", HTTP_GET | HTTP_DELETE, handleRecording);
     server.on("/api/recordings/*", HTTP_PUT, handleRecording, nullptr, recordingBody);
     server.on("/api/recordings", HTTP_GET, handleRecordings);

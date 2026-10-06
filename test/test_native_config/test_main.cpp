@@ -5,6 +5,7 @@
 
 #include "face_model.h"
 #include "haltech.h"
+#include "image_format.h"
 
 using namespace hg;
 using namespace hg::cfg;
@@ -388,6 +389,198 @@ void test_theme_presets_exist() {
     }
 }
 
+void test_images_in_a_config() {
+    Config c;
+    ParseResult r = parse(R"({"schema":1,"faces":[
+        {"name":"A","bgImage":"carbon","bgImageOpacity":40,"widgets":[
+          {"type":"image","image":"logo","x":233,"y":120,"w":200,"h":90,"fit":"cover","opacity":80,"rotate":-10},
+          {"type":"image","image":"oil-can","channel":"oil_pressure_light","flash":true},
+          {"type":"image","image":"logo"}]},
+        {"name":"B","bgImage":"logo","widgets":[{"type":"label","text":"x"}]}]})", c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    const Face& a = c.faces[0];
+    TEST_ASSERT_EQUAL_STRING("carbon", a.bgImage.c_str());
+    TEST_ASSERT_EQUAL(40, a.bgImageOpacity);
+    TEST_ASSERT_EQUAL(100, c.faces[1].bgImageOpacity);
+
+    const Widget& logo = a.widgets[0];
+    TEST_ASSERT_EQUAL(int(WidgetType::Image), int(logo.type));
+    TEST_ASSERT_EQUAL_STRING("logo", logo.image.c_str());
+    TEST_ASSERT_EQUAL(200, logo.w);
+    TEST_ASSERT_EQUAL(90, logo.h);
+    TEST_ASSERT_EQUAL(int(ImageFit::Cover), int(logo.fit));
+    TEST_ASSERT_EQUAL(80, logo.opacity);
+    TEST_ASSERT_EQUAL(-10, logo.rotate);
+    TEST_ASSERT_EQUAL(-1, logo.channel);
+    TEST_ASSERT_FALSE(logo.warn.enabled);
+
+    // With a channel, an image shows only while its condition holds.
+    const Widget& can = a.widgets[1];
+    TEST_ASSERT_EQUAL(160, can.w);
+    TEST_ASSERT_EQUAL(int(ImageFit::Contain), int(can.fit));
+    TEST_ASSERT_TRUE(can.channel >= 0);
+    TEST_ASSERT_TRUE(can.hideWhenOff);
+    TEST_ASSERT_TRUE(can.warn.enabled);
+    TEST_ASSERT_TRUE(can.warn.flash);
+
+    // Each image once, in the order it first appears.
+    const std::vector<std::string> used = imagesUsed(c);
+    TEST_ASSERT_EQUAL(3, used.size());
+    TEST_ASSERT_EQUAL_STRING("carbon", used[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("logo", used[1].c_str());
+    TEST_ASSERT_EQUAL_STRING("oil-can", used[2].c_str());
+    TEST_ASSERT_FALSE(c.hasImageMap);
+    TEST_ASSERT_NULL(findImage(c, "logo"));
+
+    assertRejected(withWidget(R"({"type":"image"})"), "'image' is required");
+    assertRejected(withWidget(R"({"type":"image","image":"my logo"})"), "must be an image name");
+    assertRejected(withWidget(R"({"type":"image","image":"logo","fit":"tile"})"), "unknown value 'tile'");
+    assertRejected(withWidget(R"({"type":"image","image":"logo","w":0})"), "'w' must be between 1 and 466");
+}
+
+void test_image_map_from_the_hub() {
+    Config c;
+    ParseResult r = parse(R"({"images":{"logo":"1A2B3C4D","carbon":"00ff00aa"},"schema":1,
+        "faces":[{"bgImage":"carbon","widgets":[{"type":"image","image":"logo"}]}]})", c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_TRUE(c.hasImageMap);
+    TEST_ASSERT_EQUAL(2, c.images.size());
+    TEST_ASSERT_EQUAL_HEX32(0x1A2B3C4D, findImage(c, "logo")->crc);
+    TEST_ASSERT_EQUAL_HEX32(0x00FF00AA, findImage(c, "carbon")->crc);
+    TEST_ASSERT_NULL(findImage(c, "other"));
+
+    assertRejected(R"({"images":{"logo":"1A2B3C4"},"schema":1,"faces":[{"widgets":[{"type":"label","text":"x"}]}]})",
+                   "8 hex digits");
+    assertRejected(R"({"images":{"logo":"1A2B3C4G"},"schema":1,"faces":[{"widgets":[{"type":"label","text":"x"}]}]})",
+                   "8 hex digits");
+    assertRejected(R"({"images":["logo"],"schema":1,"faces":[{"widgets":[{"type":"label","text":"x"}]}]})",
+                   "'images' must map");
+}
+
+void test_image_limit_per_config() {
+    // Sixteen images on one face and a seventeenth behind another face is too many.
+    std::string json = R"({"schema":1,"faces":[{"widgets":[)";
+    for (int i = 0; i < 16; i++) json += std::string(i ? "," : "") + R"({"type":"image","image":"img)" + std::to_string(i) + "\"}";
+    json += R"(]},{"bgImage":"one-more","widgets":[{"type":"label","text":"x"}]}]})";
+    assertRejected(json, "more than 16 different images");
+
+    // Sixteen is fine, and the same image used twice counts once.
+    std::string ok = R"({"schema":1,"faces":[{"bgImage":"img0","widgets":[)";
+    for (int i = 0; i < 16; i++) ok += std::string(i ? "," : "") + R"({"type":"image","image":"img)" + std::to_string(i) + "\"}";
+    ok += "]}]}";
+    Config c;
+    ParseResult r = parse(ok, c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL(16, imagesUsed(c).size());
+}
+
+namespace {
+
+// A JPEG cut down to its markers: start, an APP0 segment, a frame header.
+std::vector<uint8_t> jpegHeader(uint8_t sof, uint16_t w, uint16_t h, uint8_t components = 3) {
+    std::vector<uint8_t> j = {0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0, 1, 1, 0, 0, 1, 0, 1, 0, 0};
+    const uint8_t frame[] = {0xFF, sof, 0x00, 0x11, 8, uint8_t(h >> 8), uint8_t(h), uint8_t(w >> 8), uint8_t(w), components};
+    j.insert(j.end(), frame, frame + sizeof(frame));
+    j.resize(j.size() + 9, 0);
+    j.push_back(0xFF);
+    j.push_back(0xD9);
+    return j;
+}
+
+std::vector<uint8_t> pngHeader(uint32_t w, uint32_t h) {
+    std::vector<uint8_t> p = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
+    for (uint32_t v : {w, h}) {
+        for (int s = 24; s >= 0; s -= 8) p.push_back(uint8_t(v >> s));
+    }
+    const uint8_t rest[] = {8, 6, 0, 0, 0, 0, 0, 0, 0};  // depth, RGBA, ..., CRC
+    p.insert(p.end(), rest, rest + sizeof(rest));
+    return p;
+}
+
+void assertProbeFails(const std::vector<uint8_t>& file, const char* expect) {
+    ImageInfo info;
+    std::string error;
+    TEST_ASSERT_FALSE(probeImage(file.data(), file.size(), info, error));
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(error.c_str(), expect), error.c_str());
+}
+
+}  // namespace
+
+void test_image_headers() {
+    ImageInfo info;
+    std::string error;
+    const std::vector<uint8_t> jpeg = jpegHeader(0xC0, 466, 300);
+    TEST_ASSERT_TRUE_MESSAGE(probeImage(jpeg.data(), jpeg.size(), info, error), error.c_str());
+    TEST_ASSERT_EQUAL(int(ImageType::Jpeg), int(info.type));
+    TEST_ASSERT_EQUAL(466, info.width);
+    TEST_ASSERT_EQUAL(300, info.height);
+    TEST_ASSERT_EQUAL_STRING("jpeg", imageTypeName(info.type));
+
+    const std::vector<uint8_t> grey = jpegHeader(0xC0, 64, 64, 1);
+    TEST_ASSERT_TRUE(probeImage(grey.data(), grey.size(), info, error));
+
+    const std::vector<uint8_t> png = pngHeader(120, 80);
+    TEST_ASSERT_TRUE_MESSAGE(probeImage(png.data(), png.size(), info, error), error.c_str());
+    TEST_ASSERT_EQUAL(int(ImageType::Png), int(info.type));
+    TEST_ASSERT_EQUAL(120, info.width);
+    TEST_ASSERT_EQUAL(80, info.height);
+
+    assertProbeFails(jpegHeader(0xC2, 100, 100), "progressive JPEG");
+    assertProbeFails(jpegHeader(0xC3, 100, 100), "lossless or arithmetic");
+    assertProbeFails(jpegHeader(0xC0, 100, 100, 4), "CMYK");
+    assertProbeFails(jpegHeader(0xC0, 800, 600), "800 x 600");
+    assertProbeFails(pngHeader(467, 10), "at most 466 x 466");
+    assertProbeFails(pngHeader(0, 10), "no pixels");
+    std::vector<uint8_t> cut = jpegHeader(0xC0, 100, 100);
+    cut.resize(12);
+    assertProbeFails(cut, "damaged or cut short");
+    assertProbeFails(std::vector<uint8_t>{'G', 'I', 'F', '8', '9', 'a', 0, 0, 0, 0}, "not a JPEG or PNG");
+    assertProbeFails(std::vector<uint8_t>{0xFF, 0xD8}, "too short");
+}
+
+void test_hub_adds_the_image_map() {
+    const std::string json = R"(  {"schema":1,"faces":[{"bgImage":"carbon","widgets":[
+        {"type":"image","image":"logo"},{"type":"label","text":"x","image":"not-an-image-widget"},
+        {"type":"image","image":"logo"}]}]})";
+    const uint8_t* data = (const uint8_t*)json.data();
+    const std::vector<std::string> names = imagesNamedIn(data, json.size());
+    TEST_ASSERT_EQUAL(2, names.size());
+    TEST_ASSERT_EQUAL_STRING("carbon", names[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("logo", names[1].c_str());
+
+    // The hub has both: the map goes in after the opening brace, the rest untouched.
+    std::vector<uint8_t> out;
+    addImageMap(data, json.size(), {{"carbon", 0x0000ABCD}, {"logo", 0xDEADBEEF}}, out);
+    const std::string text(out.begin(), out.end());
+    TEST_ASSERT_EQUAL_STRING(R"(  {"images":{"carbon":"0000ABCD","logo":"DEADBEEF"},"schema":1,)",
+                             text.substr(0, text.find("\"faces\"")).c_str());
+    TEST_ASSERT_EQUAL_STRING(json.substr(json.find("\"faces\"")).c_str(), text.substr(text.find("\"faces\"")).c_str());
+
+    // The gauge reads it back.
+    Config c;
+    ParseResult r = parseConfig(out.data(), out.size(), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL_HEX32(0xDEADBEEF, findImage(c, "logo")->crc);
+    TEST_ASSERT_EQUAL_HEX32(0x0000ABCD, findImage(c, "carbon")->crc);
+
+    // No images on the hub: the config goes as it is.
+    addImageMap(data, json.size(), {}, out);
+    TEST_ASSERT_TRUE(std::string(out.begin(), out.end()) == json);
+    TEST_ASSERT_EQUAL(0, imagesNamedIn((const uint8_t*)"not json", 8).size());
+
+    // A config at the size limit still fits with sixteen long names in its map.
+    std::vector<ImageRef> refs;
+    for (int i = 0; i < 16; i++) refs.push_back({std::string(30, 'a') + std::to_string(10 + i), 0xFFFFFFFF});
+    std::string big = R"({"schema":1,"name":"padding","faces":[{"widgets":[{"type":"label","text":"x"}]}],"pad":")";
+    big += std::string(kMaxConfigBytes - big.size() - 2, ' ') + "\"}";
+    TEST_ASSERT_EQUAL(kMaxConfigBytes, big.size());
+    addImageMap((const uint8_t*)big.data(), big.size(), refs, out);
+    TEST_ASSERT_TRUE(out.size() <= kMaxConfigBytes + kMaxImageMapBytes);
+    r = parseConfig(out.data(), out.size(), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL(16, c.images.size());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_full_config_parses);
@@ -403,5 +596,10 @@ int main(int, char**) {
     RUN_TEST(test_shapes_paths_and_unit_position);
     RUN_TEST(test_theme_colours);
     RUN_TEST(test_theme_presets_exist);
+    RUN_TEST(test_images_in_a_config);
+    RUN_TEST(test_image_map_from_the_hub);
+    RUN_TEST(test_image_limit_per_config);
+    RUN_TEST(test_image_headers);
+    RUN_TEST(test_hub_adds_the_image_map);
     return UNITY_END();
 }

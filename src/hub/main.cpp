@@ -6,12 +6,14 @@
 
 #include "alert_monitor.h"
 #include "can_ports.h"
+#include "crc32.h"
 #include "channel_store.h"
 #include "display_control.h"
 #include "haltech.h"
 #include "hub_config.h"
 #include "hub_manager.h"
 #include "hub_state.h"
+#include "image_store.h"
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
@@ -144,6 +146,30 @@ void printRoster() {
     if (!any) Serial.println("  none");
 }
 
+// Reads every stored image the way a transfer to a gauge does, a block at a
+// time, and checks its CRC against the one configs give the gauges.
+void checkImages() {
+    JsonDocument doc;
+    image_store::listJson(doc.to<JsonArray>());
+    if (doc.as<JsonArray>().size() == 0) Serial.println("No images stored");
+    for (JsonObjectConst im : doc.as<JsonArrayConst>()) {
+        const uint32_t want = uint32_t(strtoul(im["crc"] | "0", nullptr, 16));
+        proto::XferSource source = {};
+        uint32_t size = 0;
+        bool ok = image_store::openForSend(want, source, size, nullptr);
+        uint32_t crc = 0;
+        uint8_t block[224];
+        for (uint32_t pos = 0; ok && pos < size; pos += sizeof(block)) {
+            const uint32_t n = size - pos < sizeof(block) ? size - pos : sizeof(block);
+            ok = source.read(pos, block, n, source.ctx);
+            if (ok) crc = crc32(block, n, crc);
+        }
+        image_store::closeSend(nullptr);
+        Serial.printf("  %-32s %6lu bytes  %s\n", (const char*)(im["name"] | ""), (unsigned long)size,
+                      !ok ? "READ FAILED" : crc == want ? "ok" : "CRC MISMATCH");
+    }
+}
+
 void handleConsole() {
     while (Serial.available()) {
         switch (Serial.read()) {
@@ -182,10 +208,13 @@ void handleConsole() {
                 Serial.println(ssid.isEmpty() ? "Home network forgotten" : "Home network saved, connecting");
                 break;
             }
+            case 'm':
+                checkImages();
+                break;
             case '?':
             case 'h':
                 Serial.println("s = toggle simulator, r = list gauges, i = identify all, w = wifi status,");
-                Serial.println("W<network>;<password> = join a home network (W alone forgets it)");
+                Serial.println("m = check the stored images, W<network>;<password> = join a home network (W alone forgets it)");
                 break;
             default:
                 break;
@@ -273,6 +302,7 @@ void setup() {
 #endif
     if (!gaugePort.begin()) Serial.println("Gauge CAN start failed");
     if (!library_store::begin()) Serial.println("Config storage failed to mount");
+    image_store::begin();
     virtual_gauges::begin();
     display_control::begin();
     recorder::begin();
@@ -285,6 +315,8 @@ void setup() {
     handler.changed = onRosterChanged;
     handler.online = onGaugeOnline;
     handler.request = display_control::onRequest;
+    handler.openImage = image_store::openForSend;
+    handler.closeImage = image_store::closeSend;
     hubManager.init({managementSend, nullptr}, handler, millis());
 
     wifi_ap::begin();

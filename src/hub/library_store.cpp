@@ -11,6 +11,7 @@
 
 #include "crc32.h"
 #include "face_model.h"
+#include "image_store.h"
 
 using namespace hg;
 using proto::HubManager;
@@ -26,9 +27,10 @@ const size_t kMaxName = 32;
 
 struct Entry {
     std::string name;
-    std::vector<uint8_t> data;
+    std::vector<uint8_t> data;  // with the image map
     uint32_t crc = 0;
     uint8_t schema = cfg::kSchemaVersion;
+    std::vector<uint32_t> images;
 };
 
 struct Assignment {
@@ -103,9 +105,9 @@ bool loadIntoCache(const char* name) {
     if (!readFile(pathFor(name).c_str(), data)) return false;
     Entry* e = new Entry;
     e->name = name;
-    e->crc = crc32(data.data(), data.size());
     e->schema = schemaOf(data.data(), data.size());
-    e->data = std::move(data);
+    withImageMap(data.data(), data.size(), e->data, e->images);
+    e->crc = crc32(e->data.data(), e->data.size());
     retire(name);
     cache.push_back(e);
     return true;
@@ -186,6 +188,10 @@ bool put(const char* name, const uint8_t* data, size_t size, std::string& error)
         error = result.error;
         return false;
     }
+    if (parsed.hasImageMap) {
+        error = "'images' is filled in by the hub on the way to a gauge: leave it out";
+        return false;
+    }
 
     File f = LittleFS.open(kTempFile, "w");
     if (!f) {
@@ -242,6 +248,8 @@ void listJson(JsonArray out) {
     JsonDocument filter;
     filter["name"] = true;
     filter["faces"][0]["name"] = true;
+    filter["faces"][0]["bgImage"] = true;
+    filter["faces"][0]["widgets"][0]["image"] = true;
     for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
         if (f.isDirectory()) continue;
         String base = f.name();
@@ -266,6 +274,8 @@ void listJson(JsonArray out) {
             o["title"] = doc["name"] | "";
             o["faces"] = doc["faces"].size();
         }
+        JsonArray used = o["images"].to<JsonArray>();
+        for (const std::string& n : cfg::imagesNamedIn(data.data(), data.size())) used.add(n);
     }
 }
 
@@ -322,6 +332,27 @@ void assignmentsJson(JsonObject out) {
     for (const Assignment& a : assignments) out[a.mac] = a.name;
 }
 
+void withImageMap(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
+                  std::vector<uint32_t>& crcs) {
+    crcs.clear();
+    std::vector<cfg::ImageRef> refs;
+    for (const std::string& n : cfg::imagesNamedIn(data, size)) {
+        image_store::Info info;
+        if (!image_store::lookup(n.c_str(), info)) continue;  // drawn as nothing on the gauge
+        refs.push_back({n, info.crc});
+        crcs.push_back(info.crc);
+    }
+    cfg::addImageMap(data, size, refs, out);
+}
+
+void imagesChanged() {
+    if (!mounted) return;
+    Guard guard;
+    std::vector<std::string> names;
+    for (const Entry* e : cache) names.push_back(e->name);
+    for (const std::string& n : names) loadIntoCache(n.c_str());  // old copies are retired, not freed
+}
+
 bool desired(const HubManager::Gauge& gauge, HubManager::Desired& out, void*) {
     if (!gauge.haveHello) return false;
     char name[kMaxName + 1];
@@ -333,6 +364,11 @@ bool desired(const HubManager::Gauge& gauge, HubManager::Desired& out, void*) {
     out.size = uint32_t(e->data.size());
     out.crc = e->crc;
     out.schema = e->schema;
+    out.imageCount = 0;
+    for (uint32_t crc : e->images) {
+        if (out.imageCount == HubManager::kMaxImages) break;
+        out.images[out.imageCount++] = crc;
+    }
     return true;
 }
 

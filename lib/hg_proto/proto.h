@@ -45,6 +45,7 @@ enum class Msg : uint8_t {
     XferAck = 11,
     XferAbort = 12,
     XferDataLast = 13,  // a data frame that also asks the receiver to acknowledge
+    Asset = 14,  // does the gauge have this image? The hub asks, the gauge answers (15 is the last free type)
 };
 
 enum class Dir : uint8_t { HubToGauge = 0, GaugeToHub = 1 };
@@ -69,6 +70,7 @@ enum class Cmd : uint8_t {
 enum class XferKind : uint8_t {
     Config = 1,     // store and apply
     TryConfig = 2,  // apply in RAM only
+    Image = 3,      // a JPEG or PNG file to keep; the CRC32 of its bytes is its name
 };
 
 enum class XferStatus : uint8_t {
@@ -81,6 +83,7 @@ enum class XferStatus : uint8_t {
     NoSession = 6,
     Rejected = 7,   // payload arrived intact but the receiver refused it
     Timeout = 8,    // sender-side only: the peer stopped answering
+    ReadFail = 9,   // sender-side only: the payload could not be read from storage
 };
 
 struct Beacon {
@@ -156,6 +159,25 @@ constexpr size_t kThemeColourCount = 32;
 constexpr size_t kThemeColourFrames = kThemeColourCount / 2;
 constexpr uint32_t kThemeColourRepeatMs = 10000;
 
+// Images a gauge keeps are named by the CRC32 of their bytes, so the same
+// picture is never sent twice and a changed one is a new name. Before
+// sending one, the hub asks the gauge whether it already has it.
+//   hub to gauge:  op 1 (query), kind, CRC32
+//   gauge to hub:  op 2 (reply), kind, CRC32, 1 = have it / 0 = not
+enum class AssetOp : uint8_t { Query = 1, Reply = 2 };
+constexpr uint32_t kMaxImageBytes = 256 * 1024;
+
+struct AssetQuery {
+    XferKind kind = XferKind::Image;
+    uint32_t crc = 0;
+};
+
+struct AssetReply {
+    XferKind kind = XferKind::Image;
+    uint32_t crc = 0;
+    bool have = false;
+};
+
 struct XferBegin {
     uint8_t session = 0;
     XferKind kind = XferKind::Config;
@@ -196,6 +218,8 @@ size_t packThemeColours(const uint32_t colours[kThemeColourCount], uint32_t node
                         CanFrame out[kThemeColourFrames]);
 // Writes the two colours one frame carries into `colours`. False if malformed.
 bool unpackThemeColours(const CanFrame& f, uint32_t colours[kThemeColourCount]);
+CanFrame pack(const AssetQuery& m, uint32_t node);
+CanFrame pack(const AssetReply& m, uint32_t node);
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node);
 CanFrame pack(const XferEnd& m, Dir dir, uint32_t node);
 CanFrame pack(const XferAck& m, Dir dir, uint32_t node);
@@ -213,6 +237,8 @@ bool unpack(const CanFrame& f, Info& m);
 bool unpack(const CanFrame& f, Status& m);
 bool unpack(const CanFrame& f, Command& m);
 bool unpack(const CanFrame& f, CommandAck& m);
+bool unpack(const CanFrame& f, AssetQuery& m);
+bool unpack(const CanFrame& f, AssetReply& m);
 bool unpack(const CanFrame& f, XferBegin& m);
 bool unpack(const CanFrame& f, XferEnd& m);
 bool unpack(const CanFrame& f, XferAck& m);

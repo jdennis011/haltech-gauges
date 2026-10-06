@@ -30,7 +30,7 @@ const Name kWidgetTypes[] = {
     {"bar", uint8_t(WidgetType::Bar)},       {"number", uint8_t(WidgetType::Number)},
     {"label", uint8_t(WidgetType::Label)},   {"light", uint8_t(WidgetType::Light)},
     {"rim", uint8_t(WidgetType::Rim)},       {"shape", uint8_t(WidgetType::Shape)},
-    {"path", uint8_t(WidgetType::Path)},
+    {"path", uint8_t(WidgetType::Path)},     {"image", uint8_t(WidgetType::Image)},
 };
 const Name kFonts[] = {
     {"sans", uint8_t(Font::Sans)},       {"condensed", uint8_t(Font::Condensed)},
@@ -93,6 +93,11 @@ const Name kNumberFormats[] = {
 const Name kRimModes[] = {
     {"flash", uint8_t(RimMode::Flash)},
     {"fill", uint8_t(RimMode::Fill)},
+};
+const Name kImageFits[] = {
+    {"contain", uint8_t(ImageFit::Contain)},
+    {"cover", uint8_t(ImageFit::Cover)},
+    {"stretch", uint8_t(ImageFit::Stretch)},
 };
 
 template <size_t N>
@@ -421,6 +426,66 @@ std::string readPathData(JsonObjectConst obj, Ctx& ctx) {
     return std::string(s);
 }
 
+// The name of an image in the hub's library.
+std::string readImageName(JsonObjectConst obj, const char* key, bool required, Ctx& ctx) {
+    JsonVariantConst v = obj[key];
+    if (v.isNull()) {
+        if (required) ctx.fail("'%s' is required: the name of an image on the hub", key);
+        return std::string();
+    }
+    const char* s = v.as<const char*>();
+    if (!validImageName(s)) {
+        ctx.fail("'%s' must be an image name: 1-32 letters, digits, - and _", key);
+        return std::string();
+    }
+    return std::string(s);
+}
+
+// 8 hex digits.
+bool parseCrc(const char* s, uint32_t& out) {
+    if (!s || strlen(s) != 8) return false;
+    uint32_t v = 0;
+    for (size_t i = 0; i < 8; i++) {
+        const char c = s[i];
+        uint32_t d;
+        if (c >= '0' && c <= '9') {
+            d = uint32_t(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            d = uint32_t(c - 'a' + 10);
+        } else if (c >= 'A' && c <= 'F') {
+            d = uint32_t(c - 'A' + 10);
+        } else {
+            return false;
+        }
+        v = (v << 4) | d;
+    }
+    out = v;
+    return true;
+}
+
+void parseImageMap(JsonVariantConst v, Config& out, Ctx& ctx) {
+    if (v.isNull()) return;
+    out.hasImageMap = true;
+    JsonObjectConst map = v.as<JsonObjectConst>();
+    if (map.isNull()) {
+        ctx.fail("'images' must map image names to their CRC32");
+        return;
+    }
+    if (map.size() > kMaxImagesPerConfig) {
+        ctx.fail("'images' lists more than %u images", unsigned(kMaxImagesPerConfig));
+        return;
+    }
+    for (JsonPairConst kv : map) {
+        ImageRef ref;
+        ref.name = kv.key().c_str();
+        if (!validImageName(ref.name.c_str()) || !parseCrc(kv.value().as<const char*>(), ref.crc)) {
+            ctx.fail("'images': each entry must be \"name\": \"8 hex digits\"");
+            return;
+        }
+        out.images.push_back(ref);
+    }
+}
+
 void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     const char* typeName = obj["type"].as<const char*>();
     if (!typeName) {
@@ -443,8 +508,9 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     w.x = int16_t(readInt(obj, "x", kScreenSize / 2, 0, kScreenSize, ctx));
     w.y = int16_t(readInt(obj, "y", kScreenSize / 2, 0, kScreenSize, ctx));
     w.color = readColor(obj, "color", t.fg, ctx);
-    // A shape or path is plain decoration unless it names a channel.
-    const bool decoration = w.type == WidgetType::Shape || w.type == WidgetType::Path;
+    // A shape, path or image is plain decoration unless it names a channel.
+    const bool decoration =
+        w.type == WidgetType::Shape || w.type == WidgetType::Path || w.type == WidgetType::Image;
     if (w.type != WidgetType::Label && !(decoration && obj["channel"].isNull())) readChannel(obj, w, ctx);
     if (!ctx.ok()) return;
 
@@ -578,9 +644,28 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             readFill(obj, w, ctx);
             readCondition(obj, w, ctx);
             break;
+
+        case WidgetType::Image:
+            w.image = readImageName(obj, "image", true, ctx);
+            w.w = int16_t(readInt(obj, "w", 160, 1, kScreenSize, ctx));
+            w.h = int16_t(readInt(obj, "h", 160, 1, kScreenSize, ctx));
+            w.fit = ImageFit(readEnum(obj, "fit", kImageFits, uint8_t(ImageFit::Contain), ctx));
+            w.opacity = uint8_t(readInt(obj, "opacity", 100, 0, 100, ctx));
+            w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
+            if (w.channel >= 0) {
+                // Shown only while the condition holds; by default, while a flag is set.
+                w.hideWhenOff = true;
+                w.warn.enabled = true;
+                w.warn.above = true;
+                w.warn.threshold = 0.5f;
+                readThreshold(obj, "on", w.warn, ctx);
+                w.warn.flash = readBool(obj, "flash", w.warn.flash, ctx);
+            }
+            break;
     }
 
-    const bool usesOn = w.type == WidgetType::Light || w.type == WidgetType::Shape || w.type == WidgetType::Path;
+    const bool usesOn = w.type == WidgetType::Light || w.type == WidgetType::Shape ||
+                        w.type == WidgetType::Path || w.type == WidgetType::Image;
     if (!usesOn) readThreshold(obj, "warn", w.warn, ctx);
 }
 
@@ -686,6 +771,91 @@ ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& ou
 
 void formatColor(Color c, char out[8]) { snprintf(out, 8, "#%06lX", (unsigned long)(c & 0xFFFFFF)); }
 
+bool validImageName(const char* name) {
+    if (!name) return false;
+    const size_t len = strlen(name);
+    if (len == 0 || len > kMaxImageName) return false;
+    for (size_t i = 0; i < len; i++) {
+        const char c = name[i];
+        const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                        c == '-' || c == '_';
+        if (!ok) return false;
+    }
+    return true;
+}
+
+std::vector<std::string> imagesUsed(const Config& config) {
+    std::vector<std::string> out;
+    auto add = [&out](const std::string& name) {
+        if (name.empty()) return;
+        for (const std::string& n : out) {
+            if (n == name) return;
+        }
+        out.push_back(name);
+    };
+    for (const Face& face : config.faces) {
+        add(face.bgImage);
+        for (const Widget& w : face.widgets) {
+            if (w.type == WidgetType::Image) add(w.image);
+        }
+    }
+    return out;
+}
+
+std::vector<std::string> imagesNamedIn(const uint8_t* json, size_t size) {
+    std::vector<std::string> out;
+    JsonDocument filter;
+    filter["faces"][0]["bgImage"] = true;
+    filter["faces"][0]["widgets"][0]["type"] = true;
+    filter["faces"][0]["widgets"][0]["image"] = true;
+    JsonDocument doc;
+    if (deserializeJson(doc, json, size, DeserializationOption::Filter(filter))) return out;
+    auto add = [&out](const char* name) {
+        if (!name || !name[0]) return;
+        for (const std::string& n : out) {
+            if (n == name) return;
+        }
+        out.push_back(name);
+    };
+    for (JsonObjectConst face : doc["faces"].as<JsonArrayConst>()) {
+        add(face["bgImage"]);
+        for (JsonObjectConst w : face["widgets"].as<JsonArrayConst>()) {
+            if (strcmp(w["type"] | "", "image") == 0) add(w["image"]);
+        }
+    }
+    return out;
+}
+
+void addImageMap(const uint8_t* json, size_t size, const std::vector<ImageRef>& refs,
+                 std::vector<uint8_t>& out) {
+    const uint8_t* brace = static_cast<const uint8_t*>(memchr(json, '{', size));
+    if (refs.empty() || !brace) {
+        out.assign(json, json + size);
+        return;
+    }
+    std::string map = "\"images\":{";
+    for (size_t i = 0; i < refs.size(); i++) {
+        char entry[kMaxImageName + 20];
+        snprintf(entry, sizeof(entry), "%s\"%s\":\"%08lX\"", i ? "," : "", refs[i].name.c_str(),
+                 (unsigned long)refs[i].crc);
+        map += entry;
+    }
+    map += "},";
+    const size_t head = size_t(brace - json) + 1;
+    out.clear();
+    out.reserve(size + map.size());
+    out.insert(out.end(), json, json + head);
+    out.insert(out.end(), map.begin(), map.end());
+    out.insert(out.end(), json + head, json + size);
+}
+
+const ImageRef* findImage(const Config& config, const std::string& name) {
+    for (const ImageRef& ref : config.images) {
+        if (ref.name == name) return &ref;
+    }
+    return nullptr;
+}
+
 const char* widgetTypeName(WidgetType type) { return nameOf(kWidgetTypes, uint8_t(type)); }
 const char* fontName(Font font) { return nameOf(kFonts, uint8_t(font)); }
 
@@ -694,7 +864,13 @@ ParseResult parseConfig(const uint8_t* json, size_t size, Config& out) {
     Ctx ctx;
     out = Config();
 
-    if (size > kMaxConfigBytes) {
+    // The hub's image map may take a config past 32 KB, by up to kMaxImageMapBytes.
+    const char* text = reinterpret_cast<const char*>(json);
+    bool mayHaveMap = false;
+    for (size_t i = 0; size > kMaxConfigBytes && i + 8 <= size && !mayHaveMap; i++) {
+        mayHaveMap = memcmp(text + i, "\"images\"", 8) == 0;
+    }
+    if (size > kMaxConfigBytes + (mayHaveMap ? kMaxImageMapBytes : 0)) {
         result.error = "config is larger than the 32 KB limit";
         return result;
     }
@@ -725,6 +901,7 @@ ParseResult parseConfig(const uint8_t* json, size_t size, Config& out) {
 
     if (ctx.ok()) out.name = readText(root, "name", ctx);
     if (ctx.ok()) parseTheme(root["theme"], ctx);
+    if (ctx.ok()) parseImageMap(root["images"], out, ctx);
     out.theme = ctx.theme;
 
     JsonArrayConst faces = root["faces"].as<JsonArrayConst>();
@@ -751,6 +928,8 @@ ParseResult parseConfig(const uint8_t* json, size_t size, Config& out) {
         Face face;
         face.name = readText(fo, "name", ctx);
         face.bg = readColor(fo, "bg", ctx.theme.bg, ctx);
+        face.bgImage = readImageName(fo, "bgImage", false, ctx);
+        face.bgImageOpacity = uint8_t(readInt(fo, "bgImageOpacity", 100, 0, 100, ctx));
 
         JsonArrayConst widgets = fo["widgets"].as<JsonArrayConst>();
         if (ctx.ok()) {
@@ -779,6 +958,15 @@ ParseResult parseConfig(const uint8_t* json, size_t size, Config& out) {
         }
         if (ctx.ok()) out.faces.push_back(std::move(face));
         fi++;
+    }
+
+    if (ctx.ok() && size > kMaxConfigBytes && !out.hasImageMap) {
+        ctx.path.clear();
+        ctx.fail("config is larger than the 32 KB limit");
+    }
+    if (ctx.ok() && imagesUsed(out).size() > kMaxImagesPerConfig) {
+        ctx.path.clear();
+        ctx.fail("uses more than %u different images", unsigned(kMaxImagesPerConfig));
     }
 
     result.ok = ctx.ok();

@@ -23,7 +23,7 @@ void GaugeNode::init(const XferLink& link, const uint8_t mac[6], uint32_t node, 
     node_ = node;
     haveBeacon_ = false;
     hubPresent_ = false;
-    helloPending_ = infoPending_ = ackPending_ = statusDue_ = false;
+    helloPending_ = infoPending_ = ackPending_ = statusDue_ = replyPending_ = false;
     conflict_ = false;
     alerts_ = AlertReceiver();
     receiver_.init(link, node, Dir::HubToGauge, handler.transfer);
@@ -104,6 +104,17 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
             sender_.onFrame(frame, nowMs);
             break;
 
+        case Msg::Asset: {
+            AssetQuery q;
+            if (node != node_ || !unpack(frame, q)) return;
+            reply_.kind = q.kind;
+            reply_.crc = q.crc;
+            reply_.have = q.kind == XferKind::Image && handler_.hasImage &&
+                          handler_.hasImage(q.crc, handler_.ctx);
+            replyPending_ = true;
+            break;
+        }
+
         case Msg::ThemeColours: {
             uint32_t next[kThemeColourCount];
             memcpy(next, themeColours_, sizeof(next));
@@ -142,6 +153,7 @@ void GaugeNode::poll(uint32_t nowMs) {
     if (helloPending_ && send(pack(hello_, node_))) helloPending_ = false;
     if (infoPending_ && send(pack(info_, node_))) infoPending_ = false;
     if (ackPending_ && send(pack(ack_, node_))) ackPending_ = false;
+    if (replyPending_ && send(pack(reply_, node_))) replyPending_ = false;
 
     if (statusDue_ || uint32_t(nowMs - lastStatusMs_) >= kStatusPeriodMs) {
         Status s;

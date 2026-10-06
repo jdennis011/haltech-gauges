@@ -2,7 +2,7 @@
 
 // The gauge's side of the management protocol: stays silent until a hub
 // beacon is heard, then announces itself, reports status once a second,
-// carries out commands and receives configs. Driven by onFrame() and poll();
+// carries out commands and receives configs and images. Driven by onFrame() and poll();
 // no dependence on the CAN driver or clock.
 
 #include "proto.h"
@@ -18,8 +18,11 @@ public:
         bool (*command)(Cmd cmd, uint8_t arg, void* ctx);
         // Fill in the current state for the periodic status message.
         void (*status)(Status& out, void* ctx);
-        // Incoming configs.
+        // Incoming configs and images (XferKind::Image: the file's CRC32 is its name).
         XferReceiver::Handler transfer;
+        // Whether the image with this CRC32 is already stored. May be null
+        // (no images: the answer is always no).
+        bool (*hasImage)(uint32_t crc, void* ctx);
         // The message to show over the face changed; `show` is false when
         // there is none any more. May be null.
         void (*alert)(const Alert& alert, void* ctx);
@@ -86,6 +89,8 @@ private:
     bool infoPending_ = false;
     bool ackPending_ = false;
     CommandAck ack_;
+    bool replyPending_ = false;
+    AssetReply reply_;
     bool conflict_ = false;
     uint8_t uploadSession_ = 0;
 

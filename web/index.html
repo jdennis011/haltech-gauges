@@ -103,6 +103,18 @@ canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-ac
 .stale{color:var(--dim)}
 .spacer{flex:1}
 .banner{background:#7a1f1f;color:#fff;padding:8px 16px;font-size:14px}
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:8px}
+.imgcard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px;min-width:0}
+.imgmeta{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.imgmeta .mono{font-size:14px;overflow-wrap:anywhere}
+.thumb,canvas#up-preview{background:repeating-conic-gradient(#2c2c2e 0 25%,#1c1c1e 0 50%) 0 0/16px 16px}
+.thumb{width:96px;height:96px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.upload{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px}
+canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex:none;margin:0}
+.upfields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;min-width:0;flex:1 1 240px}
+.upfields input[type=text],.upfields select{width:100%}
+.upfields input[type=range]{width:100%}
 </style>
 </head>
 <body>
@@ -210,6 +222,15 @@ canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-ac
     <div class="tcol" id="theme-colours"></div>
     <div class="msg" id="theme-msg"></div>
   </div>
+  <div class="card" id="images-card">
+    <div class="row"><strong>Images</strong><span class="muted" id="image-note"></span><span class="spacer"></span>
+      <button class="btn small primary" id="btn-add-image">Add image</button>
+      <input type="file" id="image-file" accept="image/*" style="display:none"></div>
+    <div class="muted" style="font-size:13px;margin:6px 0">Backgrounds, logos and icons for the faces: use one in an <b>image</b> widget, or as a face's background. They are kept on the hub, and each gauge gets the ones its config uses over the gauge bus, before the config itself and only once. Smaller is quicker: the bus carries roughly 25 KB a second to each gauge alongside the live data.</div>
+    <div id="image-add"></div>
+    <div class="msg" id="image-msg"></div>
+    <div class="imgs" id="image-list"></div>
+  </div>
   <div class="card" id="editor" style="display:none">
     <div class="row">
       <label class="inline">Name <input type="text" id="edit-name" maxlength="32" size="18"></label>
@@ -238,6 +259,7 @@ canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-ac
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
           <div class="muted" style="font-size:13px;margin:4px 0 6px">Rows are the draw order: later rows draw on top. Drag a row by its title, or use its arrows, to reorder.</div>
+          <div id="face-settings"></div>
           <div id="widget-list"></div>
         </div>
         <div class="sub">
@@ -307,13 +329,13 @@ const state = {
   status: null, gauges: [], live: {}, meta: null, metaByName: {},
   configs: [], assignments: {}, templates: [],
   editing: null, previewCfg: null, faceIndex: 0, fonts: [], sim: null, recordings: [], user: null,
-  alerts: [], alertStates: [],
+  alerts: [], alertStates: [], images: [], imageRoom: null,
   themeColours: DEFAULT_THEME_COLOURS.map(c => Object.assign({}, c)),
 };
 
 // Signed in to the online copy: these paths go to the account's storage.
 const signedIn = () => !!(ONLINE && state.user && state.user.signedIn);
-const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings|settings)(\/|$)/.test(p);
+const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings|settings|images)(\/|$)/.test(p);
 
 // ------------------------------------------------------------------- API
 
@@ -367,7 +389,7 @@ function showTab(name) {
   $$('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $$('main > section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   try { localStorage.setItem('tab', name); } catch (e) { /* private mode */ }
-  if (name === 'configs') loadConfigs();
+  if (name === 'configs') { loadConfigs(); loadImages(); }
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
 }
@@ -463,12 +485,21 @@ const isSynthetic = mac => /^02:00:00:00:00:/.test(mac || '');
 
 function pushChip(g) {
   if (g.virtual) return el('span', { class: 'chip plan' }, isSynthetic(g.mac) ? 'planned, no hardware yet' : 'waiting for ' + g.mac);
-  if (g.push.active) return el('span', { class: 'chip' }, 'pushing config…');
+  if (g.push.active) {
+    const pct = g.push.total ? ' ' + Math.round(100 * g.push.acked / g.push.total) + '%' : '';
+    return el('span', { class: 'chip' }, (g.push.kind === 'image' ? 'sending an image' : g.push.kind === 'try' ? 'sending the trial' : 'pushing config') + '\u2026' + pct);
+  }
   if (g.push.failed) return el('span', { class: 'chip bad' }, 'push ' + g.push.result);
   if (!g.assigned) return el('span', { class: 'chip' }, 'no config assigned');
-  const cfg = state.configs.find(c => c.name === g.assigned);
-  if (cfg && cfg.crc === g.config_crc) return el('span', { class: 'chip on' }, 'config in sync');
-  return el('span', { class: 'chip' }, g.online ? 'config will be pushed' : 'config pushed when online');
+  // The hub says what the gauge should hold: the config with its images' CRCs.
+  const cfg = state.configs.find(c => c.name === g.assigned), want = g.desired_crc || (cfg && cfg.crc), im = g.images;
+  const waiting = im && im.have + im.refused < im.need ? 'images ' + im.have + ' of ' + im.need : '';
+  if (want && want === g.config_crc) {
+    if (waiting) return el('span', { class: 'chip' }, waiting);
+    if (im && im.refused) return el('span', { class: 'chip bad', title: 'The gauge would not take ' + im.refused + ' of its images: no room, or firmware without images. It draws nothing in their place.' }, 'in sync, ' + im.refused + ' image(s) refused');
+    return el('span', { class: 'chip on' }, 'config in sync');
+  }
+  return el('span', { class: 'chip' }, g.online ? (waiting ? waiting + ', then the config' : 'config will be pushed') : 'config pushed when online');
 }
 
 // Per-card previews, redrawn a few times a second while the tab is visible.
@@ -658,6 +689,7 @@ async function loadConfigs() {
     return;
   }
   renderConfigs();
+  renderImages();  // which configs use each image
   await syncCloudMirror();
   renderGauges();
 }
@@ -784,7 +816,7 @@ $('#btn-save').addEventListener('click', async () => {
   const name = currentName();
   if (!name) return;
   try {
-    await api.put('/api/configs/' + name, $('#edit-text').value, true);
+    await api.put('/api/configs/' + name, withoutImageMap($('#edit-text').value), true);
     state.editing = { name, isNew: false };
     forgetConfig(name);
     setMsg('Saved "' + name + '". Assigned gauges receive it within a few seconds.', 'ok');
@@ -834,6 +866,7 @@ $('#file-import').addEventListener('change', ev => {
   reader.onload = () => {
     try {
       const cfg = JSON.parse(reader.result);
+      if (cfg && typeof cfg === 'object') delete cfg.images;  // the hub's, not part of the config
       const name = file.name.replace(/\.json$/i, '').replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 32) || 'imported';
       openEditor(name, cfg, true);
     } catch (e) { alert('Not a JSON file: ' + e.message); }
@@ -851,9 +884,13 @@ async function buildBackup() {
   const [list, gauges, assignments, alerts] = await Promise.all([api.get('/api/configs'), api.get('/api/virtual'), api.get('/api/assignments'), api.get('/api/alerts')]);
   const configs = {};
   for (const c of list) configs[c.name] = await api.get('/api/configs/' + c.name);
+  const images = {};
+  let imageList = [];
+  try { imageList = (await api.get('/api/images')).images || []; } catch (e) { /* a hub from before images */ }
+  for (const im of imageList) images[im.name] = { type: im.type, data: await blobToB64(await imageBlob(im.name)) };
   return { kind: 'haltech-gauges-backup', schema: 1, exported: new Date().toISOString(),
     hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments, alerts: alerts.rules || [],
-    themeColours: (await api.get('/api/theme-colours')).colours };
+    themeColours: (await api.get('/api/theme-colours')).colours, images };
 }
 
 async function exportAll() {
@@ -876,10 +913,16 @@ async function importAll(file) {
   if (!bundle || bundle.kind !== 'haltech-gauges-backup' || !bundle.configs) { alert('That is not an export from this page. For a single config, use Import file.'); return; }
   const names = Object.keys(bundle.configs), gauges = bundle.gauges || [], assignments = bundle.assignments || {};
   const alerts = Array.isArray(bundle.alerts) ? bundle.alerts : null;
-  if (!confirm('Import ' + names.length + ' config(s), ' + gauges.length + ' planned gauge(s), ' + Object.keys(assignments).length + ' assignment(s)' + (alerts ? ' and ' + alerts.length + ' alert(s)' : '') + '?\nConfigs with the same name are replaced; planned gauges are matched by MAC or name' + (alerts ? '; the alerts replace the ones here' : '') + '.')) return;
-  const errors = [], done = { configs: 0, gauges: 0, assignments: 0 };
+  const images = bundle.images && typeof bundle.images === 'object' ? bundle.images : {};
+  const imageNames = Object.keys(images);
+  if (!confirm('Import ' + names.length + ' config(s), ' + imageNames.length + ' image(s), ' + gauges.length + ' planned gauge(s), ' + Object.keys(assignments).length + ' assignment(s)' + (alerts ? ' and ' + alerts.length + ' alert(s)' : '') + '?\nConfigs and images with the same name are replaced; planned gauges are matched by MAC or name' + (alerts ? '; the alerts replace the ones here' : '') + '.')) return;
+  const errors = [], done = { configs: 0, images: 0, gauges: 0, assignments: 0 };
+  for (const name of imageNames) {
+    try { await putImage(name, b64ToBlob(images[name].data, imageMime(images[name].type))); delete imageCache[name]; done.images++; }
+    catch (e) { errors.push('image ' + name + ': ' + e.message); }
+  }
   for (const name of names) {
-    try { await api.put('/api/configs/' + name, JSON.stringify(bundle.configs[name]), true); forgetConfig(name); done.configs++; }
+    try { await api.put('/api/configs/' + name, withoutImageMap(JSON.stringify(bundle.configs[name])), true); forgetConfig(name); done.configs++; }
     catch (e) { errors.push('config ' + name + ': ' + e.message); }
   }
   const macMap = {};
@@ -917,7 +960,8 @@ async function importAll(file) {
     catch (e) { errors.push('alerts: ' + e.message); }
   }
   await loadConfigs();
-  alert('Imported ' + done.configs + ' config(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s)' + (alerts ? ', and the alerts' : '') + '.' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
+  await loadImages();
+  alert('Imported ' + done.configs + ' config(s), ' + done.images + ' image(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s)' + (alerts ? ', and the alerts' : '') + '.' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
 }
 
 $('#btn-export-all').addEventListener('click', exportAll);
@@ -939,7 +983,11 @@ function renderTryGauges() {
 $('#btn-try').addEventListener('click', async () => {
   const node = $('#try-gauge').value;
   if (!node) return;
-  try { await api.post('/api/gauges/' + node + '/try', $('#edit-text').value, true); setMsg('Sent to gauge ' + node + ' for a look; it is not stored there.', 'ok'); }
+  try {
+    await api.post('/api/gauges/' + node + '/try', withoutImageMap($('#edit-text').value), true);
+    const n = configImages(state.previewCfg).filter(imageInfo).length;
+    setMsg('Sent to gauge ' + node + ' for a look; it is not stored there.' + (n ? ' Any of its ' + n + ' image(s) the gauge lacks go first.' : ''), 'ok');
+  }
   catch (e) { setMsg(e.message, 'bad'); }
 });
 $('#btn-endtry').addEventListener('click', async () => {
@@ -1042,6 +1090,9 @@ const PANEL_FIELDS = {
            ['w', 'int', 'W', [1, 466, 100]], ['h', 'int', 'H', [1, 466, 60]],
            ['filled', 'bool', 'Filled', true], ['color', 'color', 'Fill', 'fg'], ['strokeColor', 'color', 'Outline', '=color', 'Follows the fill colour unless set'], ['strokeWidth', 'int', 'Outline w', [0, 40, 0]],
            ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
+  image:  [['image', 'image', 'Image'], ['w', 'int', 'W', [1, 466, 160]], ['h', 'int', 'H', [1, 466, 160]],
+           ['fit', 'select', 'Fit', ['contain', 'cover', 'stretch'], 'contain: the whole image, in proportion; cover: fills the box, in proportion, edges cut off; stretch: fills the box exactly'],
+           ['opacity', 'int', 'Opacity', [0, 100, 100]], ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
   path:   [['d', 'icon', 'Icon'], ['d', 'longtext', 'Path', null, 'SVG path data: the d attribute of an icon\'s <path>'],
            ['size', 'int', 'Size', [4, 466, 48]], ['color', 'color', 'Colour', 'fg'], ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
 };
@@ -1066,6 +1117,8 @@ const MORE_FIELDS = {
   rim:    [...XY, ['mode', 'select', 'Mode', ['flash', 'fill']], ['r', 'int', 'Radius', [40, 233, 233]], ['thickness', 'int', 'Thickness', [2, 60, 12]]],
   shape:  [...XY, ['cornerRadius', 'int', 'Corners', [0, 233, 0], 'Rounds the corners of a rectangle'],
            ['points', 'points', 'Points', null, 'Polygon corners as x, y pairs measured from the widget\'s x, y'], ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
+  image:  [...XY, ['channel', 'channelOpt', 'Channel', null, 'Optional. With a channel, the image shows only while the condition below holds'],
+           ['on', 'cond', 'Shown when', null, 'With a channel: shown while the value is above or below this'], ['flash', 'bool', 'Flash', false]],
   path:   [...XY, ['box', 'int', 'Box', [1, 2000, 24], 'The size of the path\'s own coordinate square; 24 for most icon sets'],
            ['filled', 'bool', 'Filled', true], ['strokeColor', 'color', 'Outline', '=color', 'Follows the fill colour unless set'], ['strokeWidth', 'int', 'Outline w', [0, 40, 0]],
            ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
@@ -1203,6 +1256,11 @@ function fieldControl(w, i, [key, kind, label, opts, hint]) {
       if (n.length >= 6 && n.length <= 32 && n.length % 2 === 0 && n.every(Number.isFinite)) set(n.map(Math.round));
       else setMsg('Points: 3 to 16 corners as x, y pairs, e.g. 0, -40, 35, 30, -35, 30', 'bad');
     } });
+  else if (kind === 'image') {
+    const info = imageInfo(w[key]);
+    control = el('span', { class: 'colorctl' }, imagePicker(w[key], set),
+      info ? btn('its size', () => setWidgetFields(i, { w: info.width, h: info.height }), false, 'small', 'W and H to the image\'s own ' + info.width + ' x ' + info.height) : null);
+  }
   else if (kind === 'longtext') control = el('input', { type: 'text', class: 'long', maxlength: 1024, value: w[key] == null ? '' : w[key], onchange: ev => set(ev.target.value.trim()) });
   else control = el('input', { type: 'text', maxlength: 32, value: w[key] == null ? '' : w[key], onchange: ev => set(ev.target.value) });
   if (hint) control.title = hint;
@@ -1218,6 +1276,7 @@ function renderWidgetTable() {
   const face = cfg ? (cfg.faces || [])[state.faceIndex] : null;
   const widgets = face ? face.widgets || [] : [];
   $('#widget-note').textContent = face ? 'on face ' + (state.faceIndex + 1) + (face.name ? ': ' + face.name : '') : '';
+  renderFaceSettings(face);
   widgets.forEach((w, i) => {
     const ctl = el('div', { class: 'ctl' });
     for (const spec of PANEL_FIELDS[w.type] || []) ctl.append(fieldControl(w, i, spec));
@@ -1230,7 +1289,7 @@ function renderWidgetTable() {
       ondragstart: ev => { dragFrom = i; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); ev.currentTarget.parentNode.classList.add('dragging'); },
       ondragend: ev => { ev.currentTarget.parentNode.classList.remove('dragging'); dragFrom = -1; } },
       el('span', { class: 'grip' }, '\u2261'),
-      el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.type === 'shape' ? ' ' + (w.shape || 'rect') : '') + (w.text ? ' "' + w.text + '"' : '')),
+      el('span', { onclick: () => selectWidget(i) }, (i + 1) + '. ' + w.type + (w.type === 'shape' ? ' ' + (w.shape || 'rect') : '') + (w.type === 'image' && w.image ? ' ' + w.image : '') + (w.text ? ' "' + w.text + '"' : '')),
       el('span', { class: 'spacer' }),
       btn('\u25B2', () => { openMore.clear(); reorderWidget(i, i - 1); }, i === 0, 'small', 'Move up: drawn earlier, further back'),
       btn('\u25BC', () => { openMore.clear(); reorderWidget(i, i + 1); }, i === widgets.length - 1, 'small', 'Move down: drawn later, further forward'),
@@ -1255,6 +1314,7 @@ const WIDGET_DEFAULTS = {
   rim: { type: 'rim', channel: 'rpm', from: 7200 },
   shape: { type: 'shape', shape: 'rect', w: 140, h: 70, cornerRadius: 10, filled: false, strokeWidth: 3 },
   path: { type: 'path', d: ICONS.engine, size: 72, y: 380, color: 'warn', channel: 'check_engine_light', offColor: 'dim' },
+  image: { type: 'image', w: 160, h: 160 },
 };
 const MAX_WIDGETS = 16;  // the parser's limit per face
 $('#add-type').append(...Object.keys(WIDGET_DEFAULTS).map(k => el('option', { value: k }, k)));
@@ -1268,7 +1328,9 @@ $('#btn-add-widget').addEventListener('click', () => {
     if (!cfg.faces || !cfg.faces.length) cfg.faces = [{ name: 'Face 1', widgets: [] }];
     const face = cfg.faces[state.faceIndex] || cfg.faces[0];
     face.widgets = face.widgets || [];
-    face.widgets.push(Object.assign({}, WIDGET_DEFAULTS[type]));
+    const w = Object.assign({}, WIDGET_DEFAULTS[type]);
+    if (type === 'image' && state.images.length) w.image = state.images[0].name;
+    face.widgets.push(w);
     index = face.widgets.length - 1;
   });
   if (index >= 0) selectWidget(index);
@@ -2019,6 +2081,310 @@ $('#btn-sta-forget').addEventListener('click', async () => {
   catch (e) { $('#sta-msg').textContent = e.message; }
 });
 
+// ---------------------------------------------------------------- images
+// Pictures for the faces, kept on the hub by name. The page shrinks and
+// re-encodes what you pick (JPEG, or PNG where there is transparency) so the
+// gauge can decode it and it crosses the bus quickly.
+
+const BUS_BYTES_PER_S = 25 * 1024;  // roughly what the gauge bus gives an image beside the live data
+const MAX_IMAGE_BYTES = 256 * 1024;
+const kb = n => (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+const sendTime = bytes => { const s = bytes / BUS_BYTES_PER_S; return s < 1 ? 'under a second' : 'about ' + Math.round(s) + ' s'; };
+const imageInfo = name => state.images.find(i => i.name === name);
+const blobToB64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+const b64ToBlob = (b64, type) => new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type });
+const imageMime = type => type === 'png' ? 'image/png' : 'image/jpeg';
+
+// The images a config uses, each once: face backgrounds and image widgets.
+function configImages(cfg) {
+  const out = [];
+  const add = n => { if (n && !out.includes(n)) out.push(n); };
+  for (const f of (cfg && cfg.faces) || []) {
+    add(f.bgImage);
+    for (const w of f.widgets || []) if (w.type === 'image') add(w.image);
+  }
+  return out;
+}
+
+// The hub adds "images" to a config on its way to a gauge; it is never saved with one.
+function withoutImageMap(text) {
+  try {
+    const c = JSON.parse(text);
+    if (c && typeof c === 'object' && !Array.isArray(c) && 'images' in c) { delete c.images; return JSON.stringify(c, null, 2); }
+  } catch (e) { /* the hub reports the JSON error */ }
+  return text;
+}
+
+let crc32Table = null;
+function crc32Hex(bytes) {
+  if (!crc32Table) {
+    crc32Table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crc32Table[n] = c >>> 0; }
+  }
+  let crc = 0xFFFFFFFF;
+  for (const b of bytes) crc = crc32Table[(crc ^ b) & 0xFF] ^ (crc >>> 8);
+  return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+}
+
+// Decoded images for the previews, by name, fetched one at a time (the hub
+// serves one large file at a time well) and again when an image changes.
+const imageCache = {};
+let imageQueue = Promise.resolve();
+function imageFor(name) {
+  const info = name && imageInfo(name);
+  if (!info) return null;
+  let c = imageCache[name];
+  if (!c || c.crc !== info.crc) {
+    if (c && c.img) URL.revokeObjectURL(c.img.src);
+    c = imageCache[name] = { crc: info.crc, img: null };
+    imageQueue = imageQueue.then(() => loadImageElement(name, c)).catch(() => { c.failed = true; });
+  }
+  return c.img;
+}
+async function imageBlob(name) {
+  if (MOCK && !cloudRoute('/api/images')) {
+    const m = mock.images[name];
+    if (!m) throw new Error('no such image');
+    return b64ToBlob(m.data, imageMime(m.type));
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const r = await fetch('/api/images/' + encodeURIComponent(name));
+    if (r.ok) return r.blob();
+    if (r.status !== 503) throw new Error('HTTP ' + r.status);
+    await new Promise(res => setTimeout(res, 700 * (attempt + 1)));
+  }
+  throw new Error('the hub is busy');
+}
+async function loadImageElement(name, c) {
+  const img = new Image();
+  img.src = URL.createObjectURL(await imageBlob(name));
+  await img.decode();
+  if (imageCache[name] !== c) { URL.revokeObjectURL(img.src); return; }  // replaced meanwhile
+  c.img = img;
+  if ($('#tab-configs').classList.contains('active')) renderImages();
+}
+
+async function putImage(name, blob) {
+  const path = '/api/images/' + name;
+  if (MOCK && !cloudRoute(path)) return mock.putImage(name, blob);
+  const r = await fetch(path, { method: 'PUT', headers: { 'Content-Type': blob.type || 'application/octet-stream' }, body: blob });
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) { data = { ok: false, error: text.slice(0, 200) }; }
+  if (!r.ok) throw new Error((data && data.error) || 'HTTP ' + r.status);
+  return data;
+}
+
+async function loadImages() {
+  try {
+    const r = await api.get('/api/images');
+    state.images = r.images || [];
+    state.imageRoom = { free: r.free, maxBytes: r.max_bytes || MAX_IMAGE_BYTES, maxCount: r.max_count || 32 };
+  } catch (e) {
+    $('#image-note').textContent = e.message;
+    return;
+  }
+  renderImages();
+  if (state.previewCfg) renderWidgetTable();
+}
+
+function setImageMsg(text, cls) {
+  const m = $('#image-msg');
+  m.textContent = text;
+  m.className = 'msg' + (cls ? ' ' + cls : '');
+}
+
+function renderImages() {
+  const root = $('#image-list');
+  root.innerHTML = '';
+  const room = state.imageRoom || {};
+  $('#image-note').textContent = state.images.length + (state.images.length === 1 ? ' image' : ' images') + (room.free != null ? ', ' + kb(room.free) + ' free on the hub' : '');
+  for (const im of state.images) {
+    const img = imageFor(im.name);
+    const users = state.configs.filter(c => (c.images || []).includes(im.name)).map(c => c.name);
+    root.append(el('div', { class: 'imgcard' },
+      el('div', { class: 'thumb' }, img ? el('img', { src: img.src, alt: im.name }) : el('span', { class: 'muted' }, '\u2026')),
+      el('div', { class: 'imgmeta' },
+        el('span', { class: 'mono' }, im.name),
+        el('span', { class: 'muted' }, im.width + ' x ' + im.height + ' ' + (im.type === 'png' ? 'PNG' : 'JPEG') + ', ' + kb(im.size)),
+        el('span', { class: 'muted' }, sendTime(im.size) + ' to each gauge'),
+        el('span', { class: 'muted' }, users.length ? 'used by ' + users.join(', ') : 'not used by a config yet'),
+        el('span', { class: 'row', style: 'gap:6px;margin-top:4px' },
+          btn('Download', () => downloadImage(im), false, 'small'),
+          btn('Delete', () => deleteImage(im, users), false, 'small danger')))));
+  }
+  if (!state.images.length) root.append(el('div', { class: 'muted' }, 'No images yet. Add one, then use it in a config: an image widget, or a face\'s background.'));
+}
+
+async function downloadImage(im) {
+  try {
+    const blob = await imageBlob(im.name);
+    const a = el('a', { href: URL.createObjectURL(blob), download: im.name + (im.type === 'png' ? '.png' : '.jpg') });
+    document.body.append(a);
+    a.click();
+    a.remove();
+  } catch (e) { setImageMsg(e.message, 'bad'); }
+}
+
+async function deleteImage(im, users) {
+  if (!confirm('Delete the image "' + im.name + '"?' + (users.length ? '\nIt is used by ' + users.join(', ') + '; the gauges draw nothing in its place until an image of that name is added again.' : ''))) return;
+  try {
+    await api.del('/api/images/' + im.name);
+    delete imageCache[im.name];
+    setImageMsg('Deleted "' + im.name + '".', 'ok');
+    await loadImages();
+  } catch (e) { setImageMsg(e.message, 'bad'); }
+}
+
+// Adding an image: the file you pick, shrunk to a size you choose and encoded
+// as JPEG (or PNG where there is transparency), checked before it is sent.
+const upload = { src: null, blob: null, width: 0, height: 0, type: '', alpha: false, timer: null };
+
+async function decodeFile(file) {
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await img.decode();
+  return { img, width: img.naturalWidth || 466, height: img.naturalHeight || 466 };
+}
+
+// Any pixel not fully opaque makes it a PNG; JPEG has no transparency.
+function hasTransparency(src, file) {
+  if (file.type === 'image/jpeg') return false;
+  const k = Math.min(1, 256 / Math.max(src.width, src.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(src.width * k));
+  c.height = Math.max(1, Math.round(src.height * k));
+  const ctx = c.getContext('2d');
+  ctx.drawImage(src.img, 0, 0, c.width, c.height);
+  const px = ctx.getImageData(0, 0, c.width, c.height).data;
+  for (let i = 3; i < px.length; i += 4) if (px[i] < 250) return true;
+  return false;
+}
+
+async function openUpload(file) {
+  let src;
+  try { src = await decodeFile(file); }
+  catch (e) { setImageMsg('That file could not be read as an image.', 'bad'); return; }
+  closeUpload();
+  upload.src = src;
+  upload.alpha = hasTransparency(src, file);
+  const big = Math.max(src.width, src.height);
+  const name = file.name.replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'image';
+  const sizes = [[466, 'Whole face: up to 466 px'], [350, 'Up to 350 px'], [233, 'Half the face: up to 233 px'], [120, 'Icon: up to 120 px'], [64, 'Small icon: up to 64 px']];
+  const sizeSel = el('select', { id: 'up-size', onchange: queueEncode },
+    ...sizes.map(([v, label]) => el('option', { value: v }, label)),
+    el('option', { value: 'own', disabled: big > 466 ? '' : null }, 'Its own size, ' + src.width + ' x ' + src.height + (big > 466 ? ' (too big)' : '')));
+  sizeSel.value = big > 466 ? '466' : 'own';
+  $('#image-add').append(el('div', { class: 'upload' },
+    el('canvas', { id: 'up-preview', width: 200, height: 200 }),
+    el('div', { class: 'upfields' },
+      el('span', { class: 'muted' }, 'Name'), el('input', { type: 'text', id: 'up-name', maxlength: 32, value: name, title: 'Letters, digits, - and _; configs use the image by this name' }),
+      el('span', { class: 'muted' }, 'Size'), sizeSel,
+      el('span', { class: 'muted' }, 'Format'), el('select', { id: 'up-format', onchange: queueEncode },
+        el('option', { value: 'auto' }, 'Automatic: ' + (upload.alpha ? 'PNG, it has transparency' : 'JPEG')),
+        el('option', { value: 'jpeg' }, 'JPEG: photos, smallest'), el('option', { value: 'png' }, 'PNG: transparency and sharp edges')),
+      el('span', { class: 'muted' }, 'Quality'), el('input', { type: 'range', id: 'up-quality', min: 40, max: 95, value: 80, oninput: queueEncode, title: 'JPEG only: lower is smaller' }),
+      el('span'), el('span', { id: 'up-result', class: 'muted' }, 'working\u2026'),
+      el('span'), el('span', { class: 'row', style: 'gap:6px' },
+        btn('Save to hub', saveUpload, true, 'small primary'), btn('Cancel', closeUpload, false, 'small')))));
+  $('#up-name').focus();
+  await encodeUpload();
+}
+
+function closeUpload() {
+  if (upload.src) URL.revokeObjectURL(upload.src.img.src);
+  upload.src = upload.blob = null;
+  $('#image-add').innerHTML = '';
+}
+
+function queueEncode() {
+  clearTimeout(upload.timer);
+  upload.timer = setTimeout(encodeUpload, 120);
+}
+
+async function encodeUpload() {
+  const s = upload.src;
+  if (!s) return;
+  const sel = $('#up-size').value, big = Math.max(s.width, s.height);
+  const k = Math.min(1, (sel === 'own' ? big : +sel) / big);
+  const w = Math.max(1, Math.round(s.width * k)), h = Math.max(1, Math.round(s.height * k));
+  const chosen = $('#up-format').value, type = chosen === 'auto' ? (upload.alpha ? 'png' : 'jpeg') : chosen;
+  $('#up-quality').disabled = type === 'png';
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  if (type === 'jpeg') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }  // transparency becomes the face's black
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(s.img, 0, 0, w, h);
+  const blob = await new Promise(res => c.toBlob(res, imageMime(type), +$('#up-quality').value / 100));
+  if (upload.src !== s || !blob) return;
+  Object.assign(upload, { blob, width: w, height: h, type });
+
+  const pv = $('#up-preview'), pctx = pv.getContext('2d'), f = Math.min(200 / w, 200 / h);
+  pctx.clearRect(0, 0, 200, 200);
+  pctx.drawImage(c, (200 - w * f) / 2, (200 - h * f) / 2, w * f, h * f);
+  const max = (state.imageRoom && state.imageRoom.maxBytes) || MAX_IMAGE_BYTES;
+  const tooBig = blob.size > max;
+  const res = $('#up-result');
+  res.textContent = w + ' x ' + h + ' ' + type.toUpperCase() + ', ' + kb(blob.size) + ': ' + sendTime(blob.size) + ' to each gauge over the bus.' +
+    (tooBig ? ' Too big: the hub takes up to ' + kb(max) + '; choose a smaller size or lower quality.' : blob.size > 150 * 1024 ? ' Large: a smaller size or lower quality sends quicker.' : '');
+  res.className = tooBig ? 'bad' : blob.size > 150 * 1024 ? '' : 'muted';
+  $('#image-add .btn.primary').disabled = tooBig;
+}
+
+async function saveUpload() {
+  const name = $('#up-name').value.trim();
+  if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) { setImageMsg('Name: 1-32 characters, letters, digits, - and _ only.', 'bad'); return; }
+  if (!upload.blob) return;
+  if (imageInfo(name) && !confirm('Replace the image "' + name + '"? Every config using it shows the new one, and the gauges are sent it again.')) return;
+  try {
+    await putImage(name, upload.blob);
+    closeUpload();
+    setImageMsg('Saved "' + name + '". Use it in an image widget, or as a face\'s background.', 'ok');
+    await loadImages();
+  } catch (e) { setImageMsg('Not saved: ' + e.message, 'bad'); }
+}
+
+$('#btn-add-image').addEventListener('click', () => $('#image-file').click());
+$('#image-file').addEventListener('change', ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) openUpload(f); });
+
+// A list of the library's images for a widget or a face background.
+function imagePicker(val, set, noneLabel) {
+  const names = state.images.map(i => i.name);
+  return el('select', { onchange: ev => set(ev.target.value) },
+    el('option', { value: '' }, noneLabel || (names.length ? 'choose an image' : 'none yet: add one under Images')),
+    ...names.map(n => el('option', { value: n, selected: n === val ? '' : null }, n)),
+    val && !names.includes(val) ? el('option', { value: val, selected: '' }, val + ' (not on this hub)') : null);
+}
+
+// The selected face's own settings: background colour and picture.
+function renderFaceSettings(face) {
+  const root = $('#face-settings');
+  root.innerHTML = '';
+  if (!face) return;
+  const setFace = changes => editConfig(cfg => {
+    const f = (cfg.faces || [])[state.faceIndex];
+    if (!f) return;
+    for (const [k, v] of Object.entries(changes)) { if (v === '' || v == null) delete f[k]; else f[k] = v; }
+  });
+  root.append(el('div', { class: 'wrow' },
+    el('div', { class: 'wtitle' }, 'Face ' + (state.faceIndex + 1) + ' background'),
+    el('div', { class: 'ctl' },
+      el('label', {}, 'Colour', colorPicker(face.bg, 'bg', v => setFace({ bg: v }))),
+      el('label', { title: 'A picture filling the round face behind the widgets' }, 'Image', imagePicker(face.bgImage, v => setFace({ bgImage: v }), 'none')),
+      el('label', { title: 'Below 100 the colour shows through, which darkens a busy picture behind the numbers' }, 'Opacity',
+        el('input', { type: 'number', min: 0, max: 100, step: 1, placeholder: 100, value: face.bgImageOpacity == null ? '' : face.bgImageOpacity,
+          onchange: ev => setFace({ bgImageOpacity: ev.target.value === '' ? '' : Math.max(0, Math.min(100, Math.round(+ev.target.value))) }) })))));
+}
+
+// Where an iw x ih image goes in a W x H box: whole, filling it, or stretched.
+function fitImage(iw, ih, W, H, fit) {
+  if (fit === 'stretch') return { dw: W, dh: H };
+  const k = fit === 'cover' ? Math.max(W / iw, H / ih) : Math.min(W / iw, H / ih);
+  return { dw: iw * k, dh: ih * k };
+}
+
 // --------------------------------------------------------------- preview
 // Mirrors the gauge's renderer closely enough to lay a face out. Colours and
 // theme presets must match lib/hg_config/face_parse.cpp.
@@ -2415,7 +2781,32 @@ function drawPath(ctx, w, th, t) {
   if (s.sw > 0) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.sw / k; ctx.stroke(p); }
 }
 
-const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath };
+// An image in its box; with a channel, only while its condition holds.
+function drawImageWidget(ctx, w, th, t) {
+  if (w.channel) {
+    const v = valueOf(w, t), on = w.on || { above: 0.5 };
+    const lit = v != null && (on.above != null ? v > on.above : v < on.below) && (!w.flash || Math.floor(t / 250) % 2 === 0);
+    if (!lit) return;
+  }
+  const W = w.w == null ? 160 : w.w, H = w.h == null ? 160 : w.h;
+  ctx.translate(w.x == null ? 233 : w.x, w.y == null ? 233 : w.y);
+  if (w.rotate) ctx.rotate(rad(w.rotate));
+  const img = imageFor(w.image);
+  if (!img) {
+    // Still loading, or not on this hub: an outline where it goes.
+    ctx.strokeStyle = th.dim; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeRect(-W / 2, -H / 2, W, H);
+    ctx.fillStyle = th.dim; ctx.font = '14px ' + fontStack('sans'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(!w.image ? 'no image' : imageInfo(w.image) ? w.image : w.image + ' (missing)', 0, 0, Math.max(20, W - 8));
+    return;
+  }
+  ctx.globalAlpha = (w.opacity == null ? 100 : w.opacity) / 100;
+  const fit = w.fit || 'contain', d = fitImage(img.naturalWidth, img.naturalHeight, W, H, fit);
+  if (fit === 'cover') { ctx.beginPath(); ctx.rect(-W / 2, -H / 2, W, H); ctx.clip(); }
+  ctx.drawImage(img, -d.dw / 2, -d.dh / 2, d.dw, d.dh);
+}
+
+const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath, image: drawImageWidget };
 
 function drawFace(canvas, cfg, faceIdx, t) {
   loadFonts();
@@ -2427,6 +2818,14 @@ function drawFace(canvas, cfg, faceIdx, t) {
   ctx.save();
   ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
   ctx.fillStyle = color(face.bg, theme, theme.bg); ctx.fillRect(0, 0, S, S);
+  const bgImg = imageFor(face.bgImage);
+  if (bgImg) {
+    // Fills the face; below 100% opacity the colour shows through.
+    const d = fitImage(bgImg.naturalWidth, bgImg.naturalHeight, S, S, 'cover');
+    ctx.globalAlpha = (face.bgImageOpacity == null ? 100 : face.bgImageOpacity) / 100;
+    ctx.drawImage(bgImg, (S - d.dw) / 2, (S - d.dh) / 2, d.dw, d.dh);
+    ctx.globalAlpha = 1;
+  }
   for (const w of face.widgets || []) {
     const fn = DRAW[w.type];
     if (!fn) continue;
@@ -2492,6 +2891,7 @@ function widgetBounds(ctx, w, t) {
     return rotated({ kind: 'rect', cx, cy, w: W, h: H }, w.rotate || 0, cx, cy);
   }
   if (w.type === 'path') { const s = w.size || 48; return rotated({ kind: 'rect', cx, cy, w: s, h: s }, w.rotate || 0, cx, cy); }
+  if (w.type === 'image') return rotated({ kind: 'rect', cx, cy, w: w.w == null ? 160 : w.w, h: w.h == null ? 160 : w.h }, w.rotate || 0, cx, cy);
   // Text: number, label, light caption.
   const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : (w.size || 24);
   const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
@@ -2517,7 +2917,7 @@ function rotated(b, angle, px, py) {
 }
 
 // What dragging a corner handle turns: the widget's rotation, or an arc's start.
-const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', shape: 'rotate', path: 'rotate', dial: 'start', ring: 'start' };
+const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', shape: 'rotate', path: 'rotate', image: 'rotate', dial: 'start', ring: 'start' };
 
 // The four corner handles of a selection box, in canvas coordinates.
 function handleCorners(b) {
@@ -2563,7 +2963,7 @@ function applyResize(w, p) {
   } else if (w.type === 'shape' && w.shape === 'polygon' && drag.points0) {
     w.points = drag.points0.map(v => lim(v * d / drag.d0, -466, 466));
     drag.keys = ['points'];
-  } else if (w.type === 'bar' || w.type === 'shape') {
+  } else if (w.type === 'bar' || w.type === 'shape' || w.type === 'image') {
     const a = rad(w.rotate || 0), dx = p.x - drag.px, dy = p.y - drag.py;
     const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
     w.w = lim(2 * Math.abs(lx), 4, 466);
@@ -2815,6 +3215,7 @@ async function signOut() {
   cloudThemePulled = false;
   await loadUser();
   await loadConfigs();
+  await loadImages();
   await loadRecordings();
 }
 
@@ -2833,6 +3234,7 @@ async function afterSignIn() {
         await api.put('/api/virtual/' + r.id, { face: v.face || 0 });
         if (mock.assignments[v.mac] && mock.configs[mock.assignments[v.mac]]) await api.put('/api/assignments/' + made.mac, { name: mock.assignments[v.mac] });
       }
+      for (const [name, m] of Object.entries(mock.images)) await putImage(name, b64ToBlob(m.data, imageMime(m.type)));
     }
   } catch (e) { alert('Could not copy local work: ' + e.message); }
   await loadConfigs();
@@ -2840,6 +3242,7 @@ async function afterSignIn() {
   await pullCloudSim();
   await pullCloudAlerts();
   await pullCloudThemeColours();
+  await loadImages();
 }
 
 // The demo's gauge cards read planned gauges and assignments from the account
@@ -2862,6 +3265,7 @@ const mock = {
   recordings: {}, library: {}, playback: null,
   alerts: [], alertRun: [],
   themeColours: DEFAULT_THEME_COLOURS.map(c => Object.assign({}, c)),
+  images: {},
   virtual: [{ id: 1, label: 'Left pod', mac: '02:00:00:00:00:01', face: 0 }],
   templates: {
     'classic-tach': { schema: 1, name: 'Classic tach', theme: 'white', faces: [{ name: 'Tach', widgets: [
@@ -3014,6 +3418,23 @@ const mock = {
       }
     });
   },
+  // An image kept in this browser, as the hub would keep it.
+  async putImage(name, blob) {
+    if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) throw new Error('name must be 1-32 characters: letters, digits, - and _');
+    if (blob.size > MAX_IMAGE_BYTES) throw new Error('an image can be at most 256 KB');
+    if (!this.images[name] && Object.keys(this.images).length >= 32) throw new Error('at most 32 images; delete one first');
+    const bmp = await createImageBitmap(blob);
+    if (bmp.width > 466 || bmp.height > 466) throw new Error('the image is ' + bmp.width + ' x ' + bmp.height + ': at most 466 x 466 pixels');
+    const previous = this.images[name];
+    this.images[name] = { type: blob.type === 'image/png' ? 'png' : 'jpeg', data: await blobToB64(blob), width: bmp.width, height: bmp.height,
+      size: blob.size, crc: crc32Hex(new Uint8Array(await blob.arrayBuffer())) };
+    if (!this.save()) {
+      if (previous) this.images[name] = previous; else delete this.images[name];
+      this.save();
+      throw new Error('this browser has no room left for it: sign in to keep images in your account, or make it smaller');
+    }
+    return { ok: true };
+  },
   async req(method, path, body, raw) {
     // Online, the worker serves these as static files behind the hub's paths.
     if (ONLINE && (path === '/api/templates' || path.startsWith('/api/templates/') || path === '/api/channels/meta' || path === '/api/fonts')) {
@@ -3027,13 +3448,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts, themeColours: this.themeColours })); }
-    catch (e) { /* no storage */ }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts, themeColours: this.themeColours, images: this.images })); return true; }
+    catch (e) { return false; /* no storage, or full */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (themeListOk(s.themeColours)) this.themeColours = s.themeColours; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (themeListOk(s.themeColours)) this.themeColours = s.themeColours; if (s.images && typeof s.images === 'object') this.images = s.images; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -3041,7 +3462,7 @@ const mock = {
     const parse = () => raw ? JSON.parse(body) : body;
     if (path === '/api/channels/meta') return this.meta;
     if (path === '/api/fonts') return DEFAULT_FONTS;
-    if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length }));
+    if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length, images: configImages(c) }));
     if (seg[1] === 'configs') {
       if (method === 'GET') { if (!this.configs[seg[2]]) throw new Error('no such config'); return this.configs[seg[2]]; }
       if (method === 'PUT') { this.configs[seg[2]] = parse(); return { ok: true }; }
@@ -3126,6 +3547,16 @@ const mock = {
       }
       return { rules: JSON.parse(JSON.stringify(this.alerts)), states: this.alertStates(), max: 16 };
     }
+    if (path === '/api/images') {
+      const list = Object.entries(this.images).map(([name, m]) => ({ name, size: m.size, crc: m.crc, width: m.width, height: m.height, type: m.type }));
+      const room = 4 * 1024 * 1024, used = list.reduce((n, m) => n + m.size, 0);
+      return { images: list, free: Math.max(0, room - used), total: room, max_bytes: MAX_IMAGE_BYTES, max_count: 32 };
+    }
+    if (seg[1] === 'images' && method === 'DELETE') {
+      if (!this.images[seg[2]]) throw new Error('no such image');
+      delete this.images[seg[2]];
+      return { ok: true };
+    }
     if (path === '/api/record') throw new Error('this is the online copy: there is no hub to record from');
     if (path === '/api/playback') {
       if (body.action === 'start') {
@@ -3194,6 +3625,7 @@ async function init() {
   try { setFonts(await api.get('/api/fonts')); } catch (e) { setFonts(DEFAULT_FONTS); }
   const metaReady = loadMeta(6);
   await loadConfigs();
+  await loadImages();
   await loadAlerts();
   await loadThemeColours();
   connect();

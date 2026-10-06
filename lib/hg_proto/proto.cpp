@@ -245,6 +245,38 @@ bool unpackThemeColours(const CanFrame& f, uint32_t colours[kThemeColourCount]) 
     return true;
 }
 
+CanFrame pack(const AssetQuery& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Asset, Dir::HubToGauge, node, 6);
+    f.data[0] = uint8_t(AssetOp::Query);
+    f.data[1] = uint8_t(m.kind);
+    put32(f.data + 2, m.crc);
+    return f;
+}
+
+bool unpack(const CanFrame& f, AssetQuery& m) {
+    if (f.len < 6 || f.data[0] != uint8_t(AssetOp::Query)) return false;
+    m.kind = XferKind(f.data[1]);
+    m.crc = get32(f.data + 2);
+    return true;
+}
+
+CanFrame pack(const AssetReply& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Asset, Dir::GaugeToHub, node, 7);
+    f.data[0] = uint8_t(AssetOp::Reply);
+    f.data[1] = uint8_t(m.kind);
+    put32(f.data + 2, m.crc);
+    f.data[6] = m.have ? 1 : 0;
+    return f;
+}
+
+bool unpack(const CanFrame& f, AssetReply& m) {
+    if (f.len < 7 || f.data[0] != uint8_t(AssetOp::Reply)) return false;
+    m.kind = XferKind(f.data[1]);
+    m.crc = get32(f.data + 2);
+    m.have = f.data[6] != 0;
+    return true;
+}
+
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node) {
     CanFrame f = makeFrame(Msg::XferBegin, dir, node, 6);
     f.data[0] = m.session;

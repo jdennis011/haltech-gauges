@@ -5,12 +5,14 @@
 
 #include <ArduinoJson.h>
 #include <string>
+#include <vector>
 
 #include "hub_manager.h"
 
 // The hub's library of gauge configs, kept on LittleFS, and the table of
 // which config each gauge (by MAC) should be running. Assigned configs are
-// held in RAM so the manager can push them without touching flash.
+// held in RAM so the manager can push them without touching flash, with the
+// "images" map (each image's CRC32) that the gauge needs added.
 namespace library_store {
 
 // Mounts the filesystem and loads the assigned configs. False if the
@@ -26,8 +28,15 @@ std::string filePath(const char* name);
 bool put(const char* name, const uint8_t* data, size_t size, std::string& error);
 bool remove(const char* name);
 bool read(const char* name, std::string& out);
-// Appends one object per stored config: name, size, crc, title, faces.
+// Appends one object per stored config: name, size, crc, title, faces, images.
 void listJson(JsonArray out);
+
+// A config as it goes to a gauge: the same bytes with "images": {name: CRC}
+// added for each image it uses that the hub has, and those CRCs.
+void withImageMap(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
+                  std::vector<uint32_t>& crcs);
+// The image library changed: the assigned configs are rebuilt with new CRCs.
+void imagesChanged();
 
 // mac is "AA:BB:CC:DD:EE:FF". An empty name clears the assignment. False if
 // the config does not exist.

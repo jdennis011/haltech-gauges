@@ -5,9 +5,9 @@
 //    list, fonts), so the page's code is identical.
 // 2. Sign in with Google: the page posts Google's ID token, the Worker verifies it
 //    against Google's keys and sets a signed session cookie.
-// 3. Per-user storage in KV, behind the hub's own paths for configs, planned
-//    gauges, assignments and recordings, so what you make follows your account
-//    across devices. Signed out, the page keeps its work in the browser instead.
+// 3. Per-user storage in KV, behind the hub's own paths for configs, images,
+//    planned gauges, assignments and recordings, so what you make follows your
+//    account across devices. Signed out, the page keeps its work in the browser instead.
 
 const STATIC_API = {
   '/api/templates': '/data/templates.json',
@@ -25,6 +25,9 @@ const MAX_RECORDING_BYTES = 1024 * 1024;
 const MAX_CONFIGS = 64;
 const MAX_RECORDINGS = 20;
 const MAX_PLANNED = 8;
+const MAX_IMAGE_BYTES = 256 * 1024;
+const MAX_IMAGES = 32;
+const ACCOUNT_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -95,15 +98,65 @@ function cookies(request) {
 
 // CRC32 as the hub computes it, so the page's "config in sync" check means the same.
 let crcTable = null;
-function crc32(text) {
+function crc32Bytes(bytes) {
   if (!crcTable) {
     crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crcTable[n] = c >>> 0; }
   }
-  const bytes = utf8(text);
   let crc = 0xFFFFFFFF;
   for (const b of bytes) crc = crcTable[(crc ^ b) & 0xFF] ^ (crc >>> 8);
   return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+}
+const crc32 = text => crc32Bytes(utf8(text));
+
+// The type and size of an image from its header, checked as the hub checks
+// them: baseline JPEG or any PNG, at most 466 x 466. {error} if not.
+function probeImage(b) {
+  const n = b.length, be16 = i => (b[i] << 8) | b[i + 1];
+  let type = '', width = 0, height = 0;
+  if (n < 8) return { error: 'the file is too short to be an image' };
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) {
+    for (let pos = 2; pos + 4 <= n;) {
+      if (b[pos] !== 0xFF) break;
+      const m = b[pos + 1];
+      if (m === 0xFF) { pos++; continue; }
+      if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { pos += 2; continue; }
+      if (m === 0xD9 || m === 0xDA) break;
+      const len = be16(pos + 2);
+      if (len < 2) break;
+      if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) {
+        if ([0xC2, 0xC6, 0xCA, 0xCE].includes(m)) return { error: 'progressive JPEG: save it as a baseline (standard) JPEG' };
+        if (m !== 0xC0) return { error: 'this kind of JPEG (lossless or arithmetic-coded) is not supported: save it as a baseline JPEG' };
+        if (pos + 10 > n) break;
+        if (b[pos + 4] !== 8) return { error: 'JPEG with 12-bit samples is not supported' };
+        if (b[pos + 9] !== 1 && b[pos + 9] !== 3) return { error: 'JPEG in CMYK is not supported: save it as RGB' };
+        type = 'jpeg'; height = be16(pos + 5); width = be16(pos + 7);
+        break;
+      }
+      pos += 2 + len;
+    }
+    if (!type) return { error: 'the JPEG is damaged or cut short' };
+  } else if ([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].every((v, i) => b[i] === v)) {
+    if (n < 33 || String.fromCharCode(b[12], b[13], b[14], b[15]) !== 'IHDR') return { error: 'the PNG is damaged or cut short' };
+    const be32 = i => b[i] * 16777216 + (b[i + 1] << 16) + (b[i + 2] << 8) + b[i + 3];
+    type = 'png'; width = be32(16); height = be32(20);
+  } else {
+    return { error: 'not a JPEG or PNG file' };
+  }
+  if (!width || !height) return { error: 'the image has no pixels' };
+  if (width > 466 || height > 466) return { error: 'the image is ' + width + ' x ' + height + ': at most 466 x 466 pixels, the size of the screen' };
+  return { type, width, height };
+}
+
+// The images a config uses, each once: face backgrounds and image widgets.
+function configImages(cfg) {
+  const out = [];
+  const add = n => { if (typeof n === 'string' && n && !out.includes(n)) out.push(n); };
+  for (const f of Array.isArray(cfg && cfg.faces) ? cfg.faces : []) {
+    add(f && f.bgImage);
+    for (const w of Array.isArray(f && f.widgets) ? f.widgets : []) if (w && w.type === 'image') add(w.image);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------- auth
@@ -179,7 +232,7 @@ const key = (user, ...rest) => ['u', user.sub, ...rest].join(':');
 
 async function readIndex(env, user) {
   const idx = await env.HG.get(key(user, 'index'), 'json');
-  return idx || { configs: {}, recordings: {}, virtual: [], assignments: {}, nextId: 1 };
+  return Object.assign({ configs: {}, recordings: {}, images: {}, virtual: [], assignments: {}, nextId: 1 }, idx || {});
 }
 const writeIndex = (env, user, idx) => env.HG.put(key(user, 'index'), JSON.stringify(idx));
 
@@ -195,7 +248,7 @@ const cleanAlert = r => Object.fromEntries(Object.entries(r && typeof r === 'obj
 async function userApi(request, env, path, user) {
   const seg = path.split('/').filter(Boolean);
   const area = seg[1];
-  if (!['configs', 'assignments', 'virtual', 'recordings', 'settings'].includes(area)) return null;
+  if (!['configs', 'assignments', 'virtual', 'recordings', 'settings', 'images'].includes(area)) return null;
   if (!user) return json({ ok: false, error: 'sign in to keep work in your account' }, 401);
   if (!env.HG) return json({ ok: false, error: 'storage is not set up on this site' }, 503);
   const method = request.method;
@@ -222,7 +275,8 @@ async function userApi(request, env, path, user) {
       if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.faces) || !cfg.faces.length) return json({ ok: false, error: "'faces' must list at least one face" }, 400);
       if (!idx.configs[name] && Object.keys(idx.configs).length >= MAX_CONFIGS) return json({ ok: false, error: 'at most ' + MAX_CONFIGS + ' configs per account' }, 409);
       await env.HG.put(key(user, 'cfg', name), text);
-      idx.configs[name] = { size: text.length, crc: crc32(text), title: typeof cfg.name === 'string' ? cfg.name : '', faces: cfg.faces.length };
+      if ('images' in cfg) return json({ ok: false, error: "'images' is filled in by the hub on the way to a gauge: leave it out" }, 400);
+      idx.configs[name] = { size: text.length, crc: crc32(text), title: typeof cfg.name === 'string' ? cfg.name : '', faces: cfg.faces.length, images: configImages(cfg) };
       await writeIndex(env, user, idx);
       return json({ ok: true });
     }
@@ -334,6 +388,44 @@ async function userApi(request, env, path, user) {
     idx.settings = { ...(idx.settings || {}), sim: { speed, overrides } };
     await writeIndex(env, user, idx);
     return json({ ok: true });
+  }
+
+  // ---- images: the file itself, checked as the hub checks it
+  if (area === 'images') {
+    if (!name) {
+      if (method !== 'GET') return json({ ok: false, error: 'method' }, 405);
+      const list = Object.entries(idx.images).map(([n, m]) => ({ name: n, ...m }));
+      const used = list.reduce((s, m) => s + m.size, 0);
+      return json({ images: list, free: Math.max(0, ACCOUNT_IMAGE_BYTES - used), total: ACCOUNT_IMAGE_BYTES, max_bytes: MAX_IMAGE_BYTES, max_count: MAX_IMAGES });
+    }
+    if (!NAME_RE.test(name)) return json({ ok: false, error: 'bad image name' }, 400);
+    const meta = idx.images[name];
+    if (method === 'GET') {
+      const data = meta ? await env.HG.get(key(user, 'img', name), 'arrayBuffer') : null;
+      if (!data) return json({ ok: false, error: 'no such image' }, 404);
+      return new Response(data, { headers: { 'content-type': meta.type === 'png' ? 'image/png' : 'image/jpeg', 'cache-control': 'no-store' } });
+    }
+    if (method === 'PUT') {
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) return json({ ok: false, error: 'an image can be at most 256 KB' }, 400);
+      const info = probeImage(bytes);
+      if (info.error) return json({ ok: false, error: info.error }, 400);
+      if (!meta && Object.keys(idx.images).length >= MAX_IMAGES) return json({ ok: false, error: 'at most ' + MAX_IMAGES + ' images per account; delete one first' }, 409);
+      const used = Object.values(idx.images).reduce((s, m) => s + m.size, 0) - (meta ? meta.size : 0);
+      if (used + bytes.length > ACCOUNT_IMAGE_BYTES) return json({ ok: false, error: 'no room: images in an account come to at most 4 MB' }, 409);
+      await env.HG.put(key(user, 'img', name), bytes);
+      idx.images[name] = { size: bytes.length, crc: crc32Bytes(bytes), width: info.width, height: info.height, type: info.type };
+      await writeIndex(env, user, idx);
+      return json({ ok: true });
+    }
+    if (method === 'DELETE') {
+      if (!meta) return json({ ok: false, error: 'no such image' }, 404);
+      await env.HG.delete(key(user, 'img', name));
+      delete idx.images[name];
+      await writeIndex(env, user, idx);
+      return json({ ok: true });
+    }
+    return json({ ok: false, error: 'method' }, 405);
   }
 
   // ---- recordings

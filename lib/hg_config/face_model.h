@@ -27,6 +27,13 @@ constexpr size_t kMaxZones = 6;
 constexpr size_t kMaxTextLength = 32;
 constexpr size_t kMaxPathLength = 1024;   // SVG path data of a path widget
 constexpr size_t kMaxPolygonPoints = 16;
+// Images: kept in the hub's library by name (the rules of a config name) and
+// used by name in a config. A config uses at most this many different ones.
+constexpr size_t kMaxImageName = 32;
+constexpr size_t kMaxImagesPerConfig = 16;
+// The hub's "images" map is added to a config on its way to a gauge, so a
+// config at the 32 KB limit still fits with it.
+constexpr size_t kMaxImageMapBytes = 1024;
 
 typedef uint32_t Color;  // 0xRRGGBB, or a reference to one of the hub's theme colours
 
@@ -59,7 +66,7 @@ struct ThemeColours {
     ThemeColours();  // the eight defaults: white, orange, red, yellow, green, blue, grey, black
 };
 
-enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path };
+enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path, Image };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
 // Marker: arrow at radius r pointing inward; MarkerOut: arrow inside r pointing outward.
 enum class NeedleStyle : uint8_t { Line, Tapered, TaperedCap, None, Marker, MarkerOut };
@@ -73,6 +80,9 @@ enum class TickShape : uint8_t { Line, Triangle };
 enum class ArcSide : uint8_t { Auto, Inside, Outside };  // which way arched text faces
 enum class NumberFormat : uint8_t { Plain, Gear };  // gear: 0 = N, -1 = R, -2 = P
 enum class RimMode : uint8_t { Flash, Fill };
+// How an image fills its box: whole and in proportion, filling the box in
+// proportion (edges cut off), or stretched to the box.
+enum class ImageFit : uint8_t { Contain, Cover, Stretch };
 
 struct Theme {
     Color bg = 0x000000;
@@ -185,6 +195,11 @@ struct Widget {
     std::string path;             // path: SVG path data
     int16_t box = 24;             // path: the size of the path's own coordinate box
 
+    // image: drawn in the w x h box (with opacity and rotate), or, with a
+    // channel, only while its "on" condition holds
+    std::string image;            // name in the hub's image library
+    ImageFit fit = ImageFit::Contain;
+
     // rim
     RimMode rimMode = RimMode::Flash;
     float from = 0;
@@ -197,13 +212,28 @@ struct Widget {
 struct Face {
     std::string name;
     Color bg = 0x000000;
+    // An image over the background colour, filling the round face, behind
+    // the widgets. Below 100% opacity the colour shows through, which
+    // darkens a busy picture behind the numbers.
+    std::string bgImage;
+    uint8_t bgImageOpacity = 100;
     std::vector<Widget> widgets;
+};
+
+// The hub adds "images": {"logo": "1A2B3C4D", ...} to a config on its way to
+// a gauge: the CRC32 of each image the config uses, which is what the gauge
+// stores it under. A config in the library never has one.
+struct ImageRef {
+    std::string name;
+    uint32_t crc = 0;
 };
 
 struct Config {
     std::string name;
     Theme theme;
     std::vector<Face> faces;
+    bool hasImageMap = false;
+    std::vector<ImageRef> images;
 };
 
 struct ParseResult {
@@ -220,6 +250,21 @@ ParseResult parseConfig(const uint8_t* json, size_t size, Config& out);
 ParseResult parseThemeColours(const uint8_t* json, size_t size, ThemeColours& out);
 // "#RRGGBB" into `out`, which must hold 8 characters.
 void formatColor(Color c, char out[8]);
+
+// 1 to kMaxImageName letters, digits, - and _.
+bool validImageName(const char* name);
+// The images a config uses (face backgrounds and image widgets), each name
+// once, in the order they first appear.
+std::vector<std::string> imagesUsed(const Config& config);
+// The CRC32 the hub gave an image in the config's map; null if it has none.
+const ImageRef* findImage(const Config& config, const std::string& name);
+// The images a config's JSON names, read without checking the rest: for the
+// hub, which has already validated what it stores.
+std::vector<std::string> imagesNamedIn(const uint8_t* json, size_t size);
+// The config as it goes to a gauge: the same bytes with "images": {name: CRC}
+// added straight after the opening brace. With no refs it is unchanged.
+void addImageMap(const uint8_t* json, size_t size, const std::vector<ImageRef>& refs,
+                 std::vector<uint8_t>& out);
 
 const char* widgetTypeName(WidgetType type);
 const char* fontName(Font font);

@@ -116,11 +116,18 @@ before saving.
 - **Writing:** an image arrives in PSRAM, and a background task writes it to flash in 4 KB
   pieces, so the CAN task, and the live data, never wait on flash.
 - **M5Stack Dial:** it has no PSRAM, so images arrive in internal RAM; keep them small there.
-- **Not done yet:** the gauge firmware does not draw faces yet (the LVGL renderer is still to
-  come), and does not store configs yet. When it does:
-  - storing a config calls `image_store::keepOnly()` with the CRCs from its map;
-  - the renderer opens `image_store::path(crc)` through an LVGL file-system driver, with
-    `LV_USE_TJPGD` and `LV_USE_LODEPNG` on and the image cache in PSRAM.
+- **Drawing:** the renderer (`src/gauge/face_renderer.cpp`) finds each image through the
+  config's `images` map and `image_store::path(crc)`, and shows it as an LVGL image object read
+  from the filesystem (`L:/img/<crc>.jpg`) and decoded by TJpgDec or lodepng, with the fit,
+  rotation and opacity the config asks. Decoded images stay in LVGL's cache (2 MB of PSRAM on the
+  Waveshare board) so a background is decoded once, not every frame. Storing a config calls
+  `image_store::keepOnly()` with the CRCs from its map, so the images it no longer uses go.
+- **Where an image draws:** a face background sits under every widget; an image widget sits
+  above every vector widget on the face, whatever its place in the config's order (the vector
+  widgets are painted by one object, images are objects of their own on top). Put a shape over an
+  image on the page and the gauge draws the image over the shape.
+- **Missing images:** an image the hub never sent, or that the gauge has dropped, is simply not
+  drawn; the page's preview shows a dashed box in its place.
 
 ## Later: over Wi-Fi
 

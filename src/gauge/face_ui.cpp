@@ -137,7 +137,7 @@ void updateOverlays(uint32_t now) {
     const char* status = face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "");
     static std::string lastStatus;
     std::string next = status;
-    if (face_store::trying()) next += next.empty() ? "TRIAL" : "  TRIAL";
+    if (face_store::trial()) next += next.empty() ? "TRIAL" : "  TRIAL";
     if (face_store::fallback()) next += next.empty() ? "BUILT-IN FACE" : "  BUILT-IN FACE";
     if (next != lastStatus) {
         lastStatus = next;

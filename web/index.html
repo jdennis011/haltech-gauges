@@ -196,7 +196,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
     <div class="row"><strong>Alerts</strong><span class="muted" id="alert-note"></span><span class="spacer"></span>
       <select id="alert-preset" title="A starting point for the new alert"></select>
       <button class="btn small primary" id="btn-add-alert">Add alert</button></div>
-    <div class="muted" style="font-size:13px;margin:6px 0">The hub checks these against the live data ten times a second. While an alert's condition holds, the gauges show its message, switch to its face, or both, and go back when it ends. Where two alerts apply to the same gauge, the one higher in the list wins. Changes are saved as you make them.</div>
+    <div class="muted" style="font-size:13px;margin:6px 0">The hub checks these against the live data ten times a second. While an alert's condition holds, the gauges show its message, switch to another config or face, or both, and go back when it ends. Where two alerts apply to the same gauge, the one higher in the list wins. Changes are saved as you make them.</div>
     <div class="msg" id="alert-msg"></div>
     <div id="alert-list"></div>
   </div>
@@ -502,7 +502,7 @@ function pushChip(g) {
   if (g.virtual) return el('span', { class: 'chip plan' }, isSynthetic(g.mac) ? 'planned, no hardware yet' : 'waiting for ' + g.mac);
   if (g.push.active) {
     const pct = g.push.total ? ' ' + Math.round(100 * g.push.acked / g.push.total) + '%' : '';
-    return el('span', { class: 'chip' }, (g.push.kind === 'image' ? 'sending an image' : g.push.kind === 'try' ? 'sending the trial' : 'pushing config') + '\u2026' + pct);
+    return el('span', { class: 'chip' }, (g.push.kind === 'image' ? 'sending an image' : g.push.kind === 'try' ? 'sending the trial' : g.push.kind === 'switch' ? 'switching config for an alert' : 'pushing config') + '\u2026' + pct);
   }
   if (g.push.failed) return el('span', { class: 'chip bad' }, 'push ' + g.push.result);
   if (!g.assigned) return el('span', { class: 'chip' }, 'no config assigned');
@@ -523,10 +523,12 @@ function drawCards() {
   if (!$('#tab-gauges').classList.contains('active')) return;
   const now = performance.now();
   for (const p of cardPreviews) {
-    const cfg = cachedConfig(p.name);
-    if (!cfg) continue;
     const a = alertFor(p.mac);
-    drawFace(p.canvas, cfg, Math.min(a.face != null ? a.face : p.face, (cfg.faces || []).length - 1), now);
+    const switched = a.config ? cachedConfig(a.config) : null;
+    const cfg = switched || cachedConfig(p.name);
+    if (!cfg) continue;
+    const face = switched ? (a.configFace != null ? a.configFace : p.face) : (a.face != null ? a.face : p.face);
+    drawFace(p.canvas, cfg, Math.min(face, (cfg.faces || []).length - 1), now);
     if (a.message) drawAlertBanner(p.canvas, a.message, a.color);
   }
 }
@@ -1636,7 +1638,7 @@ try { if (localStorage.getItem('wheelOpen')) $('#wheel-card').open = true; } cat
 
 // ---------------------------------------------------------------- alerts
 // Rules the hub checks against the live data: while one holds, the gauges show
-// its message, switch to its face, or both. docs/alerts.md has the format.
+// its message, switch to another config or face, or both. docs/alerts.md has the format.
 
 const ALERT_WHEN = [['above', 'goes above'], ['below', 'goes below'], ['outside', 'is outside'], ['inside', 'is inside'],
   ['on', 'is on'], ['off', 'is off'], ['changes', 'changes']];
@@ -1650,6 +1652,8 @@ const ALERT_PRESETS = {
   'Check engine light': { channel: 'check_engine_light', when: 'on', message: 'CHECK ENGINE' },
   'Battery low': { channel: 'battery_voltage', when: 'below', value: 12, for: 5, message: 'BATTERY LOW', color: '#FFCC00' },
   'Shift': { channel: 'rpm', when: 'above', value: 7000, hold: 0.5, message: 'SHIFT', color: '#FFCC00' },
+  // Cruise state: 0 disabled, 1 inactive, 2 cruising and above. Pick the config to switch to once added.
+  'Cruise control': { channel: 'cruise_state', when: 'above', value: 1, hold: 1, message: 'CRUISE', color: '#34C759' },
 };
 
 function setAlertMsg(text, cls) {
@@ -1787,11 +1791,15 @@ function renderAlerts() {
       el('label', { title: 'Shown across the middle of the face while the alert is in force. Up to 32 characters; leave empty for no message.' }, 'Show',
         el('input', { type: 'text', class: 'amsg', maxlength: 32, value: r.message || '', placeholder: 'no message', onchange: ev => setAlert(i, { message: ev.target.value.trim() }) })),
       el('input', { type: 'color', value: hex6(r.color || ALERT_RED), title: 'Message colour', onchange: ev => setAlert(i, { color: ev.target.value.toUpperCase() }) }),
-      el('label', { title: 'The face the gauge changes to while the alert is in force' }, 'Switch to',
-        el('select', { onchange: ev => setAlert(i, { face: ev.target.value === '' ? '' : +ev.target.value }, true) },
-          el('option', { value: '' }, 'no face change'),
-          ...[0, 1, 2, 3, 4, 5, 6, 7].map(f => el('option', { value: f, selected: r.face === f ? '' : null }, 'face ' + (f + 1))))),
-      r.face != null ? el('label', { title: 'Go back to the face that was showing when the alert ends' }, 'then back',
+      el('label', { title: 'A config the gauge shows in place of its own while the alert is in force. It is sent each time and not stored; the gauge goes back to its own config when the alert ends.' }, 'Switch to',
+        el('select', { onchange: ev => setAlert(i, { config: ev.target.value, face: ev.target.value && r.face == null ? 0 : r.face }, true) },
+          el('option', { value: '' }, 'its own config'),
+          r.config && !state.configs.some(c => c.name === r.config) ? el('option', { value: r.config, selected: '' }, r.config + ' (not on this hub)') : null,
+          ...state.configs.map(c => el('option', { value: c.name, selected: c.name === r.config ? '' : null }, c.name)))),
+      el('select', { title: r.config ? 'The face of that config to show' : 'The face the gauge changes to while the alert is in force', onchange: ev => setAlert(i, { face: ev.target.value === '' ? '' : +ev.target.value }, true) },
+        el('option', { value: '' }, r.config ? 'face as it is' : 'no face change'),
+        ...alertFaceNames(r.config).map((name, f) => el('option', { value: f, selected: r.face === f ? '' : null }, name))),
+      r.face != null || r.config ? el('label', { title: 'Go back to the face that was showing when the alert ends' }, 'then back',
         el('input', { type: 'checkbox', checked: r.restore === false ? null : '', onchange: ev => setAlert(i, { restore: ev.target.checked }) })) : null,
       el('label', {}, 'on', el('select', { onchange: ev => setAlert(i, { gauge: ev.target.value }) },
         el('option', { value: 'all' }, 'all gauges'),
@@ -1814,6 +1822,16 @@ function renderAlerts() {
   });
   if (!state.alerts.length) root.append(el('div', { class: 'muted' }, 'No alerts yet. Pick a starting point above and press Add alert.'));
   renderAlertStates();
+}
+
+// The face choices for an alert: eight numbered ones, named after the config it switches to when that is known.
+function alertFaceNames(configName) {
+  const cfg = configName ? cachedConfig(configName) : null;
+  const faces = cfg && Array.isArray(cfg.faces) && cfg.faces.length ? cfg.faces : null;
+  const count = faces ? Math.min(faces.length, 8) : 8;
+  const names = [];
+  for (let f = 0; f < count; f++) names.push('face ' + (f + 1) + (faces && faces[f] && faces[f].name ? ': ' + faces[f].name : ''));
+  return names;
 }
 
 function moveAlert(from, to) {
@@ -1841,14 +1859,16 @@ $('#btn-add-alert').addEventListener('click', () => {
   saveAlerts(true);
 });
 
-// What the alerts in force ask of one gauge: the first with a message, and the first with a face.
+// What the alerts in force ask of one gauge: the first with a message, the first with a config
+// (whose own face applies while it shows), and the first with a face.
 function alertFor(mac) {
-  const out = { message: '', color: ALERT_RED, face: null };
+  const out = { message: '', color: ALERT_RED, config: null, configFace: null, face: null };
   state.alerts.forEach((r, i) => {
     const s = state.alertStates[i];
     if (!s || !s.active || r.enabled === false) return;
     if (r.gauge && r.gauge !== 'all' && r.gauge !== mac) return;
     if (!out.message && r.message) { out.message = r.message; out.color = r.color || ALERT_RED; }
+    if (!out.config && r.config) { out.config = r.config; out.configFace = r.face != null ? r.face : null; }
     if (out.face == null && r.face != null) out.face = r.face;
   });
   return out;
@@ -3467,7 +3487,8 @@ const mock = {
       if ((r.when === 'above' || r.when === 'below') && typeof r.value !== 'number') return head + "'value' must be a number";
       if ((r.when === 'outside' || r.when === 'inside') && !(typeof r.low === 'number' && typeof r.high === 'number')) return head + "'low' and 'high' must be numbers";
       if ((r.when === 'outside' || r.when === 'inside') && !(r.low < r.high)) return head + "'low' must be less than 'high'";
-      if (!r.message && r.face == null) return head + "needs a 'message' to show or a 'face' to switch to";
+      if (typeof r.config === 'string' && r.config.length > 32) return head + "'config' is longer than 32 characters";
+      if (!r.message && r.face == null && !r.config) return head + "needs a 'message' to show, a 'config' or a 'face' to switch to";
     }
     return null;
   },

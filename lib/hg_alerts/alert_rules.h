@@ -1,9 +1,9 @@
 #pragma once
 
 // Alerts: rules the hub checks against the live data. While a rule's
-// condition holds, the gauges show its message, switch to its face, or both.
-// This is the rule format, its parser and the evaluation; the hub adds the
-// storage and the sending. docs/alerts.md describes the format.
+// condition holds, the gauges show its message, switch to another config or
+// face, or both. This is the rule format, its parser and the evaluation; the
+// hub adds the storage and the sending. docs/alerts.md describes the format.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -23,6 +23,7 @@ constexpr size_t kMaxName = 24;
 constexpr size_t kMaxMessage = 32;  // bytes; what one alert message carries on the bus
 constexpr float kMaxSeconds = 600;
 constexpr int kMaxFace = 7;         // face index, from 0
+constexpr size_t kMaxConfigName = 32;  // a config's name in the hub's library
 
 enum class When : uint8_t {
     Above,    // value > `value`
@@ -48,7 +49,8 @@ struct Rule {
 
     std::string message;      // shown over the face; empty for none
     uint32_t color = 0xFF3B30;
-    int16_t face = -1;        // face to switch to; -1 leaves the face alone
+    std::string config;       // config to show in place of the gauge's own; empty for none
+    int16_t face = -1;        // face to switch to (within `config` if set); -1 leaves the face alone
     bool restore = true;      // go back to the earlier face when the alert ends
     bool allGauges = true;
     uint8_t mac[6] = {};      // the one gauge it applies to, when not all
@@ -95,9 +97,12 @@ public:
     // what it does. False if there is no such rule.
     bool test(size_t index, uint32_t nowMs, uint32_t forMs);
 
-    // The rule whose message this gauge should show, or whose face it should
-    // be on: the first active one in list order that applies to it. -1 for none.
+    // The rule whose message this gauge should show, whose config it should
+    // be showing, or whose face it should be on: the first active one in list
+    // order that applies to it. -1 for none. A rule with a config counts for
+    // faceFor() only if it names a face too, and that face is within its config.
     int messageFor(const uint8_t mac[6]) const;
+    int configFor(const uint8_t mac[6]) const;
     int faceFor(const uint8_t mac[6]) const;
 
 private:

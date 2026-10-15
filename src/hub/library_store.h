@@ -52,6 +52,10 @@ void assignmentsJson(JsonObject out);
 
 // HubManager::Handler::desired.
 bool desired(const hg::proto::HubManager::Gauge& gauge, hg::proto::HubManager::Desired& out, void*);
+// The config of this name as it goes to a gauge, for an alert that switches
+// a gauge to it (alerts::Dispatcher::ConfigSource): loaded into RAM on first
+// use and kept, like an assigned one. False if there is no such config.
+bool desiredNamed(const char* name, hg::proto::HubManager::Desired& out, void*);
 
 // Frees config copies that were replaced or removed. Call only while no
 // push is in progress (hold the hub lock and check pushBusy()).

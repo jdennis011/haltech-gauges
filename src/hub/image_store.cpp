@@ -237,6 +237,10 @@ bool remove(const char* name) {
 }
 
 bool lookup(const char* name, Info& out) {
+    // The config library loads its assigned configs before this store has
+    // started (it mounts the filesystem); they get their image CRCs when
+    // begin() calls library_store::imagesChanged().
+    if (!mtx) return false;
     Guard guard;
     const Entry* e = find(name);
     if (!e) return false;

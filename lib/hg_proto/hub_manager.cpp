@@ -158,12 +158,13 @@ bool HubManager::themeColours(uint32_t node, const uint32_t colours[kThemeColour
 }
 
 bool HubManager::tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs,
-                           const uint32_t* images, size_t imageCount) {
+                           const uint32_t* images, size_t imageCount, XferKind kind) {
     (void)nowMs;
     const Gauge* g = find(node);
     if (!g || !g->online || pushBusy()) return false;
     // Sent from poll() once the gauge has the images.
     tryPending_ = true;
+    tryKind_ = kind == XferKind::SwitchConfig ? XferKind::SwitchConfig : XferKind::TryConfig;
     tryNode_ = node;
     tryData_ = data;
     trySize_ = size;
@@ -230,6 +231,7 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
                                  s.faceCount != g->status.faceCount || s.flags != g->status.flags;
             g->status = s;
             g->haveStatus = true;
+            g->statusMs = nowMs;
             // We restarted and this gauge is already running: ask who it is.
             if (!g->haveHello && !helloRequestPending_) {
                 helloRequestPending_ = true;
@@ -309,7 +311,7 @@ void HubManager::finishPush(uint32_t nowMs) {
     }
 
     g->pushResult = result;
-    if (pushKind_ == XferKind::TryConfig) {
+    if (pushKind_ == XferKind::TryConfig || pushKind_ == XferKind::SwitchConfig) {
         notify();
         return;
     }
@@ -490,9 +492,9 @@ void HubManager::poll(uint32_t nowMs) {
         if (images(*g, tryImages_, tryImageCount_, nowMs) != Step::Ready) return;
         tryPending_ = false;
         pushActive_ = true;
-        pushKind_ = XferKind::TryConfig;
-        sender_.start(link_, tryNode_, Dir::HubToGauge, ++session_, XferKind::TryConfig, tryData_,
-                      trySize_, nowMs);
+        pushKind_ = tryKind_;
+        sender_.start(link_, tryNode_, Dir::HubToGauge, ++session_, tryKind_, tryData_, trySize_,
+                      nowMs);
         return;
     }
     reconcile(nowMs);

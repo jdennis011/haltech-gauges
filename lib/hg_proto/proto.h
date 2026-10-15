@@ -69,8 +69,9 @@ enum class Cmd : uint8_t {
 
 enum class XferKind : uint8_t {
     Config = 1,     // store and apply
-    TryConfig = 2,  // apply in RAM only
+    TryConfig = 2,  // apply in RAM only: a preview from the page
     Image = 3,      // a JPEG or PNG file to keep; the CRC32 of its bytes is its name
+    SwitchConfig = 4,  // apply in RAM only, as TryConfig, but shown as the face proper: an alert's switch
 };
 
 enum class XferStatus : uint8_t {

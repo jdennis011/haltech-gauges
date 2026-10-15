@@ -42,13 +42,15 @@ SemaphoreHandle_t mtx = nullptr;
 
 // Shared between the tasks, under mtx.
 std::unique_ptr<cfg::Config> staged;    // parsed, waiting for the UI to take it
-bool stagedIsTry = false;
+bool stagedIsTry = false;               // shown without storing
+bool stagedIsTrial = false;             // and a preview from the page, noted on the screen
 bool stagedValid = false;
 
 // UI task only.
 std::unique_ptr<cfg::Config> active;
 std::unique_ptr<cfg::Config> stored;    // kept while a try config is shown, to go back to
 bool activeIsTry = false;
+bool activeIsTrial = false;
 uint8_t face = 0;
 bool inFallback = false;
 
@@ -86,10 +88,11 @@ void dropUnusedImages(const cfg::Config& c) {
     image_store::keepOnly(crcs, n);
 }
 
-void stage(std::unique_ptr<cfg::Config> c, bool isTry) {
+void stage(std::unique_ptr<cfg::Config> c, bool isTry, bool isTrial = false) {
     Guard guard;
     staged = std::move(c);
     stagedIsTry = isTry;
+    stagedIsTrial = isTry && isTrial;
     stagedValid = true;
 }
 
@@ -165,13 +168,15 @@ proto::XferStatus accept(proto::XferKind kind, uint32_t size, uint8_t** buffer) 
 }
 
 bool complete(proto::XferKind kind, const uint8_t* data, uint32_t size) {
-    std::unique_ptr<cfg::Config> c = parse(data, size, kind == proto::XferKind::TryConfig ? "try" : "pushed");
+    const bool trial = kind == proto::XferKind::TryConfig;
+    const bool ramOnly = trial || kind == proto::XferKind::SwitchConfig;
+    std::unique_ptr<cfg::Config> c = parse(data, size, trial ? "try" : ramOnly ? "switched-to" : "pushed");
     if (!c) {
         freeRxBuffer();
         return false;
     }
-    if (kind == proto::XferKind::TryConfig) {
-        stage(std::move(c), true);
+    if (ramOnly) {
+        stage(std::move(c), true, trial);
         freeRxBuffer();
         return true;
     }
@@ -212,20 +217,24 @@ const cfg::Config* current() { return active.get(); }
 bool takeChange() {
     std::unique_ptr<cfg::Config> next;
     bool isTry = false;
+    bool isTrial = false;
     {
         Guard guard;
         if (!stagedValid) return false;
         next = std::move(staged);
         isTry = stagedIsTry;
+        isTrial = stagedIsTrial;
         stagedValid = false;
     }
     if (!next) return false;
     if (isTry) {
         if (!activeIsTry) stored = std::move(active);  // keep what to go back to
         activeIsTry = true;
+        activeIsTrial = isTrial;
     } else {
         stored.reset(new cfg::Config(*next));
         activeIsTry = false;
+        activeIsTrial = false;
     }
     active = std::move(next);
     if (face >= active->faces.size()) face = 0;
@@ -249,6 +258,8 @@ void setActiveFace(uint8_t index) {
 }
 
 bool trying() { return activeIsTry; }
+
+bool trial() { return activeIsTry && activeIsTrial; }
 
 void endTry() {
     if (!activeIsTry) return;

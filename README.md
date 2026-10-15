@@ -67,7 +67,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/web-ui.md` | The hub's page and its REST and WebSocket API |
 | `docs/config-schema.md` | The face config format |
 | `docs/templates.md` | The built-in templates, with a gallery |
-| `docs/alerts.md` | Alerts: rules on the hub that put a message on the gauges or switch their face when a channel meets a condition |
+| `docs/alerts.md` | Alerts: rules on the hub that put a message on the gauges, or switch them to another config or face, when a channel meets a condition |
 | `docs/images.md` | Images for the faces: kept on the hub, sent to each gauge over the gauge bus once; the plan for Wi-Fi transfers |
 | `docs/cloud-sync.md` | Linking a hub to an account on the online copy, so configs, images, theme colours and alerts stay in step both ways |
 | `docs/gauge-adapter-handoff.md` | Hand-off for whoever takes on the gauge adapter: rev A as built, the rev B self-terminating design, open bench items |

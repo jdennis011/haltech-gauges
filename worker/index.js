@@ -364,7 +364,7 @@ const syntheticMac = id => '02:00:00:00:00:' + id.toString(16).toUpperCase().pad
 
 // An alert rule as the page sends it: known keys of the right type only.
 const ALERT_KEYS = { name: 'string', enabled: 'boolean', channel: 'string', unit: 'string', when: 'string', value: 'number', low: 'number', high: 'number',
-  for: 'number', hold: 'number', message: 'string', color: 'string', face: 'number', restore: 'boolean', gauge: 'string' };
+  for: 'number', hold: 'number', message: 'string', color: 'string', config: 'string', face: 'number', restore: 'boolean', gauge: 'string' };
 const cleanAlert = r => Object.fromEntries(Object.entries(r && typeof r === 'object' ? r : {})
   .filter(([k, v]) => ALERT_KEYS[k] === typeof v && (typeof v !== 'string' || v.length <= 64)));
 

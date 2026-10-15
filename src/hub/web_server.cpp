@@ -228,6 +228,7 @@ const char* kindName(proto::XferKind k) {
     switch (k) {
         case proto::XferKind::Config: return "config";
         case proto::XferKind::TryConfig: return "try";
+        case proto::XferKind::SwitchConfig: return "switch";
         case proto::XferKind::Image: return "image";
     }
     return "?";

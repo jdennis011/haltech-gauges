@@ -69,12 +69,13 @@ void test_rules_parse_and_write_back() {
       {"name":"Coolant hot","channel":"coolant_temp","unit":"C","when":"above","value":105,"for":1.5,"hold":4,
        "message":"COOLANT HOT","color":"#FFCC00","face":2,"restore":false,"gauge":"A0:76:4E:11:22:33"},
       {"channel":"wideband_1","when":"outside","low":0.8,"high":1.1,"message":"LAMBDA"},
-      {"name":"CEL","enabled":false,"channel":"check_engine_light","when":"on","face":0}
+      {"name":"CEL","enabled":false,"channel":"check_engine_light","when":"on","face":0},
+      {"name":"Cruise","channel":"cruise_state","when":"above","value":1,"hold":1,"config":"Cruise face","face":0}
     ])";
     std::vector<Rule> rules;
     const ParseResult r = parse(json, rules);
     TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
-    TEST_ASSERT_EQUAL(3, rules.size());
+    TEST_ASSERT_EQUAL(4, rules.size());
 
     TEST_ASSERT_EQUAL_STRING("Coolant hot", rules[0].name.c_str());
     TEST_ASSERT_EQUAL(int(CH_coolant_temp), rules[0].channel);
@@ -97,6 +98,13 @@ void test_rules_parse_and_write_back() {
     TEST_ASSERT_EQUAL(-1, rules[1].face);
     TEST_ASSERT_FALSE(rules[2].enabled);
     TEST_ASSERT_EQUAL(0, rules[2].face);
+    TEST_ASSERT_TRUE(rules[2].config.empty());
+
+    // A config to switch to, with a face within it.
+    TEST_ASSERT_EQUAL_STRING("Cruise face", rules[3].config.c_str());
+    TEST_ASSERT_EQUAL(0, rules[3].face);
+    TEST_ASSERT_TRUE(rules[3].restore);
+    TEST_ASSERT_EQUAL(1000, rules[3].holdMs);
 
     // What is written back reads as the same rules.
     JsonDocument doc;
@@ -106,7 +114,9 @@ void test_rules_parse_and_write_back() {
     serializeJson(doc, text);
     std::vector<Rule> again;
     TEST_ASSERT_TRUE(parse(text, again).ok);
-    TEST_ASSERT_EQUAL(3, again.size());
+    TEST_ASSERT_EQUAL(4, again.size());
+    TEST_ASSERT_EQUAL_STRING("Cruise face", again[3].config.c_str());
+    TEST_ASSERT_EQUAL(0, again[3].face);
     TEST_ASSERT_EQUAL_STRING("COOLANT HOT", again[0].message.c_str());
     TEST_ASSERT_EQUAL_FLOAT(105, again[0].value);
     TEST_ASSERT_EQUAL(1500, again[0].delayMs);
@@ -130,7 +140,9 @@ void test_bad_rules_are_refused_and_named() {
     assertRejected(R"([{"channel":"rpm","when":"over","message":"X"}])", "'when' must be one of");
     assertRejected(R"([{"channel":"rpm","when":"above","message":"X"}])", "'value' must be a number");
     assertRejected(R"([{"channel":"rpm","when":"inside","low":5000,"high":4000,"message":"X"}])", "'low' must be less");
-    assertRejected(R"([{"channel":"rpm","when":"above","value":1}])", "needs a 'message' to show or a 'face'");
+    assertRejected(R"([{"channel":"rpm","when":"above","value":1}])", "needs a 'message' to show");
+    assertRejected(R"([{"channel":"rpm","when":"above","value":1,"config":"a name that is far too long for a config"}])",
+                   "'config' is longer than 32");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"face":8}])", "'face' must be");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","color":"red"}])", "'color' must look like");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","gauge":"left"}])", "'gauge' must be");
@@ -279,6 +291,24 @@ void test_disabled_rules_never_fire_and_test_forces_one() {
     TEST_ASSERT_FALSE(rig.active(1));
 }
 
+void test_config_rules_are_found_per_gauge() {
+    // A rule with only a config is a valid rule, and the first active one wins.
+    Rig rig(R"([{"channel":"rpm","when":"above","value":7000,"hold":0,"config":"Shift","gauge":"A0:76:4E:11:22:33"},
+                {"channel":"cruise_state","when":"above","value":1,"hold":0,"config":"Cruise","face":1},
+                {"channel":"coolant_temp","when":"above","value":105,"hold":0,"message":"HOT"}])");
+    TEST_ASSERT_EQUAL(-1, rig.engine.configFor(kMacA));
+    rig.run(CH_cruise_state, 2, 200);
+    TEST_ASSERT_EQUAL(1, rig.engine.configFor(kMacA));
+    TEST_ASSERT_EQUAL(1, rig.engine.configFor(kMacB));
+    TEST_ASSERT_EQUAL(1, rig.engine.faceFor(kMacB));  // the config rule's face counts as a face too
+    rig.run(CH_rpm, 7500, 200);
+    TEST_ASSERT_EQUAL(0, rig.engine.configFor(kMacA));  // first in the list, for gauge A only
+    TEST_ASSERT_EQUAL(1, rig.engine.configFor(kMacB));
+    rig.run(CH_coolant_temp, 110, 200);
+    TEST_ASSERT_EQUAL(2, rig.engine.messageFor(kMacA));  // the message rule has no config
+    TEST_ASSERT_EQUAL(0, rig.engine.configFor(kMacA));
+}
+
 void test_first_active_rule_wins_per_gauge() {
     Rig rig(R"([{"channel":"rpm","when":"above","value":7000,"hold":0,"message":"SHIFT","gauge":"A0:76:4E:11:22:33"},
                 {"channel":"coolant_temp","when":"above","value":105,"hold":0,"message":"HOT","face":2},
@@ -317,5 +347,6 @@ int main(int, char**) {
     RUN_TEST(test_missing_data_ends_an_alert_and_is_not_a_change);
     RUN_TEST(test_disabled_rules_never_fire_and_test_forces_one);
     RUN_TEST(test_first_active_rule_wins_per_gauge);
+    RUN_TEST(test_config_rules_are_found_per_gauge);
     return UNITY_END();
 }

@@ -152,6 +152,13 @@ bool parseRule(JsonObjectConst o, Rule& r, std::string& why) {
         return false;
     }
 
+    const char* config = o["config"] | "";
+    if (strlen(config) > kMaxConfigName) {
+        why = "'config' is longer than 32 characters";
+        return false;
+    }
+    r.config = config;
+
     r.face = -1;
     if (!o["face"].isNull()) {
         if (!o["face"].is<int>() || o["face"].as<int>() < 0 || o["face"].as<int>() > kMaxFace) {
@@ -161,8 +168,8 @@ bool parseRule(JsonObjectConst o, Rule& r, std::string& why) {
         r.face = int16_t(o["face"].as<int>());
     }
     r.restore = o["restore"] | true;
-    if (r.message.empty() && r.face < 0) {
-        why = "needs a 'message' to show or a 'face' to switch to";
+    if (r.message.empty() && r.face < 0 && r.config.empty()) {
+        why = "needs a 'message' to show, a 'config' or a 'face' to switch to";
         return false;
     }
 
@@ -253,10 +260,9 @@ void toJson(const Rule& r, JsonObject o) {
     char buf[18];
     snprintf(buf, sizeof(buf), "#%06lX", (unsigned long)(r.color & 0xFFFFFF));
     o["color"] = buf;
-    if (r.face >= 0) {
-        o["face"] = r.face;
-        o["restore"] = r.restore;
-    }
+    if (!r.config.empty()) o["config"] = r.config;
+    if (r.face >= 0) o["face"] = r.face;
+    if (r.face >= 0 || !r.config.empty()) o["restore"] = r.restore;
     if (r.allGauges) {
         o["gauge"] = "all";
     } else {
@@ -344,6 +350,13 @@ bool Engine::appliesTo(const Rule& rule, const uint8_t mac[6]) const {
 int Engine::messageFor(const uint8_t mac[6]) const {
     for (size_t i = 0; i < rules_.size(); i++) {
         if (states_[i].active && !rules_[i].message.empty() && appliesTo(rules_[i], mac)) return int(i);
+    }
+    return -1;
+}
+
+int Engine::configFor(const uint8_t mac[6]) const {
+    for (size_t i = 0; i < rules_.size(); i++) {
+        if (states_[i].active && !rules_[i].config.empty() && appliesTo(rules_[i], mac)) return int(i);
     }
     return -1;
 }

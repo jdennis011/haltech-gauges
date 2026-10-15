@@ -213,7 +213,8 @@ bool put(const char* name, const uint8_t* data, size_t size, std::string& error)
     }
 
     Guard guard;
-    if (isAssigned(name)) loadIntoCache(name);  // the old copy is retired, not freed
+    // A copy in RAM (assigned, or an alert's) is replaced; the old one is retired, not freed.
+    if (isAssigned(name) || findCached(name)) loadIntoCache(name);
     return true;
 }
 
@@ -377,6 +378,22 @@ void imagesChanged() {
     for (const std::string& n : names) loadIntoCache(n.c_str());  // old copies are retired, not freed
 }
 
+namespace {
+
+void fillDesired(const Entry& e, HubManager::Desired& out) {
+    out.data = e.data.data();
+    out.size = uint32_t(e.data.size());
+    out.crc = e.crc;
+    out.schema = e.schema;
+    out.imageCount = 0;
+    for (uint32_t crc : e.images) {
+        if (out.imageCount == HubManager::kMaxImages) break;
+        out.images[out.imageCount++] = crc;
+    }
+}
+
+}  // namespace
+
 bool desired(const HubManager::Gauge& gauge, HubManager::Desired& out, void*) {
     if (!gauge.haveHello) return false;
     char name[kMaxName + 1];
@@ -384,15 +401,20 @@ bool desired(const HubManager::Gauge& gauge, HubManager::Desired& out, void*) {
     Guard guard;
     const Entry* e = findCached(name);
     if (!e) return false;
-    out.data = e->data.data();
-    out.size = uint32_t(e->data.size());
-    out.crc = e->crc;
-    out.schema = e->schema;
-    out.imageCount = 0;
-    for (uint32_t crc : e->images) {
-        if (out.imageCount == HubManager::kMaxImages) break;
-        out.images[out.imageCount++] = crc;
+    fillDesired(*e, out);
+    return true;
+}
+
+bool desiredNamed(const char* name, HubManager::Desired& out, void*) {
+    if (!mounted || !validName(name)) return false;
+    Guard guard;
+    const Entry* e = findCached(name);
+    if (!e) {
+        if (!exists(name) || !loadIntoCache(name)) return false;
+        e = findCached(name);
+        if (!e) return false;
     }
+    fillDesired(*e, out);
     return true;
 }
 

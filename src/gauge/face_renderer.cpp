@@ -1,5 +1,6 @@
 #include "face_renderer.h"
 
+#include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +12,7 @@
 #include "channel_store.h"
 #include "display.h"
 #include "font_manager.h"
+#include "image_store.h"
 #include "units.h"
 
 using namespace hg;
@@ -34,10 +36,13 @@ struct Item {
     std::string text;           // number: the text drawn
     lv_obj_t* label = nullptr;  // rotated text, as an LVGL label
     std::vector<lv_obj_t*> chars;  // arched text, a label per character
+    lv_obj_t* image = nullptr;  // an image widget
+    lv_vector_path_t* vpath = nullptr;  // a path widget's path
 };
 
 lv_obj_t* painter = nullptr;
 lv_obj_t* screen = nullptr;
+lv_obj_t* background = nullptr;  // the face's background image
 std::vector<Item> items;
 const Config* config = nullptr;
 const Face* face = nullptr;
@@ -607,10 +612,224 @@ void drawShape(lv_layer_t* layer, Item& it) {
     }
 }
 
-// Paths (SVG path data) and images are not drawn yet: a path needs a vector
-// rasteriser, an image the filesystem driver and decoders. Both are stored
-// and will come with the next renderer step.
-void drawPath(lv_layer_t*, Item&) {}
+// ---------------------------------------------------------------- images
+// An image widget and a face background are LVGL image objects reading the
+// file the hub sent (image_store), decoded by LVGL and kept in its cache.
+// They sit above the painter, so an image draws over every vector widget
+// whatever its place in the config; the background sits below it.
+
+// "L:/img/<crc>.jpg" for an image the config names, or empty if the hub did
+// not send it or the gauge has not kept it.
+std::string imageSource(const std::string& name) {
+    if (!config || name.empty()) return std::string();
+    const ImageRef* ref = findImage(*config, name);
+    if (!ref) return std::string();
+    const std::string path = image_store::path(ref->crc);
+    return path.empty() ? std::string() : "L:" + path;
+}
+
+// An image object filling a box, in design units, with the fit the config asks.
+lv_obj_t* makeImage(const std::string& src, float cx, float cy, float boxW, float boxH, ImageFit fit, float rotateDeg,
+                    uint8_t opacity, bool background) {
+    lv_image_header_t header;
+    if (lv_image_decoder_get_info(src.c_str(), &header) != LV_RESULT_OK || header.w == 0 || header.h == 0) {
+        Serial.printf("image %s could not be read\n", src.c_str());
+        return nullptr;
+    }
+    lv_obj_t* img = lv_image_create(screen);
+    lv_image_set_src(img, src.c_str());
+    lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    const int32_t W = S(boxW), H = S(boxH);
+    lv_obj_set_size(img, W, H);
+    lv_obj_set_pos(img, S(cx) - W / 2, S(cy) - H / 2);
+    if (fit == ImageFit::Stretch) {
+        lv_image_set_inner_align(img, LV_IMAGE_ALIGN_STRETCH);
+    } else {
+        const float sx = float(W) / float(header.w), sy = float(H) / float(header.h);
+        const float s = fit == ImageFit::Cover ? (sx > sy ? sx : sy) : (sx < sy ? sx : sy);
+        lv_image_set_scale(img, uint32_t(s * 256 + 0.5f));
+        lv_image_set_inner_align(img, LV_IMAGE_ALIGN_CENTER);  // clipped to the box
+    }
+    if (rotateDeg != 0) {
+        lv_image_set_pivot(img, W / 2, H / 2);
+        lv_image_set_rotation(img, int32_t(lroundf(rotateDeg * 10)));
+    }
+    lv_obj_set_style_image_opa(img, lv_opa_t(opacity * 255 / 100), 0);
+    if (background) lv_obj_move_background(img);
+    return img;
+}
+
+// ----------------------------------------------------------------- paths
+// SVG path data (the d attribute) parsed once into an LVGL vector path, in the
+// path's own coordinate box, and drawn by ThorVG with the widget's transform.
+
+struct PathReader {
+    const char* s;
+    bool numberAhead() {
+        while (*s == ' ' || *s == ',' || *s == '\t' || *s == '\n') s++;
+        return (*s >= '0' && *s <= '9') || *s == '-' || *s == '+' || *s == '.';
+    }
+    bool number(float& out) {
+        if (!numberAhead()) return false;
+        char* end = nullptr;
+        out = strtof(s, &end);
+        if (end == s) return false;
+        s = end;
+        return true;
+    }
+    bool flag(bool& out) {
+        while (*s == ' ' || *s == ',' || *s == '\t' || *s == '\n') s++;
+        if (*s != '0' && *s != '1') return false;
+        out = *s == '1';
+        s++;
+        return true;
+    }
+};
+
+// A path from SVG path data. Relative commands, shorthand curves and arcs are
+// turned into absolute moves, lines, quadratic and cubic curves and arcs.
+// Returns false, with the path as far as it got, on data it cannot read.
+bool parsePath(const std::string& d, lv_vector_path_t* path) {
+    PathReader r{d.c_str()};
+    lv_fpoint_t cur = {0, 0}, start = {0, 0}, lastCtrl = {0, 0};
+    char lastCmd = 0;
+    char cmd = 0;
+    for (;;) {
+        while (*r.s == ' ' || *r.s == ',' || *r.s == '\t' || *r.s == '\n') r.s++;
+        if (!*r.s) return true;
+        if (strchr("MmLlHhVvCcSsQqTtAaZz", *r.s)) {
+            cmd = *r.s++;
+        } else if (!cmd || !r.numberAhead()) {
+            return false;
+        } else if (cmd == 'M') {
+            cmd = 'L';  // further pairs after a move are lines
+        } else if (cmd == 'm') {
+            cmd = 'l';
+        }
+        const bool rel = cmd >= 'a' && cmd <= 'z';
+        const char C = char(rel ? cmd - 32 : cmd);
+        float x, y, x1, y1, x2, y2;
+        switch (C) {
+            case 'M':
+                if (!r.number(x) || !r.number(y)) return false;
+                if (rel) { x += cur.x; y += cur.y; }
+                cur = start = {x, y};
+                lv_vector_path_move_to(path, &cur);
+                break;
+            case 'L':
+                if (!r.number(x) || !r.number(y)) return false;
+                if (rel) { x += cur.x; y += cur.y; }
+                cur = {x, y};
+                lv_vector_path_line_to(path, &cur);
+                break;
+            case 'H':
+                if (!r.number(x)) return false;
+                cur.x = rel ? cur.x + x : x;
+                lv_vector_path_line_to(path, &cur);
+                break;
+            case 'V':
+                if (!r.number(y)) return false;
+                cur.y = rel ? cur.y + y : y;
+                lv_vector_path_line_to(path, &cur);
+                break;
+            case 'C': {
+                if (!r.number(x1) || !r.number(y1) || !r.number(x2) || !r.number(y2) || !r.number(x) || !r.number(y)) return false;
+                if (rel) { x1 += cur.x; y1 += cur.y; x2 += cur.x; y2 += cur.y; x += cur.x; y += cur.y; }
+                const lv_fpoint_t p1 = {x1, y1}, p2 = {x2, y2};
+                cur = {x, y};
+                lv_vector_path_cubic_to(path, &p1, &p2, &cur);
+                lastCtrl = p2;
+                break;
+            }
+            case 'S': {
+                if (!r.number(x2) || !r.number(y2) || !r.number(x) || !r.number(y)) return false;
+                if (rel) { x2 += cur.x; y2 += cur.y; x += cur.x; y += cur.y; }
+                // The first control point mirrors the previous curve's second one.
+                const bool chain = lastCmd == 'C' || lastCmd == 'S';
+                const lv_fpoint_t p1 = chain ? lv_fpoint_t{2 * cur.x - lastCtrl.x, 2 * cur.y - lastCtrl.y} : cur;
+                const lv_fpoint_t p2 = {x2, y2};
+                cur = {x, y};
+                lv_vector_path_cubic_to(path, &p1, &p2, &cur);
+                lastCtrl = p2;
+                break;
+            }
+            case 'Q': {
+                if (!r.number(x1) || !r.number(y1) || !r.number(x) || !r.number(y)) return false;
+                if (rel) { x1 += cur.x; y1 += cur.y; x += cur.x; y += cur.y; }
+                const lv_fpoint_t p1 = {x1, y1};
+                cur = {x, y};
+                lv_vector_path_quad_to(path, &p1, &cur);
+                lastCtrl = p1;
+                break;
+            }
+            case 'T': {
+                if (!r.number(x) || !r.number(y)) return false;
+                if (rel) { x += cur.x; y += cur.y; }
+                const bool chain = lastCmd == 'Q' || lastCmd == 'T';
+                const lv_fpoint_t p1 = chain ? lv_fpoint_t{2 * cur.x - lastCtrl.x, 2 * cur.y - lastCtrl.y} : cur;
+                cur = {x, y};
+                lv_vector_path_quad_to(path, &p1, &cur);
+                lastCtrl = p1;
+                break;
+            }
+            case 'A': {
+                float rx, ry, rot;
+                bool large, sweep;
+                if (!r.number(rx) || !r.number(ry) || !r.number(rot) || !r.flag(large) || !r.flag(sweep) || !r.number(x) || !r.number(y)) return false;
+                if (rel) { x += cur.x; y += cur.y; }
+                cur = {x, y};
+                lv_vector_path_arc_to(path, fabsf(rx), fabsf(ry), rot, large, sweep, &cur);
+                break;
+            }
+            case 'Z':
+                lv_vector_path_close(path);
+                cur = start;
+                break;
+        }
+        lastCmd = C;
+    }
+}
+
+void drawPath(lv_layer_t* layer, Item& it) {
+    const Widget& w = *it.w;
+    if (!it.vpath) return;
+    const bool lit = litNow(w, it.valid, it.value);
+    if (!lit && w.hideWhenOff) return;
+    const lv_color_t fill = col(lit ? w.color : w.offColor);
+    const lv_color_t stroke = lit ? col(w.strokeColor) : fill;
+    const lv_opa_t opa = lv_opa_t(w.opacity * 255 / 100);
+    const float box = float(w.box), size = float(w.size);
+    lv_draw_vector_dsc_t* dsc = lv_draw_vector_dsc_create(layer);
+    if (!dsc) return;
+    // The path's own box, scaled to `size`, rotated, centred on x, y.
+    lv_draw_vector_dsc_identity(dsc);
+    lv_draw_vector_dsc_translate(dsc, Sf(widgetX(w)), Sf(widgetY(w)));
+    if (w.rotate) lv_draw_vector_dsc_rotate(dsc, float(w.rotate));
+    const float scale = Sf(size) / box;
+    lv_draw_vector_dsc_scale(dsc, scale, scale);
+    lv_draw_vector_dsc_translate(dsc, -box / 2, -box / 2);
+    lv_draw_vector_dsc_set_fill_rule(dsc, LV_VECTOR_FILL_EVENODD);
+    if (w.filled) {
+        lv_draw_vector_dsc_set_fill_color(dsc, fill);
+        lv_draw_vector_dsc_set_fill_opa(dsc, opa);
+    } else {
+        lv_draw_vector_dsc_set_fill_opa(dsc, LV_OPA_TRANSP);
+    }
+    if (w.strokeWidth > 0) {
+        lv_draw_vector_dsc_set_stroke_color(dsc, stroke);
+        lv_draw_vector_dsc_set_stroke_opa(dsc, opa);
+        lv_draw_vector_dsc_set_stroke_width(dsc, float(w.strokeWidth) / scale);  // in path units
+        lv_draw_vector_dsc_set_stroke_join(dsc, LV_VECTOR_STROKE_JOIN_ROUND);
+        lv_draw_vector_dsc_set_stroke_cap(dsc, LV_VECTOR_STROKE_CAP_ROUND);
+    } else {
+        lv_draw_vector_dsc_set_stroke_opa(dsc, LV_OPA_TRANSP);
+    }
+    lv_draw_vector_dsc_add_path(dsc, it.vpath);
+    lv_draw_vector(dsc);
+    lv_draw_vector_dsc_delete(dsc);
+}
+
+// Images are objects of their own (above), nothing to paint here.
 void drawImage(lv_layer_t*, Item&) {}
 
 void drawItem(lv_layer_t* layer, Item& it) {
@@ -806,6 +1025,12 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
     lv_obj_set_style_bg_color(parent, col(face->bg), 0);
     lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
 
+    // The background picture fills the face and sits under everything.
+    const std::string bgSrc = imageSource(face->bgImage);
+    if (!bgSrc.empty()) {
+        background = makeImage(bgSrc, 233, 233, 466, 466, ImageFit::Cover, 0, face->bgImageOpacity, true);
+    }
+
     painter = lv_obj_create(parent);
     lv_obj_remove_style_all(painter);
     lv_obj_set_size(painter, display::kSize, display::kSize);
@@ -829,6 +1054,14 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         } else if ((w.type == WidgetType::Label || w.type == WidgetType::Number) && w.rotate) {
             const char* text = w.type == WidgetType::Label ? w.text.c_str() : "---";
             it.label = makeLabel(text, font(w.font, float(w.size)), col(w.color), widgetX(w), widgetY(w), float(w.rotate));
+        } else if (w.type == WidgetType::Image) {
+            const std::string src = imageSource(w.image);
+            if (!src.empty()) {
+                it.image = makeImage(src, widgetX(w), widgetY(w), float(w.w), float(w.h), w.fit, float(w.rotate), w.opacity, false);
+            }
+        } else if (w.type == WidgetType::Path) {
+            it.vpath = lv_vector_path_create(LV_VECTOR_PATH_QUALITY_MEDIUM);
+            if (!parsePath(w.path, it.vpath)) Serial.println("path widget: could not read all of its path data");
         }
     }
     update(now);
@@ -837,9 +1070,13 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
 void destroy() {
     if (painter) lv_obj_delete(painter);
     painter = nullptr;
+    if (background) lv_obj_delete(background);
+    background = nullptr;
     for (Item& it : items) {
         if (it.label) lv_obj_delete(it.label);
         for (lv_obj_t* c : it.chars) lv_obj_delete(c);
+        if (it.image) lv_obj_delete(it.image);
+        if (it.vpath) lv_vector_path_delete(it.vpath);
     }
     items.clear();
     face = nullptr;
@@ -904,7 +1141,12 @@ void update(uint32_t nowMs) {
         const uint32_t key = lookKey(it);
         if (key != it.key) {
             it.key = key;
-            lv_obj_invalidate_area(painter, &it.area);
+            if (it.image) {
+                const bool show = w.channel < 0 || litNow(w, valid, v);
+                if (show) lv_obj_remove_flag(it.image, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(it.image, LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_invalidate_area(painter, &it.area);
+            }
         }
     }
     (void)wasLive;

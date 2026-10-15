@@ -9,6 +9,7 @@
 
 #include "alert_dispatch.h"
 #include "hub_state.h"
+#include "library_store.h"
 
 using namespace hg;
 using alerts::Rule;
@@ -29,6 +30,8 @@ uint32_t lastCheckMs = 0;
 }  // namespace
 
 void begin() {
+    // The configs that alerts switch gauges to come from the library.
+    dispatcher.setConfigSource({library_store::desiredNamed, nullptr});
     File f = LittleFS.open(kFile, "r");
     if (!f) return;
     std::vector<uint8_t> text(f.size());

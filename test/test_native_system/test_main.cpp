@@ -87,6 +87,7 @@ struct SimGauge {
     Bytes tryConfig;
     Bytes rxBuffer;
     bool trying = false;
+    XferKind lastRamKind = XferKind::TryConfig;  // the kind of the last RAM-only config
     uint8_t activeFace = 0;
     int identifyCount = 0;
     int storeCount = 0;
@@ -158,9 +159,10 @@ struct SimGauge {
             g->images[crc32(data, size)] = Bytes(data, data + size);
             g->imageStores++;
             g->storeLog.push_back("image");
-        } else if (kind == XferKind::TryConfig) {
+        } else if (kind == XferKind::TryConfig || kind == XferKind::SwitchConfig) {
             g->tryConfig.assign(data, data + size);
             g->trying = true;
+            g->lastRamKind = kind;
         } else {
             g->stored.assign(data, data + size);
             g->storeCount++;
@@ -221,6 +223,7 @@ struct SimHub {
     HubManager mgr;
     uint32_t* now = nullptr;
     std::map<Mac, Bytes> assignments;
+    std::map<std::string, Bytes> named;  // the library, for alerts that switch a gauge to a config
     uint8_t configSchema = 1;
     Bytes uploadBuffer;
     Bytes uploaded;
@@ -245,6 +248,18 @@ struct SimHub {
         if (want != h->wantImages.end()) {
             for (uint32_t crc : want->second) out.images[out.imageCount++] = crc;
         }
+        return true;
+    }
+    // alerts::Dispatcher::ConfigSource.
+    static bool onNamed(const char* name, HubManager::Desired& out, void* ctx) {
+        SimHub* h = static_cast<SimHub*>(ctx);
+        auto it = h->named.find(name);
+        if (it == h->named.end()) return false;
+        out.data = it->second.data();
+        out.size = uint32_t(it->second.size());
+        out.crc = crc32(out.data, out.size);
+        out.schema = h->configSchema;
+        out.imageCount = 0;
         return true;
     }
     static bool readImage(uint32_t offset, uint8_t* out, uint32_t len, void* ctx) {
@@ -586,6 +601,7 @@ struct AlertRig {
         const alerts::ParseResult r = alerts::parseRules(reinterpret_cast<const uint8_t*>(json), strlen(json), rules);
         TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
         engine.setRules(rules);
+        dispatcher.setConfigSource({SimHub::onNamed, &w.hub});
     }
     void run(ChannelId id, float value, uint32_t ms) {
         for (uint32_t i = 0; i < ms; i++) {
@@ -643,6 +659,67 @@ void test_alert_rules_are_carried_out_on_the_gauges() {
     TEST_ASSERT_FALSE(w.g1.alertShown);
     TEST_ASSERT_FALSE(w.g2.alertShown);
     TEST_ASSERT_EQUAL(1, w.g1.activeFace);
+}
+
+void test_alert_switches_a_gauge_to_another_config_and_back() {
+    World w;
+    const Bytes own = makeConfig("the gauge's own config");
+    const Bytes cruise = makeConfig("the cruise config");
+    w.hub.assignments[w.g1.mac] = own;
+    w.hub.named["Cruise"] = cruise;
+    w.run(3000);  // pushed and stored
+    TEST_ASSERT_TRUE(w.g1.stored == own);
+    w.g1.activeFace = 1;
+    w.run(1500);  // the hub hears which face it is on
+
+    // Cruise engages: gauge 1 shows the cruise config on its third face; gauge 2 is left alone.
+    AlertRig rig(w, R"([
+      {"channel":"cruise_state","when":"above","value":1,"hold":1,"config":"Cruise","face":2,"gauge":"24:6F:28:11:22:33"}
+    ])");
+    rig.run(CH_cruise_state, 1, 500);
+    TEST_ASSERT_FALSE(w.g1.trying);
+    rig.run(CH_cruise_state, 2, 2500);
+    TEST_ASSERT_TRUE(w.g1.trying);
+    TEST_ASSERT_TRUE(w.g1.tryConfig == cruise);
+    TEST_ASSERT_EQUAL(int(XferKind::SwitchConfig), int(w.g1.lastRamKind));
+    TEST_ASSERT_TRUE(w.g1.stored == own);  // not stored over its own
+    TEST_ASSERT_EQUAL(2, w.g1.activeFace);
+    TEST_ASSERT_FALSE(w.g2.trying);
+
+    // While it holds the config is not sent again.
+    const int offered = w.g1.transfersOffered;
+    rig.run(CH_cruise_state, 3, 6000);
+    TEST_ASSERT_EQUAL(offered, w.g1.transfersOffered);
+    TEST_ASSERT_TRUE(w.g1.trying);
+
+    // The gauge resets in the middle of it and comes back on its own config: switched again.
+    w.g1.boot();
+    rig.run(CH_cruise_state, 3, 6000);
+    TEST_ASSERT_TRUE(w.g1.trying);
+    TEST_ASSERT_TRUE(w.g1.tryConfig == cruise);
+    TEST_ASSERT_EQUAL(2, w.g1.activeFace);
+
+    // Cruise disengages: a second later the gauge is back on its own config and its earlier face.
+    rig.run(CH_cruise_state, 1, 300);
+    TEST_ASSERT_TRUE(w.g1.trying);  // the hold time
+    rig.run(CH_cruise_state, 1, 2000);
+    TEST_ASSERT_FALSE(w.g1.trying);
+    TEST_ASSERT_TRUE(w.g1.stored == own);
+    TEST_ASSERT_EQUAL(1, w.g1.activeFace);
+}
+
+void test_alert_naming_a_missing_config_does_nothing() {
+    World w;
+    w.hub.assignments[w.g1.mac] = makeConfig("own");
+    w.run(3000);
+    AlertRig rig(w, R"([{"channel":"cruise_state","when":"above","value":1,"hold":0,"config":"Nowhere","message":"CRUISE"}])");
+    const int offered = w.g1.transfersOffered;
+    rig.run(CH_cruise_state, 2, 4000);
+    TEST_ASSERT_EQUAL(offered, w.g1.transfersOffered);
+    TEST_ASSERT_FALSE(w.g1.trying);
+    TEST_ASSERT_TRUE(w.g1.alertShown);  // the message still shows
+    rig.run(CH_cruise_state, 0, 1500);
+    TEST_ASSERT_FALSE(w.g1.alertShown);
 }
 
 void test_higher_alert_takes_over_the_message() {
@@ -1023,6 +1100,8 @@ int main(int, char**) {
     RUN_TEST(test_commands_reach_the_gauge_and_are_acknowledged);
     RUN_TEST(test_alert_message_stays_up_only_while_the_hub_repeats_it);
     RUN_TEST(test_alert_rules_are_carried_out_on_the_gauges);
+    RUN_TEST(test_alert_switches_a_gauge_to_another_config_and_back);
+    RUN_TEST(test_alert_naming_a_missing_config_does_nothing);
     RUN_TEST(test_higher_alert_takes_over_the_message);
     RUN_TEST(test_theme_colours_reach_every_gauge);
     RUN_TEST(test_try_config_is_shown_but_not_stored);

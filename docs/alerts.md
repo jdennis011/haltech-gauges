@@ -3,13 +3,18 @@
 An alert is a rule the hub checks against the live data: a channel, a condition,
 and what the gauges do while the condition holds. It is the hub's own warning
 system on top of the ECU's: an extra "check engine light" for anything the ECU
-broadcasts.
+broadcasts, and a way to put a different gauge in front of the driver when
+something is going on.
 
 - Coolant temperature goes above 105 °C: every gauge shows **COOLANT HOT**.
 - Lambda is outside 0.75 to 1.15 for a second: the left gauge switches to its
   mixture face and shows **CHECK MIXTURE**, then goes back.
 - The check engine light comes on: every gauge shows **CHECK ENGINE**.
 - The gear changes: the centre gauge switches to its gear face for two seconds.
+- Cruise control engages (the ECU's cruise state goes above 1): the centre gauge
+  switches to the **Cruise** config from the library, on its first face, and goes
+  back to its own config a second after cruise disengages. A car that never had a
+  cruise light gets one.
 
 Alerts are edited on the page's **Alerts** tab and kept on the hub in
 `/alerts.json`, so they work with no phone or laptop connected. The hub checks
@@ -48,11 +53,21 @@ them ten times a second.
 | `hold` | Seconds the alert stays in force after the condition stops holding, 0 to 600 (3). For `changes`, how long each change is shown |
 | `message` | Text shown over the face, up to 32 characters (none) |
 | `color` | Colour of the message, `#RRGGBB` (`#FF3B30`) |
-| `face` | Face to switch to, counted from 0, up to 7 (no change) |
+| `config` | The name of a config in the hub's library to show in place of the gauge's own while the alert is in force, up to 32 characters (none). The gauge goes back to its own config when the alert ends |
+| `face` | Face to switch to, counted from 0, up to 7 (no change). With a `config`, a face of that config |
 | `restore` | Go back to the face that was showing when the alert ends (`true`) |
 | `gauge` | `"all"`, or the MAC of one gauge, e.g. `"A0:76:4E:11:22:33"` (`"all"`) |
 
-A rule needs a `message`, a `face`, or both. Up to 16 rules.
+A rule needs a `message`, a `config`, a `face`, or some of them. Up to 16 rules.
+
+The cruise control example:
+
+```json
+{
+  "name": "Cruise", "channel": "cruise_state", "when": "above", "value": 1,
+  "hold": 1, "config": "Cruise", "face": 0, "gauge": "A0:76:4E:11:22:33"
+}
+```
 
 ## How it behaves
 
@@ -64,9 +79,10 @@ A rule needs a `message`, a `face`, or both. Up to 16 rules.
   on it ends after its hold time, and "below 100" is not true of a dead sensor.
   Data coming back is not counted as a change.
 - **Two at once.** Where two alerts in force apply to the same gauge, the one
-  higher in the list wins, separately for the message and for the face: a gauge
-  can show the first alert's message on the second alert's face if the first has
-  no face of its own.
+  higher in the list wins, separately for the message, for the config and for
+  the face: a gauge can show the first alert's message on the second alert's
+  face if the first has no face of its own. While an alert's config is showing,
+  the face is that alert's own; other alerts' faces wait until it ends.
 - **The message** is a band across the middle of the face, in the alert's colour,
   over whatever face is showing. The hub repeats it every second while the alert
   is in force; a gauge takes it down three seconds after the last repeat, so a
@@ -74,6 +90,18 @@ A rule needs a `message`, a `face`, or both. Up to 16 rules.
 - **The face.** The hub notes the face the gauge was on, switches it, and with
   `restore` switches it back when the alert ends. Swiping to another face during
   the alert is not fought: the hub sends the switch once.
+- **The config.** The hub sends the named config to the gauge the way **Try on
+  gauge** does: the images it uses first, if the gauge lacks them, then the
+  config, shown from RAM without touching the gauge's stored config. Once the
+  gauge reports it is showing it, the hub switches to the rule's `face`. When
+  the alert ends the gauge goes back to its own config, and with `restore` to
+  the face it was on. A 4 KB config lands in under a second; images the gauge
+  does not have yet take a few seconds each the first time, and the gauge keeps
+  them until a stored config no longer uses them. A config the hub does not have
+  does nothing. A gauge that ends up back on its own config while the alert
+  still holds (the page's **End try**, or a config stored over it) is switched
+  again a few seconds later; a gauge that resets is switched again when it is
+  back.
 - **A gauge that connects late** gets the messages and faces of whatever alerts
   are in force at that moment.
 - **Test** on the page puts one alert in force for five seconds whatever its
@@ -116,8 +144,11 @@ and once a second while there are rules, so the readings on the page stay curren
 
 ## On the gauge bus
 
-A face switch is the existing `SetFace` command. The message is a new message
-type, `Alert` (6), from the hub to one gauge:
+A face switch is the existing `SetFace` command. A config switch is a segmented
+transfer of kind `SwitchConfig` (4): the same as the page's `TryConfig` (2),
+shown from RAM and reported with the status's "trying" flag, except that the
+gauge does not mark it as a trial on the screen; `EndTry` ends either. The
+message is a new message type, `Alert` (6), from the hub to one gauge:
 
 | Frame | Bytes |
 |---|---|
@@ -132,14 +163,13 @@ lost on the bus are made good by the next repeat.
 
 Done: the rule format, its evaluation and the sending to the gauges
 (`lib/hg_alerts`), the hub's storage and API (`src/hub/alert_monitor.cpp`), the
-protocol message with its receiver on the gauge side (`lib/hg_proto`), the page,
-and the online copy. Host tests cover the rules and run them end to end against
-simulated gauges.
+protocol message with its receiver on the gauge side (`lib/hg_proto`), the
+config switch, the page, and the online copy. Host tests cover the rules and run
+them end to end against simulated gauges, config switch included.
 
-Not yet: the gauge draws nothing for it. The gauge firmware receives the message
-and keeps it (`can_task::alertMessage()`), and prints it on its serial port; the
-band on the screen, and obeying `SetFace`, come with the face renderer (plan
-phase 4).
+On the gauge, the band on the screen, `SetFace` and the switched config are in
+the face screen (`src/gauge/face_ui.cpp`, `face_store.cpp`), written with the
+renderer and not yet seen on a panel.
 
 Ideas left out for now: the live reading inside the message ("COOLANT 108"), a
 second condition on a rule (oil pressure low *while* the engine is running), and

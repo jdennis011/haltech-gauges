@@ -51,6 +51,7 @@ public:
         Info info;
         bool haveStatus = false;
         Status status;
+        uint32_t statusMs = 0;  // when the last status arrived
 
         // Outcome of the last attempt to push the assigned config.
         bool pushFailed = false;   // the gauge refused it; not retried until something changes
@@ -126,16 +127,19 @@ public:
     // Shows a config on a gauge without storing it, after sending any of
     // `images` the gauge lacks. `data` must stay valid until pushBusy() is
     // false. Returns false if the gauge is offline or a push is already running.
+    // `kind` is TryConfig for a preview from the page, SwitchConfig for a
+    // switch the hub makes on its own (an alert); the gauge treats them alike.
     bool tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs,
-                   const uint32_t* images = nullptr, size_t imageCount = 0);
+                   const uint32_t* images = nullptr, size_t imageCount = 0,
+                   XferKind kind = XferKind::TryConfig);
     // Asks a gauge to upload its stored config; it arrives through Handler::upload.
     bool requestUpload(uint32_t node, uint32_t nowMs);
 
     // A transfer is running, or a "try" is waiting for its images.
     bool pushBusy() const { return sender_.busy() || tryPending_; }
     uint32_t pushNode() const { return tryPending_ && !sender_.busy() ? tryNode_ : sender_.node(); }
-    // What is being sent: Config, TryConfig or Image.
-    XferKind pushKind() const { return sender_.busy() ? sender_.kind() : XferKind::TryConfig; }
+    // What is being sent: Config, TryConfig, SwitchConfig or Image.
+    XferKind pushKind() const { return sender_.busy() ? sender_.kind() : tryKind_; }
     uint32_t pushFramesAcked() const { return sender_.busy() ? sender_.framesAcked() : 0; }
     uint32_t pushFramesTotal() const { return sender_.busy() ? sender_.totalFrames() : 0; }
     bool uploadBusy() const { return uploadArmed_ && uploadReceiver_.active(); }
@@ -182,6 +186,7 @@ private:
 
     // A "try" whose images are still being sent.
     bool tryPending_ = false;
+    XferKind tryKind_ = XferKind::TryConfig;
     uint32_t tryNode_ = 0;
     const uint8_t* tryData_ = nullptr;
     uint32_t trySize_ = 0;

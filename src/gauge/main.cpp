@@ -3,7 +3,7 @@
 #include "board.h"
 #include "can_task.h"
 #include "display.h"
-#include "perf_screen.h"
+#include "face_ui.h"
 #include "touch.h"
 
 // LVGL's software renderer and the TTF rasteriser need more than the default 8 KB.
@@ -20,16 +20,13 @@ void setup() {
     if (!touch::begin()) Serial.println("Touch start failed");
 
     can_task::begin();
-    perf_screen::create();
+    face_ui::begin();
 }
 
 void loop() {
     board::update();
-    perf_screen::update();
+    face_ui::update();
     display::loop();
-
-    const int brightness = can_task::takeBrightnessRequest();
-    if (brightness >= 0) display::setBrightness(uint8_t(brightness));
 
     static uint32_t lastPowerMs = 0;
     if (millis() - lastPowerMs >= 1000) {

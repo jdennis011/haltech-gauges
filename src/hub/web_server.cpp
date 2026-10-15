@@ -14,6 +14,7 @@
 
 #include "alert_monitor.h"
 #include "channel_store.h"
+#include "cloud_sync.h"
 #include "display_control.h"
 #include "face_model.h"
 #include "haltech.h"
@@ -287,6 +288,7 @@ void buildStatus(JsonObject o) {
         }
     }
     wifi_ap::statusJson(o);
+    cloud_sync::statusJson(o["cloud"].to<JsonObject>());
 }
 
 void buildGauges(JsonArray arr) {
@@ -670,10 +672,12 @@ void handleConfig(AsyncWebServerRequest* r) {
             if (!library_store::put(name.c_str(), b->data, b->len, error)) {
                 return sendError(r, 400, error.c_str());
             }
+            cloud_sync::noteLocalChange(cloud_sync::Kind::Config, name.c_str());
             return sendOk(r);
         }
         case HTTP_DELETE:
             if (!library_store::remove(name.c_str())) return sendError(r, 404, "no such config");
+            cloud_sync::noteLocalDelete(cloud_sync::Kind::Config, name.c_str());
             return sendOk(r);
         default:
             return sendError(r, 405, "method not allowed");
@@ -854,10 +858,12 @@ void handleImage(AsyncWebServerRequest* r) {
         }
         std::string error;
         if (!image_store::accept(name.c_str(), error)) return sendError(r, 400, error.c_str());
+        cloud_sync::noteLocalChange(cloud_sync::Kind::Image, name.c_str());
         return sendOk(r);
     }
     if (r->method() == HTTP_DELETE) {
         if (!image_store::remove(name.c_str())) return sendError(r, 404, "no such image");
+        cloud_sync::noteLocalDelete(cloud_sync::Kind::Image, name.c_str());
         return sendOk(r);
     }
     std::string path;
@@ -1008,6 +1014,7 @@ void handleAlerts(AsyncWebServerRequest* r) {
         if (!b || b->len == 0) return sendError(r, 400, "send the list of alerts as the request body");
         std::string error;
         if (!alert_monitor::setRules(b->data, b->len, error)) return sendError(r, 400, error.c_str());
+        cloud_sync::noteLocalChange(cloud_sync::Kind::Alerts, nullptr);
         return sendOk(r);
     }
     JsonDocument doc;
@@ -1024,6 +1031,7 @@ void handleThemeColours(AsyncWebServerRequest* r) {
         if (!b || b->len == 0) return sendError(r, 400, "send the eight theme colours as the request body");
         std::string error;
         if (!theme_colours::set(b->data, b->len, error)) return sendError(r, 400, error.c_str());
+        cloud_sync::noteLocalChange(cloud_sync::Kind::ThemeColours, nullptr);
         return sendOk(r);
     }
     JsonDocument doc;
@@ -1039,6 +1047,33 @@ void handleAlertTest(AsyncWebServerRequest* r) {
         return sendError(r, 404, "no such alert");
     }
     sendOk(r);
+}
+
+// GET /api/cloud is the link's state; POST /api/cloud/link {code}, /api/cloud/unlink
+// and /api/cloud/sync ask the sync task to act, and the state shows the outcome.
+void handleCloud(AsyncWebServerRequest* r) {
+    const String action = segment(r->url(), 2);
+    if (r->method() == HTTP_POST) {
+        JsonDocument body;
+        if (!parseBody(r, body)) return;
+        if (action == "link") {
+            String code = body["code"] | "";
+            code.trim();
+            code.toUpperCase();
+            if (code.length() != 6) return sendError(r, 400, "the code is six characters");
+            cloud_sync::requestLink(code.c_str());
+        } else if (action == "unlink") {
+            cloud_sync::requestUnlink();
+        } else if (action == "sync") {
+            if (!cloud_sync::linked()) return sendError(r, 409, "not linked");
+            cloud_sync::requestSync();
+        } else {
+            return sendError(r, 404, "unknown action");
+        }
+    }
+    JsonDocument doc;
+    cloud_sync::statusJson(doc.to<JsonObject>());
+    sendJson(r, doc);
 }
 
 void handleWifi(AsyncWebServerRequest* r) {
@@ -1140,6 +1175,8 @@ void begin() {
     server.on("/api/theme-colours", HTTP_GET | HTTP_PUT, handleThemeColours, nullptr, collectBody);
     server.on("/api/alerts", HTTP_GET | HTTP_PUT, handleAlerts, nullptr, collectBody);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
+    server.on("/api/cloud/*", HTTP_POST, handleCloud, nullptr, collectBody);
+    server.on("/api/cloud", HTTP_GET, handleCloud);
     server.onNotFound(handleNotFound);
 
     server.begin();

@@ -54,6 +54,24 @@ Order 5 boards, assemble 3 to 5.
 | JP1 | 1 | Wurth Elektronik | 61300211121 | 1x2 male header 2.54 mm, chain-power jumper | THT | THT | Fit shunt 60900213421 |
 | TP1 |  |  |  | Test pad on the spare GPIO | bare pad | none | No part |
 
+## Gauge adapter, rev B (self-terminating)
+
+Electrical spec section 2.5. Not laid out yet; the user does the layout. Everything from the rev A
+list stays except J1 and J2, which go up one size, plus the parts below.
+
+| Designators | Qty | Manufacturer | Part number | Description | Package | Fit | Notes |
+|---|---|---|---|---|---|---|---|
+| J1, J2 | 2 | Molex | 43045-0612 | Micro-Fit 3.0 header, 2x3, vertical: pins 1-4 as rev A, 5 = sense, 6 = GND | THT, 6 pins + 2 pegs | THT | Replaces 43045-0412. Cable housings become 43025-0600; terminals stay 43030-0007 |
+| U2 | 1 | Texas Instruments | TS5A3166DBVR | SPST analogue switch, 1 ohm, 0 to V+ signal range, switches the 120 R in | SOT-23-5 | SMT | V+ from the chain 5 V. Pins: 1 NO, 2 GND, 3 IN, 4 COM, 5 V+. Not the SN74LVC1G66: its 5 V threshold (about 3.5 V) is above the enable node's 2.9 V |
+| R5 | 1 | Yageo | RC0805FR-07120RL | 120 R 1%, termination, in series with U2 across CAN H and CAN L | 0805 | SMT | About 35 mW while dominant |
+| D3, D4 | 2 | Nexperia | BAT54,215 | Schottky, one per port: ORs the two sense lines into U2's IN | SOT-23 | SMT | Pin 1 anode, pin 3 cathode |
+| R2, R3 | 2 | Yageo | RC0805FR-074K7L | 4.7 k 1%, pull-up on each port's pin 5 to 3V3 | 0805 | SMT | 4.7 k, not 10 k, so the enable node reaches about 2.9 V |
+| R4 | 1 | Yageo | RC0805FR-07100KL | 100 k 1%, pull-down on U2's IN | 0805 | SMT |  |
+| R6 | 1 | Yageo | RC0805FR-071KL | 1 k, U2's IN node to the spare GPIO ("I am the end of the chain") | 0805 | SMT | Protects the pin if the firmware ever drives it |
+| C2 | 1 | Samsung | CL21B104KBCNNNC | 100 nF 50 V X7R, on U2's V+ | 0805 | SMT | Same part as C1 |
+
+TP1 stays, now on the sense node. No terminator plug is needed with these boards.
+
 ## Hub carrier
 
 Order 5 boards, assemble 1 or 2.

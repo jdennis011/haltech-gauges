@@ -24,7 +24,12 @@ void setVbusMillivolts(uint16_t millivolts);
 uint32_t identifyUntilMs();
 // Returns a brightness (0..255) the hub asked for, or -1 if there is none waiting.
 int takeBrightnessRequest();
+// A face index the hub asked for, or -1; a display request (0 off, 1 on), or -1.
+int takeFaceRequest();
+int takeDisplayRequest();
 bool rebootRequested();
+// Whether the faces are showing the demo sweep, for the status message.
+void setDemo(bool demo);
 
 // The alert message the hub wants shown over the face. False when there is
 // none; otherwise fills `text` (at least 33 bytes) and `color` (0xRRGGBB).

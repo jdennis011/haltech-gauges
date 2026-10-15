@@ -69,6 +69,8 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/templates.md` | The built-in templates, with a gallery |
 | `docs/alerts.md` | Alerts: rules on the hub that put a message on the gauges or switch their face when a channel meets a condition |
 | `docs/images.md` | Images for the faces: kept on the hub, sent to each gauge over the gauge bus once; the plan for Wi-Fi transfers |
+| `docs/cloud-sync.md` | Linking a hub to an account on the online copy, so configs, images, theme colours and alerts stay in step both ways |
+| `docs/gauge-adapter-handoff.md` | Hand-off for whoever takes on the gauge adapter: rev A as built, the rev B self-terminating design, open bench items |
 | `docs/electrical-spec.md` | Hub carrier and gauge adapter: circuits, parts, connectors. Section 5 is a second hub design on a Waveshare ESP32-P4 board, with the clock and a GPS on the carrier |
 | `docs/bom.md`, `docs/bom-pcbway.md` | Shopping lists by store, and a PCBWay-ready BOM |
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |

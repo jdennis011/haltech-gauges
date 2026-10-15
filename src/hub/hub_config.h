@@ -7,3 +7,8 @@
 #define HUB_HOSTNAME "haltech-hub"
 
 #define HUB_FW_VERSION "0.2.0"
+
+// The online copy the hub syncs its library with once linked (docs/cloud-sync.md).
+#ifndef HUB_CLOUD_URL
+#define HUB_CLOUD_URL "https://oagauge.online"
+#endif

@@ -7,3 +7,5 @@ dist/
 node_modules/
 .wrangler/
 .dev.vars
+# ESP-Hosted slave firmware for the P4 board, copied from the Arduino core (platformio.ini, hub_p4_c6update)
+tools/hosted/*.bin

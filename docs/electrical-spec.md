@@ -145,7 +145,7 @@ Termination:
 
 | Ref | Function | Part |
 |---|---|---|
-| J10 | ECU (12 V, GND, CAN H, CAN L) | 4-way Micro-Fit 3.0 2x2 on the board (Molex 43045-0412, vertical), to a home-made DTM-4 loom (section 1.6) |
+| J10 | ECU (12 V, GND, CAN H, CAN L) | 4-way Micro-Fit 3.0 2x2 on the board (Molex 43045-0412, vertical), to a home-made DTM-4 loom (section 1.6). **Rev A caution:** it is the same connector as J11 with the supply on pin 1, so a chain lead plugged in here by mistake puts 12 V into a gauge; label both. **Rev B:** the chain side moves to a 2x3 Micro-Fit for the self-terminating adapters (section 2.5) and J10 stays 2x2, so neither plug fits the other's header |
 | J11 | Gauge chain out (5 V, GND, CAN H, CAN L) | 4-way Micro-Fit 3.0 2x2, same family as the adapters. Never use DTM-4 on the 5 V side, so the ECU's 12 V lead can never be plugged into a gauge |
 | JP1 | ECU termination jumper | 2-pin 2.54 mm header |
 | TP | GND, 5 V, 3V3, 12 V sense, RST | Test points |
@@ -155,8 +155,10 @@ and CAN L on a twisted pair; 20 AWG for 5 V and GND.
 
 ### 1.6 ECU loom (DTM-4 to the hub)
 
-Made from a DTM kit. Build the gender that mates with the end of the Haltech CAN cable
-(or CAN hub port) it will plug into.
+Made from a DTM kit, or, simpler, from a Haltech 4-core CAN cable (the user has one): keep the
+end that mates with the ECU's CAN port or the CAN hub, cut the other off and crimp the Micro-Fit
+on. Meter the cores against the DTM pin numbers moulded in the housing rather than trusting
+colours. From a kit, build the gender that mates with the end it will plug into.
 
 | DTM-4 pin | Haltech convention | Wire | Hub J10 pin |
 |---|---|---|---|
@@ -275,6 +277,64 @@ With a 5.15 V rail, 20 AWG wire, three gauges at roughly 0.3 A each and D1's dro
 gauge sees about 4.4 V. The AXP2101 runs down to 3.9 V and the firmware lowers its input
 voltage limit to 4.04 V. Bring-up step 1 gives the real current and the lowest working voltage;
 if the margin is thin, the fix is a lower-drop D1 (or a P-FET) before thicker wire.
+
+### 2.5 Rev B: self-terminating adapter
+
+Decided 2026-10-09. The rev B adapter finds out for itself whether it is the last gauge in the
+chain and switches its own 120 R in, so there is no terminator plug and no port that has to be
+the "out". It also closes the J10 mix-up (section 1.5) as a side effect.
+
+**Connector.** The chain moves to a 6-way Micro-Fit 3.0 2x3 (header 43045-0612, housing
+43025-0600, same 43030-0007 terminals). Pins 1 to 4 are unchanged (5 V, GND, CAN H, CAN L);
+pins 5 and 6 are the presence pair. J10 on the hub stays the 2x2 of rev A, so neither plug fits
+the other's header.
+
+**Cable.** Still 4-core: pins 1 to 4 straight through as before. In every plug, pins 5 and 6
+are shorted by a short loop of wire with a terminal on each end, hidden under the heat shrink.
+Both ends get the loop, so the cable is still reversible.
+
+**On every board.** Pin 6 of every port, hub J11 included, is ground. Pin 5 of each adapter
+port is a sense line with a 4.7 k pull-up to 3V3. A plug in the port shorts 5 to 6 and pulls the
+line low: "a cable is in this port". An empty port stays high. The loop draws 0.7 mA through
+the pull-up, nothing more.
+
+```
+ port A pin 5 --+-- 4k7 -- 3V3         port B pin 5 --+-- 4k7 -- 3V3
+                |                                     |
+               BAT54 >|--+--------------------<|< BAT54
+                          |
+                          +-- 100k -- GND
+                          |
+                          +-- IN of U2 (TS5A3166, V+ = chain 5 V)
+                          +-- spare GPIO (TP1), 3.3 V logic: "I am the end of the chain"
+
+ CAN H --- U2 (COM/NO, Ron 1 R) --- 120 R --- CAN L
+```
+
+- Either port empty (high) turns U2 on: the last gauge, or a gauge alone on the bench, is
+  terminated. Both ports occupied (middle gauge): off. Both empty: on, once, which is
+  harmless.
+- U2 is an SPST analogue switch with a 0 to V+ signal range; powered from the chain 5 V it
+  covers CAN H's 1.5 to 3.5 V with margin. Its 1 R and about 10 pF are nothing beside the
+  120 R. Pinout in SOT-23-5: 1 NO, 2 GND, 3 IN, 4 COM, 5 V+.
+- Levels: the 4.7 k pull-up, the BAT54's drop and R4's 100 k put the enable node at about
+  2.9 V when a port is empty, against the TS5A3166's 2.4 V threshold at a 5 V supply (with
+  10 k pull-ups it would be 2.7 V, too close). R4 stays at 100 k: a higher value lets the
+  switch's input leakage lift the "off" level. The SN74LVC1G66 is not a substitute here: at
+  5 V its threshold is 0.7 x Vcc, about 3.5 V, which this node cannot reach.
+- No split capacitor on the adapter: a plain 120 R, since the hub's termination carries the
+  common-mode cap.
+- **Caveat:** the sense is of the plug, not of what is on its far end. A lead plugged into the
+  last gauge with nothing on its other end reads "connected", so that gauge does not terminate
+  and the lead hangs off the bus as an unterminated stub. In the car every lead is in at both
+  ends or removed; on the bench, unplug an unused lead at the gauge. (Sensing the far board
+  instead would need a 6-core cable with pins 5 and 6 crossed over; the plug loop was chosen
+  to keep 4-core cable.)
+- The spare GPIO reads the same node, so the gauge can tell the hub it is the end of the chain;
+  the hub can then warn if two gauges say so (a chain plugged in wrongly) or none does. Hub
+  J11 pin 5 can go to a hub GPIO with a pull-up the same way, to show whether a chain is
+  plugged in at all. Neither is needed for the termination to work.
+- Parts, with manufacturer numbers: `docs/bom-pcbway.md`, "Gauge adapter, rev B".
 
 ## 3. JLCPCB assembly
 

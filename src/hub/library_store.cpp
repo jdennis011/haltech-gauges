@@ -241,6 +241,30 @@ bool read(const char* name, std::string& out) {
     return true;
 }
 
+bool info(const char* name, uint32_t& crc, size_t& size) {
+    std::vector<uint8_t> data;
+    if (!exists(name) || !readFile(pathFor(name).c_str(), data)) return false;
+    crc = crc32(data.data(), data.size());
+    size = data.size();
+    return true;
+}
+
+void names(std::vector<std::string>& out) {
+    out.clear();
+    if (!mounted) return;
+    File dir = LittleFS.open(kDir);
+    if (!dir) return;
+    for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+        if (f.isDirectory()) continue;
+        String base = f.name();
+        const int slash = base.lastIndexOf('/');
+        if (slash >= 0) base = base.substring(slash + 1);
+        if (base.startsWith(".") || !base.endsWith(".json")) continue;
+        base.remove(base.length() - 5);
+        out.push_back(base.c_str());
+    }
+}
+
 void listJson(JsonArray out) {
     if (!mounted) return;
     File dir = LittleFS.open(kDir);

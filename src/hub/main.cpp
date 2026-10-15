@@ -6,6 +6,7 @@
 
 #include "alert_monitor.h"
 #include "can_ports.h"
+#include "cloud_sync.h"
 #include "crc32.h"
 #include "channel_store.h"
 #include "display_control.h"
@@ -261,6 +262,8 @@ void rosterTouched() { rosterChanges++; }
 const char* boardName() {
 #if CONFIG_IDF_TARGET_ESP32C6
     return "ESP32-C6-DevKitC-1";
+#elif CONFIG_IDF_TARGET_ESP32P4
+    return "Waveshare ESP32-P4-WIFI6";
 #elif defined(ARDUINO_LOLIN_C3_MINI)
     return "Lolin C3 Mini (development: no ECU bridge)";
 #else
@@ -320,6 +323,7 @@ void setup() {
     hubManager.init({managementSend, nullptr}, handler, millis());
 
     wifi_ap::begin();
+    cloud_sync::begin();
     web_server::begin();
 
 #if HG_HAS_ECU_PORT

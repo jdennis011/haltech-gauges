@@ -28,6 +28,10 @@ std::string filePath(const char* name);
 bool put(const char* name, const uint8_t* data, size_t size, std::string& error);
 bool remove(const char* name);
 bool read(const char* name, std::string& out);
+// The stored file's CRC32 and size; false if there is no such config.
+bool info(const char* name, uint32_t& crc, size_t& size);
+// The names of every stored config.
+void names(std::vector<std::string>& out);
 // Appends one object per stored config: name, size, crc, title, faces, images.
 void listJson(JsonArray out);
 

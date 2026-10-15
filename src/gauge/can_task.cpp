@@ -10,6 +10,7 @@
 
 #include "board_pins.h"
 #include "face_model.h"
+#include "face_store.h"
 #include "gauge_node.h"
 #include "image_store.h"
 #include "version.h"
@@ -29,7 +30,10 @@ std::atomic<uint32_t> currentNode{0};
 std::atomic<uint16_t> vbus{0};
 std::atomic<uint32_t> identifyUntil{0};
 std::atomic<int> brightnessRequest{-1};
+std::atomic<int> faceRequest{-1};
+std::atomic<int> displayRequest{-1};
 std::atomic<bool> reboot{false};
+std::atomic<bool> demoMode{true};
 
 // Written by the CAN task, read by the UI loop.
 portMUX_TYPE alertMux = portMUX_INITIALIZER_UNLOCKED;
@@ -63,8 +67,22 @@ bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
         case proto::Cmd::Reboot:
             reboot = true;
             return true;
+        case proto::Cmd::SetFace:
+            if (arg >= face_store::faceCount()) return false;
+            faceRequest = arg;
+            return true;
+        case proto::Cmd::SetDisplay:
+            displayRequest = arg ? 1 : 0;
+            return true;
+        case proto::Cmd::EndTry:
+            face_store::endTry();
+            return true;
+        case proto::Cmd::SendConfig: {
+            size_t size = 0;
+            const uint8_t* data = face_store::storedBytes(size);
+            return data && node.upload(data, uint32_t(size), millis());
+        }
         default:
-            // Faces and stored configs arrive with the face builder.
             return false;
     }
 }
@@ -92,15 +110,16 @@ void onThemeColours(const uint32_t colours[proto::kThemeColourCount], void*) {
 }
 
 void onStatus(proto::Status& status, void*) {
-    status.configCrc = 0;
-    status.activeFace = 0;
-    status.faceCount = 0;
+    status.configCrc = face_store::storedCrc();
+    status.activeFace = face_store::activeFace();
+    status.faceCount = uint8_t(face_store::faceCount());
     status.vbusMillivolts = vbus;
-    status.flags = 0;
+    status.flags = (face_store::trying() ? proto::kStatusFlagTrying : 0) | (demoMode ? proto::kStatusFlagDemo : 0);
 }
 
 // Images are taken in to PSRAM and handed to the image store, which writes
-// them to flash in the background. Configs arrive with the face builder.
+// them to flash in the background; configs go to the face store, which parses
+// them here and hands them to the UI task.
 uint8_t* rxBuffer = nullptr;
 
 void freeRxBuffer() {
@@ -109,7 +128,7 @@ void freeRxBuffer() {
 }
 
 proto::XferStatus onTransferAccept(proto::XferKind kind, uint32_t size, uint8_t** buffer, void*) {
-    if (kind != proto::XferKind::Image) return proto::XferStatus::Busy;
+    if (kind != proto::XferKind::Image) return face_store::accept(kind, size, buffer);
     if (size > proto::kMaxImageBytes || !image_store::roomFor(size)) return proto::XferStatus::TooBig;
     freeRxBuffer();
     const size_t bytes = size ? size : 1;
@@ -120,14 +139,18 @@ proto::XferStatus onTransferAccept(proto::XferKind kind, uint32_t size, uint8_t*
     return proto::XferStatus::Ok;
 }
 
-bool onTransferComplete(proto::XferKind kind, const uint8_t*, uint32_t size, void*) {
-    if (kind != proto::XferKind::Image || !rxBuffer) return false;
-    uint8_t* data = rxBuffer;
+bool onTransferComplete(proto::XferKind kind, const uint8_t* data, uint32_t size, void*) {
+    if (kind != proto::XferKind::Image) return face_store::complete(kind, data, size);
+    if (!rxBuffer) return false;
+    uint8_t* owned = rxBuffer;
     rxBuffer = nullptr;
-    return image_store::submit(data, size);  // the store owns the buffer now
+    return image_store::submit(owned, size);  // the store owns the buffer now
 }
 
-void onTransferDropped(void*) { freeRxBuffer(); }
+void onTransferDropped(void*) {
+    freeRxBuffer();
+    face_store::dropped();
+}
 
 bool onHasImage(uint32_t crc, void*) { return image_store::has(crc); }
 
@@ -206,6 +229,7 @@ void begin() {
     if (!ESP32Can.begin(TWAI_SPEED_1000KBPS)) Serial.println("CAN start failed");
 
     if (!image_store::begin()) Serial.println("Image storage failed to mount");
+    face_store::begin();
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -246,6 +270,9 @@ uint32_t nodeId() { return currentNode; }
 void setVbusMillivolts(uint16_t millivolts) { vbus = millivolts; }
 uint32_t identifyUntilMs() { return identifyUntil; }
 int takeBrightnessRequest() { return brightnessRequest.exchange(-1); }
+int takeFaceRequest() { return faceRequest.exchange(-1); }
+int takeDisplayRequest() { return displayRequest.exchange(-1); }
+void setDemo(bool demo) { demoMode = demo; }
 bool rebootRequested() { return reboot; }
 
 void themeColours(uint32_t out[32]) {

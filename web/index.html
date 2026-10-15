@@ -280,6 +280,20 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
     <div class="msg" id="sta-msg"></div>
     <table><tbody id="sta-info"></tbody></table>
   </div>
+  <div class="card" id="cloud-card">
+    <h3>Online account</h3>
+    <p class="muted">Link this hub to your account at <a href="https://oagauge.online/#settings" target="_blank" rel="noopener" style="color:#6cb2ff">oagauge.online</a>: sign in there, Settings, <b>Link a hub</b>, and type the code here. From then on the configs, images, theme colours and alerts you make on either side reach the other, over your home network.</p>
+    <div class="row" id="cloud-link-row"><input type="text" id="cloud-code" placeholder="6-character code" maxlength="6" size="10" class="mono" style="text-transform:uppercase"><button class="btn primary" id="btn-cloud-link">Link</button></div>
+    <table><tbody id="cloud-info"></tbody></table>
+    <div class="row" id="cloud-linked-row" style="margin-top:8px"><button class="btn small" id="btn-cloud-sync">Sync now</button><button class="btn small danger" id="btn-cloud-unlink">Unlink</button></div>
+    <div class="msg" id="cloud-msg"></div>
+  </div>
+  <div class="card" id="hubs-card" style="display:none">
+    <div class="row"><h3 style="margin:0">Hubs</h3><span class="spacer"></span><button class="btn primary" id="btn-hub-code">Link a hub</button></div>
+    <p class="muted">A hub linked to this account keeps its configs, images, theme colours and alerts in step with what you make here, and shows up below with its state. To link one: press the button, then type the code into the hub's own page under Settings, Online account.</p>
+    <div id="hub-code" class="msg"></div>
+    <div id="hub-list"></div>
+  </div>
 </section>
 </main>
 
@@ -335,7 +349,7 @@ const state = {
 
 // Signed in to the online copy: these paths go to the account's storage.
 const signedIn = () => !!(ONLINE && state.user && state.user.signedIn);
-const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings|settings|images)(\/|$)/.test(p);
+const cloudRoute = p => signedIn() && /^\/api\/(configs|assignments|virtual|recordings|settings|images|hubs)(\/|$)/.test(p);
 
 // ------------------------------------------------------------------- API
 
@@ -392,6 +406,7 @@ function showTab(name) {
   if (name === 'configs') { loadConfigs(); loadImages(); }
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
+  if (name === 'settings') loadHubs();
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -2070,6 +2085,7 @@ function renderSettings() {
   rows($('#sta-info'), [['Network', s.sta.ssid || '— not set —'], ['Status', s.sta.connected ? 'connected, ' + s.sta.ip + ' (' + s.sta.rssi + ' dBm)' : (s.sta.ssid ? 'not connected' : '')]]);
   const ssid = $('#sta-ssid');
   if (!ssid.dataset.touched && !ssid.value) ssid.value = s.sta.ssid || '';
+  if (ONLINE) $('#cloud-card').style.display = 'none'; else renderCloud(s.cloud);
 }
 $('#sta-ssid').addEventListener('input', ev => { ev.target.dataset.touched = '1'; });
 $('#btn-sta-save').addEventListener('click', async () => {
@@ -2079,6 +2095,68 @@ $('#btn-sta-save').addEventListener('click', async () => {
 $('#btn-sta-forget').addEventListener('click', async () => {
   try { await api.del('/api/wifi'); $('#sta-ssid').value = ''; $('#sta-pass').value = ''; $('#sta-msg').textContent = 'Forgotten.'; }
   catch (e) { $('#sta-msg').textContent = e.message; }
+});
+
+
+// ----------------------------------------------------------- cloud sync
+// On the hub: the link to the account and its state (in the status message).
+// On the site: the account's hubs.
+
+const ago = s => s < 0 ? 'never' : s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago';
+
+function renderCloud(c) {
+  if (!c) return;
+  const linked = !!c.linked;
+  $('#cloud-link-row').style.display = linked ? 'none' : '';
+  $('#cloud-linked-row').style.display = linked ? '' : 'none';
+  rows($('#cloud-info'), linked
+    ? [['Account', c.email || '—'], ['This hub', (c.name || '') + ' (' + c.hub_id + ')'], ['State', c.state + (c.error ? ': ' + c.error : '')],
+       ['Last sync', ago(c.last_sync_s) + (c.pending ? ', ' + c.pending + ' change(s) waiting to go up' : '')]]
+    : [['This hub', (c.name || '') + ' (' + c.hub_id + ')'], ['State', c.state + (c.error ? ': ' + c.error : '')]]);
+}
+
+$('#btn-cloud-link').addEventListener('click', async () => {
+  const code = $('#cloud-code').value.trim().toUpperCase();
+  if (code.length !== 6) { $('#cloud-msg').textContent = 'The code is six characters.'; return; }
+  try { await api.post('/api/cloud/link', { code }); $('#cloud-msg').textContent = 'Linking…'; $('#cloud-code').value = ''; }
+  catch (e) { $('#cloud-msg').textContent = e.message; }
+});
+$('#btn-cloud-sync').addEventListener('click', async () => {
+  try { await api.post('/api/cloud/sync', {}); $('#cloud-msg').textContent = 'Syncing…'; } catch (e) { $('#cloud-msg').textContent = e.message; }
+});
+$('#btn-cloud-unlink').addEventListener('click', async () => {
+  if (!confirm('Unlink this hub from the account? Nothing is deleted on either side; they just stop following each other.')) return;
+  try { await api.post('/api/cloud/unlink', {}); $('#cloud-msg').textContent = 'Unlinked.'; } catch (e) { $('#cloud-msg').textContent = e.message; }
+});
+
+async function loadHubs() {
+  if (!ONLINE) return;
+  $('#hubs-card').style.display = '';
+  const root = $('#hub-list');
+  if (!signedIn()) { root.innerHTML = ''; root.append(el('div', { class: 'muted' }, 'Sign in to link a hub to your account.')); $('#btn-hub-code').disabled = true; return; }
+  $('#btn-hub-code').disabled = false;
+  try {
+    const hubs = await api.get('/api/hubs');
+    root.innerHTML = '';
+    for (const h of hubs) {
+      const seen = h.lastSeen ? Math.round((Date.now() - h.lastSeen) / 1000) : -1;
+      root.append(el('div', { class: 'row', style: 'padding:6px 0;border-bottom:1px solid var(--line)' },
+        el('span', {}, el('strong', {}, h.name || 'hub'), ' ', el('span', { class: 'mono muted' }, h.hubId)),
+        el('span', { class: 'muted' }, (h.board || '') + (h.fw ? ', firmware ' + h.fw : '')),
+        el('span', { class: 'chip' + (seen >= 0 && seen < 900 ? ' on' : '') }, seen < 0 ? 'never seen' : 'seen ' + ago(seen) + (h.gaugesOnline ? ', ' + h.gaugesOnline + ' gauge(s) online' : '')),
+        el('span', { class: 'spacer' }),
+        btn('Unlink', async () => { if (!confirm('Unlink ' + (h.name || h.hubId) + '?')) return; try { await api.del('/api/hubs/' + h.hubId); loadHubs(); } catch (e) { alert(e.message); } }, false, 'small danger')));
+    }
+    if (!hubs.length) root.append(el('div', { class: 'muted' }, 'No hub is linked yet.'));
+  } catch (e) { root.innerHTML = ''; root.append(el('div', { class: 'bad' }, e.message)); }
+}
+
+$('#btn-hub-code').addEventListener('click', async () => {
+  try {
+    const r = await api.post('/api/hubs/code', {});
+    $('#hub-code').innerHTML = '';
+    $('#hub-code').append('Type this into the hub within ' + Math.round(r.expires / 60) + ' minutes: ', el('strong', { class: 'mono', style: 'font-size:22px;letter-spacing:3px' }, r.code));
+  } catch (e) { $('#hub-code').textContent = e.message; }
 });
 
 // ---------------------------------------------------------------- images
@@ -3217,6 +3295,7 @@ async function signOut() {
   await loadConfigs();
   await loadImages();
   await loadRecordings();
+  loadHubs();
 }
 
 // A first sign-in on a browser with local work offers to move it into the account.
@@ -3243,6 +3322,7 @@ async function afterSignIn() {
   await pullCloudAlerts();
   await pullCloudThemeColours();
   await loadImages();
+  loadHubs();
 }
 
 // The demo's gauge cards read planned gauges and assignments from the account
@@ -3319,7 +3399,8 @@ const mock = {
       sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, displays: this.displays,
       recording: { active: false }, playback: this.playbackStatus(), gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
-      ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub' };
+      ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub',
+      cloud: { url: 'https://oagauge.online', hub_id: '000000000000', name: 'haltech-hub', linked: false, email: '', state: 'not linked', error: '', last_sync_s: -1, rev: 0, pending: 0 } };
   },
   playbackStatus() {
     const p = this.playback;
@@ -3573,6 +3654,8 @@ const mock = {
       if (seg[3] === 'display') this.displays.off = !body.on;
       return { ok: true };
     }
+    if (seg[1] === 'cloud') throw new Error(ONLINE ? 'this is the online copy: link from the hub\'s own page' : 'mock: no hub to link');
+    if (seg[1] === 'hubs') throw new Error('sign in to link a hub');
     if (path === '/api/wifi' || seg[1] === 'gauges') return { ok: true };
     throw new Error('mock: ' + method + ' ' + path);
   },

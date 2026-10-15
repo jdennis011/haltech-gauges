@@ -8,6 +8,8 @@
 // 3. Per-user storage in KV, behind the hub's own paths for configs, images,
 //    planned gauges, assignments and recordings, so what you make follows your
 //    account across devices. Signed out, the page keeps its work in the browser instead.
+// 4. Hubs linked to an account (a code from the site, then a bearer token) read and
+//    write the same storage, so a hub and the site stay in step (docs/cloud-sync.md).
 
 const STATIC_API = {
   '/api/templates': '/data/templates.json',
@@ -54,6 +56,7 @@ export default {
     }
 
     if (path === '/api/me' || path.startsWith('/api/auth/')) return auth(request, env, path);
+    if (path === '/api/hubs' || path.startsWith('/api/hubs/')) return hubsApi(request, env, path, await sessionUser(request, env));
 
     if (path.startsWith('/api/')) {
       const user = await sessionUser(request, env);
@@ -188,6 +191,8 @@ async function auth(request, env, path) {
 }
 
 async function sessionUser(request, env) {
+  const hub = await hubFromBearer(request, env);
+  if (hub) return hub;
   const raw = cookies(request)[COOKIE];
   if (!raw || !env.SESSION_SECRET) return null;
   const dot = raw.lastIndexOf('.');
@@ -224,6 +229,120 @@ async function verifyGoogleIdToken(token, clientId) {
   return claims;
 }
 
+
+// ------------------------------------------------------------------- hubs
+// A hub links to an account with a six-character code made on the site, and
+// from then on carries a bearer token (kept hashed here) that stands in for
+// the session cookie on the storage endpoints. docs/cloud-sync.md.
+
+const HUB_ID_RE = /^[0-9A-F]{12}$/;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_SECONDS = 600;
+const MAX_HUBS = 8;
+
+async function sha256hex(text) {
+  const d = await crypto.subtle.digest('SHA-256', utf8(text));
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const randomToken = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
+function randomCode() {
+  const r = crypto.getRandomValues(new Uint8Array(6));
+  return [...r].map(b => CODE_CHARS[b % CODE_CHARS.length]).join('');
+}
+
+async function hubFromBearer(request, env) {
+  const auth = request.headers.get('authorization') || '';
+  if (!auth.startsWith('Bearer ') || !env.HG) return null;
+  const hub = await env.HG.get('hubtoken:' + await sha256hex(auth.slice(7).trim()), 'json');
+  if (!hub || !hub.sub) return null;
+  return { sub: hub.sub, email: hub.email || '', hub: hub.hubId };
+}
+
+async function hubsApi(request, env, path, user) {
+  if (!env.HG) return json({ ok: false, error: 'storage is not set up on this site' }, 503);
+  const method = request.method;
+  const seg = path.split('/').filter(Boolean);
+  const sub = seg[2];
+  let body = {};
+  if (method === 'POST') { try { body = await request.json(); } catch (e) { body = {}; } }
+
+  // A code for the hub to type in, from a signed-in person.
+  if (sub === 'code' && method === 'POST') {
+    if (!user || user.hub) return json({ ok: false, error: 'sign in to link a hub' }, 401);
+    const code = randomCode();
+    await env.HG.put('linkcode:' + code, JSON.stringify({ sub: user.sub, email: user.email || '' }), { expirationTtl: CODE_SECONDS });
+    return json({ ok: true, code, expires: CODE_SECONDS });
+  }
+
+  // The hub claiming its token with that code.
+  if (sub === 'claim' && method === 'POST') {
+    const code = String(body.code || '').toUpperCase().trim();
+    const hubId = String(body.hubId || '').toUpperCase();
+    if (!HUB_ID_RE.test(hubId)) return json({ ok: false, error: 'bad hub id' }, 400);
+    const link = code.length === 6 ? await env.HG.get('linkcode:' + code, 'json') : null;
+    if (!link) return json({ ok: false, error: 'that code is wrong or has expired; make a new one on the site' }, 404);
+    await env.HG.delete('linkcode:' + code);
+    const owner = { sub: link.sub, email: link.email };
+    // A hub moving between accounts loses its old token.
+    const old = await env.HG.get('hub:' + hubId, 'json');
+    if (old && old.tokenHash) await env.HG.delete('hubtoken:' + old.tokenHash);
+    if (old && old.sub && old.sub !== owner.sub) {
+      const oldIdx = await readIndex(env, { sub: old.sub });
+      oldIdx.hubs = (oldIdx.hubs || []).filter(h => h !== hubId);
+      await writeIndex(env, { sub: old.sub }, oldIdx);
+    }
+    const idx = await readIndex(env, owner);
+    if (!(idx.hubs || []).includes(hubId) && (idx.hubs || []).length >= MAX_HUBS) return json({ ok: false, error: 'at most ' + MAX_HUBS + ' hubs per account' }, 409);
+    const token = randomToken(), tokenHash = await sha256hex(token);
+    const rec = { sub: owner.sub, email: owner.email, hubId, name: String(body.name || 'hub').slice(0, 32), fw: String(body.fw || '').slice(0, 32),
+      board: String(body.board || '').slice(0, 64), tokenHash, created: Date.now(), lastSeen: Date.now() };
+    await env.HG.put('hub:' + hubId, JSON.stringify(rec));
+    await env.HG.put('hubtoken:' + tokenHash, JSON.stringify({ sub: owner.sub, email: owner.email, hubId }));
+    idx.hubs = [...new Set([...(idx.hubs || []), hubId])];
+    await writeIndex(env, owner, idx);
+    return json({ ok: true, token, email: owner.email });
+  }
+
+  if (!user) return json({ ok: false, error: 'sign in to see your hubs' }, 401);
+  const idx = await readIndex(env, user);
+
+  // What the account has, for a hub to compare against.
+  if (sub === 'sync' && method === 'GET') {
+    if (!user.hub) return json({ ok: false, error: 'hubs only' }, 403);
+    return json({ rev: idx.rev || 0, configs: idx.configs, images: idx.images || {}, settingsRev: idx.settingsRev || {}, deleted: idx.deleted || { configs: {}, images: {} } });
+  }
+  if (sub === 'status' && method === 'POST') {
+    if (!user.hub) return json({ ok: false, error: 'hubs only' }, 403);
+    const rec = await env.HG.get('hub:' + user.hub, 'json');
+    if (!rec) return json({ ok: false, error: 'unknown hub' }, 404);
+    Object.assign(rec, { lastSeen: Date.now(), fw: String(body.fw || rec.fw || '').slice(0, 32), board: String(body.board || rec.board || '').slice(0, 64),
+      gaugesOnline: Number(body.gauges_online) || 0, ip: String(body.ip || '').slice(0, 40), uptime_s: Number(body.uptime_s) || 0, heap_free: Number(body.heap_free) || 0 });
+    await env.HG.put('hub:' + user.hub, JSON.stringify(rec));
+    return json({ ok: true });
+  }
+
+  // The person's view: the hubs on the account, and unlinking one.
+  if (!sub && method === 'GET') {
+    const hubs = [];
+    for (const id of idx.hubs || []) {
+      const rec = await env.HG.get('hub:' + id, 'json');
+      if (rec) hubs.push({ hubId: id, name: rec.name, fw: rec.fw, board: rec.board, lastSeen: rec.lastSeen, gaugesOnline: rec.gaugesOnline || 0, ip: rec.ip || '', uptime_s: rec.uptime_s || 0 });
+    }
+    return json(hubs);
+  }
+  if (sub && HUB_ID_RE.test(sub) && method === 'DELETE') {
+    if (user.hub && user.hub !== sub) return json({ ok: false, error: 'not this hub' }, 403);
+    const rec = await env.HG.get('hub:' + sub, 'json');
+    if (!rec || rec.sub !== user.sub) return json({ ok: false, error: 'no such hub on this account' }, 404);
+    if (rec.tokenHash) await env.HG.delete('hubtoken:' + rec.tokenHash);
+    await env.HG.delete('hub:' + sub);
+    idx.hubs = (idx.hubs || []).filter(h => h !== sub);
+    await writeIndex(env, user, idx);
+    return json({ ok: true });
+  }
+  return json({ ok: false, error: 'not found' }, 404);
+}
+
 // ------------------------------------------------------------ user storage
 // KV, with an index per user kept by hand so a save shows up at once (KV's own
 // listing can lag by up to a minute).
@@ -232,9 +351,13 @@ const key = (user, ...rest) => ['u', user.sub, ...rest].join(':');
 
 async function readIndex(env, user) {
   const idx = await env.HG.get(key(user, 'index'), 'json');
-  return Object.assign({ configs: {}, recordings: {}, images: {}, virtual: [], assignments: {}, nextId: 1 }, idx || {});
+  const out = Object.assign({ configs: {}, recordings: {}, images: {}, virtual: [], assignments: {}, nextId: 1, rev: 0, settingsRev: {}, deleted: {}, hubs: [] }, idx || {});
+  out.deleted = Object.assign({ configs: {}, images: {} }, out.deleted || {});
+  return out;
 }
-const writeIndex = (env, user, idx) => env.HG.put(key(user, 'index'), JSON.stringify(idx));
+// Every write bumps the revision the hubs poll for; a few things record it per item.
+const writeIndex = (env, user, idx) => { idx.rev = (idx.rev || 0) + 1; return env.HG.put(key(user, 'index'), JSON.stringify(idx)); };
+const okRev = idx => json({ ok: true, rev: idx.rev });
 
 const isSynthetic = mac => /^02:00:00:00:00:/.test(mac || '');
 const syntheticMac = id => '02:00:00:00:00:' + id.toString(16).toUpperCase().padStart(2, '0');
@@ -274,19 +397,22 @@ async function userApi(request, env, path, user) {
       try { cfg = JSON.parse(text); } catch (e) { return json({ ok: false, error: 'not valid JSON: ' + e.message }, 400); }
       if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.faces) || !cfg.faces.length) return json({ ok: false, error: "'faces' must list at least one face" }, 400);
       if (!idx.configs[name] && Object.keys(idx.configs).length >= MAX_CONFIGS) return json({ ok: false, error: 'at most ' + MAX_CONFIGS + ' configs per account' }, 409);
-      await env.HG.put(key(user, 'cfg', name), text);
+      // Refused before anything is stored.
       if ('images' in cfg) return json({ ok: false, error: "'images' is filled in by the hub on the way to a gauge: leave it out" }, 400);
+      await env.HG.put(key(user, 'cfg', name), text);
       idx.configs[name] = { size: text.length, crc: crc32(text), title: typeof cfg.name === 'string' ? cfg.name : '', faces: cfg.faces.length, images: configImages(cfg) };
+      delete idx.deleted.configs[name];
       await writeIndex(env, user, idx);
-      return json({ ok: true });
+      return okRev(idx);
     }
     if (method === 'DELETE') {
       if (!idx.configs[name]) return json({ ok: false, error: 'no such config' }, 404);
       await env.HG.delete(key(user, 'cfg', name));
       delete idx.configs[name];
       for (const mac of Object.keys(idx.assignments)) if (idx.assignments[mac] === name) delete idx.assignments[mac];
+      idx.deleted.configs[name] = (idx.rev || 0) + 1;  // the revision this delete makes
       await writeIndex(env, user, idx);
-      return json({ ok: true });
+      return okRev(idx);
     }
     return json({ ok: false, error: 'method' }, 405);
   }
@@ -362,8 +488,9 @@ async function userApi(request, env, path, user) {
       return json({ ok: false, error: 'theme colours must be a list of 8 to 32, each {value: "#RRGGBB", name}' }, 400);
     }
     idx.settings = { ...(idx.settings || {}), themeColours: body.map(c => ({ value: c.value, name: String(c.name || '') })) };
+    idx.settingsRev.themeColours = (idx.rev || 0) + 1;
     await writeIndex(env, user, idx);
-    return json({ ok: true });
+    return json({ ok: true, rev: idx.rev, settingsRev: idx.settingsRev.themeColours });
   }
   if (area === 'settings' && name === 'alerts') {
     if (method === 'GET') return json(idx.settings && idx.settings.alerts ? idx.settings.alerts : null);
@@ -372,8 +499,9 @@ async function userApi(request, env, path, user) {
     try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'bad request' }, 400); }
     if (!Array.isArray(body) || body.length > 16) return json({ ok: false, error: 'alerts must be a list of at most 16' }, 400);
     idx.settings = { ...(idx.settings || {}), alerts: body.map(cleanAlert) };
+    idx.settingsRev.alerts = (idx.rev || 0) + 1;
     await writeIndex(env, user, idx);
-    return json({ ok: true });
+    return json({ ok: true, rev: idx.rev, settingsRev: idx.settingsRev.alerts });
   }
   if (area === 'settings') {
     if (name !== 'sim') return json({ ok: false, error: 'not found' }, 404);
@@ -415,15 +543,17 @@ async function userApi(request, env, path, user) {
       if (used + bytes.length > ACCOUNT_IMAGE_BYTES) return json({ ok: false, error: 'no room: images in an account come to at most 4 MB' }, 409);
       await env.HG.put(key(user, 'img', name), bytes);
       idx.images[name] = { size: bytes.length, crc: crc32Bytes(bytes), width: info.width, height: info.height, type: info.type };
+      delete idx.deleted.images[name];
       await writeIndex(env, user, idx);
-      return json({ ok: true });
+      return okRev(idx);
     }
     if (method === 'DELETE') {
       if (!meta) return json({ ok: false, error: 'no such image' }, 404);
       await env.HG.delete(key(user, 'img', name));
       delete idx.images[name];
+      idx.deleted.images[name] = (idx.rev || 0) + 1;
       await writeIndex(env, user, idx);
-      return json({ ok: true });
+      return okRev(idx);
     }
     return json({ ok: false, error: 'method' }, 405);
   }

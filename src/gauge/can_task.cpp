@@ -42,6 +42,12 @@ portMUX_TYPE introMux = portMUX_INITIALIZER_UNLOCKED;
 proto::Intro introNow;
 std::atomic<bool> introPending{false};
 
+// Requests for all gauges from the pull-down menu, sent from this task.
+portMUX_TYPE requestMux = portMUX_INITIALIZER_UNLOCKED;
+proto::Request requestRing[4];
+uint8_t requestHead = 0;
+uint8_t requestTail = 0;
+
 // Images fetched over Wi-Fi, to be reported to the hub from this task.
 portMUX_TYPE reportMux = portMUX_INITIALIZER_UNLOCKED;
 uint32_t reportRing[16];
@@ -244,6 +250,22 @@ void task(void*) {
         node.poll(now);
         hub = node.hubPresent();
 
+        // The menu's "all gauges" requests.
+        for (;;) {
+            proto::Request rq;
+            bool any = false;
+            portENTER_CRITICAL(&requestMux);
+            if (requestHead != requestTail) {
+                rq = requestRing[requestTail];
+                any = true;
+            }
+            portEXIT_CRITICAL(&requestMux);
+            if (!any || !node.request(rq.cmd, rq.arg, true)) break;
+            portENTER_CRITICAL(&requestMux);
+            requestTail = uint8_t((requestTail + 1) % 4);
+            portEXIT_CRITICAL(&requestMux);
+        }
+
         // Images that arrived over Wi-Fi: the hub hears of each at once.
         for (;;) {
             uint32_t crc = 0;
@@ -332,6 +354,20 @@ uint32_t framesReceived() { return frames; }
 bool hubPresent() { return hub; }
 
 bool localTime(uint32_t& seconds) { return node.localTime(millis(), seconds); }
+
+void requestAll(proto::Cmd cmd, uint8_t arg) {
+    proto::Request rq;
+    rq.cmd = cmd;
+    rq.arg = arg;
+    rq.all = true;
+    portENTER_CRITICAL(&requestMux);
+    const uint8_t next = uint8_t((requestHead + 1) % 4);
+    if (next != requestTail) {
+        requestRing[requestHead] = rq;
+        requestHead = next;
+    }
+    portEXIT_CRITICAL(&requestMux);
+}
 
 void benchFace(int index) { faceRequest = index < 0 ? 0 : index; }
 void benchBrightness(int level) { brightnessRequest = level; }

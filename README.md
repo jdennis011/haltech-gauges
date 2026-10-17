@@ -78,9 +78,10 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
 | `docs/ip-link.md` | A gauge on Wi-Fi instead of the CAN chain: the bus's frames over UDP, for the bench and the odd remote gauge |
+| `docs/sd-card.md` | The P4 hub's microSD card and the datalog on it: every channel, ten times a second, a CSV per drive |
 | `docs/time-of-day.md` | The clock: NTP, the phone, a DS3231 on the carrier; the zone; the beacon field and the `clock` widget |
 | `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles |
-| `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all; hub side done |
+| `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA) and the PCBWay BOMs |
 

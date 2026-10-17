@@ -15,6 +15,7 @@
 #include "alert_monitor.h"
 #include "channel_store.h"
 #include "cloud_sync.h"
+#include "datalog.h"
 #include "display_control.h"
 #include "face_model.h"
 #include "firmware_update.h"
@@ -28,6 +29,7 @@
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
+#include "sd_card.h"
 #include "simulator.h"
 #include "theme_colours.h"
 #include "time_service.h"
@@ -260,6 +262,8 @@ void buildStatus(JsonObject o) {
     sim["overrides"] = simulator::overrideCount();
     recorder::statusJson(o["recording"].to<JsonObject>(), millis());
     playback::statusJson(o["playback"].to<JsonObject>());
+    sd_card::statusJson(o["sd"].to<JsonObject>());
+    datalog::statusJson(o["datalog"].to<JsonObject>());
     JsonObject displays = o["displays"].to<JsonObject>();
     displays["brightness"] = display_control::allBrightness();
     displays["off"] = display_control::displaysOff();
@@ -1273,6 +1277,42 @@ void handleTime(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
+// The SD card and the datalog on it (docs/sd-card.md).
+void handleSd(AsyncWebServerRequest* r) {
+    const String sub = segment(r->url(), 2);
+    if (sub == "logs") {
+        const String name = segment(r->url(), 3);
+        if (!datalog::validName(name.c_str())) return sendError(r, 400, "bad log name");
+        fs::FS* fs = sd_card::fs();
+        if (!fs) return sendError(r, 404, "no card");
+        if (r->method() == HTTP_DELETE) {
+            if (!datalog::remove(name.c_str())) return sendError(r, 409, "no such log, or it is being written");
+            return sendOk(r);
+        }
+        if (heapLow(r) || tooBusy(r)) return;
+        const std::string path = datalog::path(name.c_str());
+        if (!fs->exists(path.c_str())) return sendError(r, 404, "no such log");
+        r->send(*fs, path.c_str(), "text/csv", true);
+        return;
+    }
+    if (r->method() == HTTP_POST) {
+        if (sub == "mount") {
+            datalog::requestMount();  // on the log's task; the status says how it went
+        } else if (sub == "logging") {
+            JsonDocument body;
+            if (!parseBody(r, body)) return;
+            datalog::setEnabled(body["on"] | true);
+        } else {
+            return sendError(r, 404, "unknown action");
+        }
+    }
+    JsonDocument doc;
+    sd_card::statusJson(doc["card"].to<JsonObject>());
+    datalog::statusJson(doc["datalog"].to<JsonObject>());
+    datalog::listJson(doc["logs"].to<JsonArray>());
+    sendJson(r, doc);
+}
+
 void handleWifi(AsyncWebServerRequest* r) {
     switch (r->method()) {
         case HTTP_GET: {
@@ -1379,6 +1419,9 @@ void begin() {
     server.on("/api/gauge-firmware/*", HTTP_POST, handleGaugeFirmware, nullptr, collectBody);
     server.on("/api/gauge-firmware", HTTP_GET, handleGaugeFirmware);
     server.on("/api/time", HTTP_GET | HTTP_PUT, handleTime, nullptr, collectBody);
+    server.on("/api/sd/logs/*", HTTP_GET | HTTP_DELETE, handleSd);
+    server.on("/api/sd/*", HTTP_POST, handleSd, nullptr, collectBody);
+    server.on("/api/sd", HTTP_GET, handleSd);
     server.on("/api/intro/*", HTTP_POST, handleIntro);
     server.on("/api/intro", HTTP_GET | HTTP_PUT, handleIntro, nullptr, collectBody);
     server.on("/api/update/*", HTTP_POST, handleUpdate);

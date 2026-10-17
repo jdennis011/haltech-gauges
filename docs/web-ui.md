@@ -127,6 +127,7 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | GET `/api/cloud` | The link to the online account: `{url, hub_id, name, linked, email, state, error, last_sync_s, rev, pending}`; also in `/api/status` as `cloud` |
 | POST `/api/cloud/link` `{"code":"ABC234"}`, `/api/cloud/unlink`, `/api/cloud/sync` | Link with a code from the site, unlink, sync now; each answers with the state (`docs/cloud-sync.md`) |
 | (in `/api/status`) `ip_bus` | Gauges linked over Wi-Fi: `{port, peers: [{ip, node, age_s}], rx_frames, tx_packets, dropped}` (`docs/ip-link.md`); each gauge in `/api/gauges` has `link`: `can` or `wifi` |
+| GET `/api/sd`, POST `/api/sd/mount`, POST `/api/sd/logging` `{"on": false}`, GET/DELETE `/api/sd/logs/{name}` | The SD card and the datalog on it (`docs/sd-card.md`); `sd` and `datalog` are also in `/api/status` |
 | GET `/api/time`, PUT `/api/time` `{"unix": n}` or `{"tz": "AEST-10", "tz_name": "Australia/Brisbane"}` | The hub's clock and zone: set from the page's device, or the zone (`docs/time-of-day.md`) |
 | GET `/api/intro`, PUT `/api/intro` `{enabled, style, stagger, duration}`, POST `/api/intro/play` | The key-on intro's settings, and playing it now (`docs/startup-animation.md`) |
 | GET `/api/gauge-firmware`, POST `/api/gauge-firmware/check`, `/fetch` `{"board": 1}`, `/remove` `{"board": 1}` | The gauge builds the hub keeps: check the site, fetch one onto the hub, remove one (`docs/firmware-updates.md`, "Gauges") |

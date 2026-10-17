@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "hub_config.h"
+#include "sd_card.h"
 #include "update_manifest.h"
 
 using hg::update::Manifest;
@@ -400,6 +401,7 @@ void poll(uint32_t nowMs) {
     if (restart) {
         Serial.println("Restarting into the new firmware");
         Serial.flush();
+        sd_card::forgetProbe();  // a deliberate restart, not a card that crashed the hub
         ESP.restart();
     }
 }

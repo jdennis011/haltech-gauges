@@ -275,6 +275,14 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
 
 <section id="tab-settings">
   <div class="card"><h3>Hub</h3><table><tbody id="hub-info"></tbody></table></div>
+  <div class="card" id="sd-card">
+    <h3>SD card</h3>
+    <p class="muted">With a card in the hub's slot, every drive is logged: every channel, ten times a second, as a CSV file per key-on, named by the hub's clock. Download a log here or read the card in a PC.</p>
+    <table><tbody id="sd-info"></tbody></table>
+    <div class="row" style="margin-top:8px"><label><input type="checkbox" id="sd-logging"> Log every drive</label><button class="btn small" id="btn-sd-mount">Mount</button><span class="spacer"></span><button class="btn small" id="btn-sd-refresh">Refresh</button></div>
+    <div id="sd-logs"></div>
+    <div class="msg" id="sd-msg"></div>
+  </div>
   <div class="card" id="time-card">
     <h3>Time</h3>
     <p class="muted">The hub keeps the clock for the gauges: from the internet when it is on your home network, otherwise from this device, and from the clock chip on the carrier when one is fitted. Pick the zone the gauges should show.</p>
@@ -445,7 +453,7 @@ function showTab(name) {
   if (name === 'configs') { loadConfigs(); loadImages(); }
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
-  if (name === 'settings') { loadHubs(); loadIntro(); }
+  if (name === 'settings') { loadHubs(); loadIntro(); loadSd(); }
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -2165,6 +2173,7 @@ function renderSettings() {
   if (ONLINE) $('#cloud-card').style.display = 'none'; else renderCloud(s.cloud);
   if (ONLINE) $('#update-card').style.display = 'none'; else { renderUpdate(s.update); renderGaugeFirmware(s.gauge_firmware); }
   if (ONLINE) $('#time-card').style.display = 'none'; else renderTime(s.time);
+  if (ONLINE) $('#sd-card').style.display = 'none'; else renderSdStatus(s.sd, s.datalog);
 }
 $('#sta-ssid').addEventListener('input', ev => { ev.target.dataset.touched = '1'; });
 $('#btn-sta-save').addEventListener('click', async () => {
@@ -2214,6 +2223,44 @@ $('#btn-guess-order').addEventListener('click', async () => {
   }
   alert('Ordered by voltage: ' + linked.map(g => gaugeTitle(g) + ' (' + (g.vbus_mv / 1000).toFixed(2) + ' V)').join(', ') + '. Check with Identify and fix with the arrows.');
 });
+
+// ------------------------------------------------------------- SD card
+// The card in the hub's slot and the datalog on it (docs/sd-card.md).
+
+function renderSdStatus(card, log) {
+  if (!card) return;
+  const mb = n => n >= 1024 ? (n / 1024).toFixed(1) + ' GB' : n + ' MB';
+  rows($('#sd-info'), [
+    ['Card', !card.slot ? 'this board has no slot' : card.mounted ? card.type + ', ' + mb(card.size_mb) + ', ' + mb(card.free_mb) + ' free' : 'no card' + (card.error ? ' (' + card.error + ')' : '')],
+    ['Logging', !log ? '' : log.paused ? 'paused: ' + log.error : log.active ? 'writing ' + log.file + ': ' + log.rows + ' rows, ' + kb(log.bytes) + ', ' + log.seconds + ' s' : log.enabled ? (card.mounted ? 'waiting for live data' : 'needs a card') : 'off'],
+  ]);
+  if (log && document.activeElement !== $('#sd-logging')) $('#sd-logging').checked = log.enabled !== false;
+  $('#btn-sd-mount').style.display = card.slot && !card.mounted ? '' : 'none';
+}
+async function loadSd() {
+  if (ONLINE) { $('#sd-card').style.display = 'none'; return; }
+  const root = $('#sd-logs');
+  try {
+    const r = await api.get('/api/sd');
+    renderSdStatus(r.card, r.datalog);
+    root.innerHTML = '';
+    for (const f of r.logs || []) {
+      root.append(el('div', { class: 'row', style: 'padding:4px 0;border-bottom:1px solid var(--line)' },
+        el('span', { class: 'mono' }, f.name), el('span', { class: 'muted' }, kb(f.bytes) + (f.writing ? ', being written' : '')),
+        el('span', { class: 'spacer' }),
+        el('a', { class: 'btn small', href: '/api/sd/logs/' + encodeURIComponent(f.name), download: f.name }, 'Download'),
+        f.writing ? null : btn('Delete', async () => { if (!confirm('Delete ' + f.name + '?')) return; try { await api.del('/api/sd/logs/' + encodeURIComponent(f.name)); loadSd(); } catch (e) { $('#sd-msg').textContent = e.message; } }, false, 'small danger')));
+    }
+    if (r.card && r.card.mounted && !(r.logs || []).length) root.append(el('div', { class: 'muted' }, 'No logs on the card yet.'));
+  } catch (e) { $('#sd-msg').textContent = e.message; }
+}
+$('#sd-logging').addEventListener('change', async ev => {
+  try { await api.post('/api/sd/logging', { on: ev.target.checked }); $('#sd-msg').textContent = ev.target.checked ? 'Logging on.' : 'Logging off.'; } catch (e) { $('#sd-msg').textContent = e.message; }
+});
+$('#btn-sd-mount').addEventListener('click', async () => {
+  try { await api.post('/api/sd/mount', {}); $('#sd-msg').textContent = 'Mounted.'; loadSd(); } catch (e) { $('#sd-msg').textContent = e.message; }
+});
+$('#btn-sd-refresh').addEventListener('click', loadSd);
 
 // ---------------------------------------------------------------- time
 // The hub's clock and zone (docs/time-of-day.md). A hub with no time gets this
@@ -3693,7 +3740,8 @@ const mock = {
       cloud: { url: 'https://oagauge.online', hub_id: '000000000000', name: 'haltech-hub', linked: false, email: '', state: 'not linked', error: '', last_sync_s: -1, rev: 0, pending: 0 },
       update: { current: '0.2.0', board: 'esp32c6', slot: true, state: 'idle', progress: 0, error: '', last: '', checked_s: -1, available: null },
       gauge_firmware: { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 },
-      time: { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 } };
+      time: { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 },
+      sd: { slot: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, file: '', rows: 0, bytes: 0, seconds: 0 } };
   },
   playbackStatus() {
     const p = this.playback;
@@ -3843,6 +3891,7 @@ const mock = {
       return this.intro;
     }
     if (path === '/api/intro/play') return { ok: true, gauges: 1 };
+    if (path === '/api/sd' || path.startsWith('/api/sd/')) return { card: { slot: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, file: '', rows: 0, bytes: 0, seconds: 0 }, logs: [] };
     if (path === '/api/time') return { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 };
     if (path === '/api/gauge-firmware' || path.startsWith('/api/gauge-firmware/')) return { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 };
     if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length, images: configImages(c) }));

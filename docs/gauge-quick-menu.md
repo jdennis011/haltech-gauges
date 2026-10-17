@@ -1,4 +1,4 @@
-# Gauge pull-down menu (planned on the gauge; hub side built)
+# Gauge pull-down menu
 
 Swipe down from the top edge of any gauge and a small panel slides over the face:
 
@@ -33,8 +33,15 @@ Swipe down from the top edge of any gauge and a small panel slides over the face
 - Page: an **All gauges** strip on the Gauges tab with a brightness slider and screens
   off/on, and screen off/on per card.
 
-## What the gauge still needs
+## On the gauge
 
-The panel itself, in the gauge's screen stack (main plan phase 4): the swipe gesture,
-the slider, `SetDisplay` handling (panel sleep and wake, with touch waking it), the
-request message for *all*, and brightness stored in NVS.
+`src/gauge/quick_menu.cpp` is the panel: an LVGL container that a swipe down opens
+over the face (swipes left and right still change faces), with the slider (10 to 255,
+applied live, saved to flash on release), **Screen off**, and **this** / **all**. With
+*all*, the change also goes to the hub as a `Request`, which applies it to every gauge
+and remembers the brightness. It closes on a swipe up, a tap on the face outside it, or
+five seconds after the last touch. A dark screen is not drawn, and the first touch on it
+only wakes it; a `SetDisplay` from the hub wakes it too. The gauge's own brightness is
+read from flash at start and after a hub command.
+
+Written with the renderer; not yet seen on a panel.

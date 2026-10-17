@@ -35,6 +35,9 @@ bool takeIntro(hg::proto::Intro& out);
 // its last beacon; false if no hub has ever said (docs/time-of-day.md).
 bool localTime(uint32_t& seconds);
 
+// From the pull-down menu: ask the hub to apply a setting to every gauge.
+void requestAll(hg::proto::Cmd cmd, uint8_t arg);
+
 // --- from the serial console, for a gauge on the bench with no hub
 void benchFace(int index);
 void benchBrightness(int level);

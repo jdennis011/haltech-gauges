@@ -7,6 +7,7 @@
 #include "alert_monitor.h"
 #include "can_ports.h"
 #include "cloud_sync.h"
+#include "datalog.h"
 #include "firmware_update.h"
 #include "gauge_firmware.h"
 #include "intro.h"
@@ -22,6 +23,7 @@
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
+#include "sd_card.h"
 #include "simulator.h"
 #include "theme_colours.h"
 #include "time_service.h"
@@ -316,6 +318,7 @@ void setup() {
     if (!gaugePort.begin()) Serial.println("Gauge CAN start failed");
     if (!library_store::begin()) Serial.println("Config storage failed to mount");
     image_store::begin();
+    datalog::begin(liveStore);  // mounts the card on its own task
     gauge_firmware::begin();
     wifi_xfer::begin();
     virtual_gauges::begin();
@@ -365,6 +368,7 @@ void loop() {
     intro::poll(millis());
     time_service::poll(millis());
     recorder::poll(millis(), liveStore);
+    sd_card::poll(millis());
     playback::poll(millis());
     {
         hub::Lock lock;

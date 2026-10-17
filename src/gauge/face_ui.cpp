@@ -1,6 +1,7 @@
 #include "face_ui.h"
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <esp_heap_caps.h>
 #include <lvgl.h>
 
@@ -11,6 +12,7 @@
 #include "font_manager.h"
 #include "ip_link.h"
 #include "proto.h"
+#include "quick_menu.h"
 
 using hg::cfg::Font;
 
@@ -30,8 +32,18 @@ uint32_t lastUpdateMs = 0;
 uint32_t lastReportMs = 0;
 uint32_t startedMs = 0;
 bool healthy = false;
-uint8_t lastBrightness = 200;
+uint8_t lastBrightness = 200;  // this gauge's own, kept in flash
 bool screenOff = false;
+bool wakeSwallow = false;  // the touch that woke the screen is not a tap or a swipe
+const char* kPrefs = "gauge";
+const char* kBrightKey = "bright";
+
+void saveBrightness() {
+    Preferences p;
+    p.begin(kPrefs, false);
+    p.putUChar(kBrightKey, lastBrightness);
+    p.end();
+}
 char alertShown[33] = {};
 uint32_t alertColour = 0;
 
@@ -73,8 +85,50 @@ void showFace(int index) {
     rebuild();
 }
 
+void wakeScreen() {
+    screenOff = false;
+    display::setBrightness(lastBrightness);
+}
+
+// The menu's handlers: brightness live, screen off, and "all gauges" to the hub.
+void menuBrightness(uint8_t level, bool final) {
+    lastBrightness = level;
+    if (!screenOff) display::setBrightness(level);
+    if (final) saveBrightness();
+}
+void menuScreenOff() {
+    screenOff = true;
+    display::setBrightness(0);
+}
+void menuSendAll(uint8_t cmd, uint8_t arg) { can_task::requestAll(hg::proto::Cmd(cmd), arg); }
+
+// A touch on a dark screen wakes it and does nothing else.
+void onPressed(lv_event_t*) {
+    if (!screenOff) return;
+    wakeScreen();
+    wakeSwallow = true;
+    lv_indev_wait_release(lv_indev_active());
+}
+
+void onClicked(lv_event_t*) {
+    if (wakeSwallow) {
+        wakeSwallow = false;
+        return;
+    }
+    if (quick_menu::isOpen()) quick_menu::close();  // a tap outside the panel
+}
+
 void onGesture(lv_event_t*) {
     const lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+    if (wakeSwallow) {
+        wakeSwallow = false;
+        lv_indev_wait_release(lv_indev_active());
+        return;
+    }
+    if (quick_menu::onGesture(dir)) {
+        lv_indev_wait_release(lv_indev_active());
+        return;
+    }
     if (dir == LV_DIR_LEFT) {
         showFace(int(face_store::activeFace()) + 1);
     } else if (dir == LV_DIR_RIGHT) {
@@ -217,7 +271,16 @@ void begin() {
     lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(screen, onGesture, LV_EVENT_GESTURE, nullptr);
+    lv_obj_add_event_cb(screen, onPressed, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(screen, onClicked, LV_EVENT_CLICKED, nullptr);
+    {
+        Preferences p;
+        p.begin(kPrefs, true);
+        lastBrightness = p.getUChar(kBrightKey, 200);
+        p.end();
+    }
     makeOverlays();
+    quick_menu::begin(screen, {menuBrightness, menuScreenOff, menuSendAll}, lastBrightness);
     // Dark until the intro: the hub's, or this gauge's own if no hub speaks up.
     display::setBrightness(0);
     rebuild();
@@ -238,11 +301,14 @@ void update() {
     if (brightness >= 0) {
         lastBrightness = uint8_t(brightness);
         if (!screenOff && introDone()) display::setBrightness(lastBrightness);
+        quick_menu::setBrightness(lastBrightness);
+        saveBrightness();
     }
     const int displayOn = can_task::takeDisplayRequest();
     if (displayOn == 0 && !screenOff) {
         screenOff = true;
         display::setBrightness(0);
+        quick_menu::close();
     } else if (displayOn == 1 && screenOff) {
         screenOff = false;
         if (introDone()) display::setBrightness(lastBrightness);
@@ -251,7 +317,9 @@ void update() {
     if (now - lastUpdateMs >= 33) {
         lastUpdateMs = now;
         runIntro(now);
-        face_renderer::update(now);
+        // A dark screen is not drawn; the overlays keep their state for when it wakes.
+        if (!screenOff) face_renderer::update(now);
+        quick_menu::poll(now);
         updateOverlays(now);
         can_task::setDemo(face_renderer::demo());
     }

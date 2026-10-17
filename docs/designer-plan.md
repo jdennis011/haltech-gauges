@@ -1,5 +1,17 @@
 # Plan: the gauge designer and the `.gauge` file
 
+> **Where this stands (2026-10-17).** Most of D3 and parts of D4, D5 and D7 were built
+> into the hub's page and its online copy instead of a separate app: the canvas with
+> select, move, resize, rotate, snapping and guides; the schema-driven Widget styles and
+> All options panels; faces, templates, import and export, the hub's library, assign and
+> try on gauge, live data in the preview; images by name from the hub's library (not
+> embedded in the file) with `image` widgets and face backgrounds; vector icons as `path`
+> widgets; and now multi-select with align and spread, undo and redo, zoom, drafts kept
+> in the browser, and a keys overlay. Still open from this plan: a layers panel with
+> show/hide and lock, richer conditions (`between`, `equals`, a hold time), display
+> `orientation`, a single-file `.gauge` export that carries its images, and the gallery.
+> The schema stays 1; the base64-asset format below was not adopted.
+
 A visual editor for gauge faces that runs in a browser, and a file format for the
 result that carries everything a gauge needs, pictures included. It replaces the JSON
 editor and the Widget styles panel in the hub's page, which stay as the fallback.

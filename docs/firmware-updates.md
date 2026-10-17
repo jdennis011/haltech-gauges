@@ -92,7 +92,7 @@ when the site has one for its chip.
 | GET `/api/update` | `{current, board, slot, state, progress, error, last, confirmed, checked_s, available: {version, size, date, notes} \| null}`. Also under `update` in `/api/status`. States: `idle`, `checking`, `up to date`, `available`, `downloading`, `installing`, `restarting`, `error` |
 | POST `/api/update/check` | Check the site now |
 | POST `/api/update/install` | Install the build the last check found. 409 if there is none or one is already running |
-| PUT `/api/update` (body: the `.bin`) | Flash an uploaded image and restart. 400 with the reason if it is refused |
+| PUT `/api/update` (body: the `.bin`, `Content-Type: application/octet-stream`) | Flash an uploaded image and restart. 400 with the reason if it is refused. The content type matters: a form type (curl's default for `--data-binary`) makes the web server collect the body as form fields until the heap runs out and the connection drops, so from the command line it is `curl -X PUT -H "Content-Type: application/octet-stream" --data-binary @firmware.bin http://<hub>/api/update` |
 
 The hub's status report to the site (`POST /api/hubs/status`, every five minutes) carries
 `chip`, so the Hubs card can say which build applies.

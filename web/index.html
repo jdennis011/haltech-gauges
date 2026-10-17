@@ -40,6 +40,11 @@ th{color:var(--dim);font-weight:500}
 .ok{color:var(--ok)}
 .bad{color:var(--bad)}
 .editor{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.wrow.sel2{outline:1px dashed #0a84ff}
+#help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
+#help-overlay .card{max-width:520px;margin:16px}
+#help-overlay table td{padding:3px 10px 3px 0;vertical-align:top}
+#help-overlay td.k{white-space:nowrap;font-family:ui-monospace,Consolas,monospace;color:#6cb2ff}
 @media (max-width:820px){.editor{grid-template-columns:1fr}}
 textarea{width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical;line-height:1.35}
 canvas{width:100%;max-width:466px;aspect-ratio:1;display:block;margin:0 auto;border-radius:50%;background:#000}
@@ -239,6 +244,9 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       <button class="btn" id="btn-validate">Validate</button>
       <button class="btn primary" id="btn-save">Save</button>
       <button class="btn" id="btn-download">Download</button>
+      <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+      <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)" disabled>Redo</button>
+      <button class="btn" id="btn-help" title="Keys and mouse (?)">?</button>
       <button class="btn danger" id="btn-delete">Delete</button>
       <span class="spacer"></span>
       <button class="btn" id="btn-close">Close</button>
@@ -249,15 +257,16 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       <div>
         <div class="row" style="margin-bottom:8px">
           <label class="inline">Face <select id="face-select"></select></label>
+          <label class="inline">Zoom <select id="zoom-select"><option value="fit">fit</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
           <span class="spacer"></span>
           <select id="try-gauge"></select>
           <button class="btn" id="btn-try">Try on gauge</button>
           <button class="btn" id="btn-endtry">End try</button>
         </div>
-        <canvas id="preview" width="466" height="466"></canvas>
-        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; guides snap it to the face centre and to other widgets. Corner handles resize it (radius, width and height, or text size); the knob above rotates it (on a dial or ring, turns the scale). Arrow keys nudge it (shift for 10 px). Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
+        <div id="preview-wrap"><canvas id="preview" width="466" height="466"></canvas></div>
+        <p class="muted" style="text-align:center;font-size:13px">Drag a widget on the preview to move it; guides snap it to the face centre and to other widgets. Corner handles resize it (radius, width and height, or text size); the knob above rotates it (on a dial or ring, turns the scale). Arrow keys nudge it (shift for 10 px). Shift + click selects more, Ctrl+A all; Ctrl+Z undoes; the ? button lists the rest. Live data when the hub has any, otherwise a demo sweep. The gauge itself is the true render.</p>
         <div class="sub">
-          <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span class="spacer"></span>
+          <div class="row"><strong>Widget styles</strong><span class="muted" id="widget-note"></span><span id="multi-tools" class="row"></span><span class="spacer"></span>
             <select id="add-type"></select><button class="btn small" id="btn-add-widget">Add widget</button>
             <label class="inline">All fonts <select id="all-fonts"></select></label></div>
           <div class="muted" style="font-size:13px;margin:4px 0 6px">Rows are the draw order: later rows draw on top. Drag a row by its title, or use its arrows, to reorder.</div>
@@ -343,6 +352,25 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
   </div>
 </section>
 </main>
+<div id="help-overlay">
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Editing a face</h3><span class="spacer"></span><button class="btn small" id="btn-help-close">Close</button></div>
+    <table>
+      <tr><td class="k">click, drag</td><td>select a widget; move it. Guides snap it to the face centre and to other widgets</td></tr>
+      <tr><td class="k">shift + click</td><td>add to the selection; drag moves them together</td></tr>
+      <tr><td class="k">Ctrl + A</td><td>select every widget on the face</td></tr>
+      <tr><td class="k">corner handles</td><td>resize: radius, width and height, or text size</td></tr>
+      <tr><td class="k">knob above</td><td>rotate (snaps to 15 degrees); the start angle of a dial or ring</td></tr>
+      <tr><td class="k">arrows</td><td>nudge by a pixel; with shift, ten</td></tr>
+      <tr><td class="k">Delete</td><td>remove the selected widgets</td></tr>
+      <tr><td class="k">Ctrl + D</td><td>duplicate them, a little to the right and down</td></tr>
+      <tr><td class="k">Ctrl + Z, Ctrl + Y</td><td>undo, redo (also the Undo and Redo buttons)</td></tr>
+      <tr><td class="k">Esc</td><td>deselect; close this</td></tr>
+      <tr><td class="k">?</td><td>this list</td></tr>
+    </table>
+    <p class="muted" style="margin:10px 0 0">With two or more selected, <b>Same x</b>, <b>Same y</b>, <b>Spread x</b> and <b>Spread y</b> appear above the widget list. What you type in the JSON is kept in this browser until you save it: reopening a config offers the unsaved draft back.</p>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -833,16 +861,100 @@ async function startFonts() {
   }
 }
 
+// ----------------------------------------------------------- undo / redo
+// Every change made through the editor goes through editConfig(), which
+// keeps the text before it; typing in the JSON is kept per burst. Drafts go
+// to this browser's storage until saved, in case the tab is lost.
+
+const UNDO_MAX = 100;
+const undoStack = [], redoStack = [];
+let lastParsedText = '';  // the JSON as last applied, so a typing burst can be undone as one
+let typingBurst = false;
+
+function updateUndoButtons() {
+  $('#btn-undo').disabled = !undoStack.length;
+  $('#btn-redo').disabled = !redoStack.length;
+}
+function snapshot(text) {
+  if (undoStack.length && undoStack[undoStack.length - 1] === text) return;
+  undoStack.push(text);
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoButtons();
+}
+function applyText(text) {
+  $('#edit-text').value = text;
+  parseEditor();
+  lastParsedText = text;
+  selectWidget(-1);
+  saveDraft();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push($('#edit-text').value);
+  applyText(undoStack.pop());
+  updateUndoButtons();
+  setMsg('Undone.');
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push($('#edit-text').value);
+  applyText(redoStack.pop());
+  updateUndoButtons();
+  setMsg('Redone.');
+}
+$('#btn-undo').addEventListener('click', undo);
+$('#btn-redo').addEventListener('click', redo);
+
+const draftKey = () => state.editing ? 'hg-draft:' + (state.editing.name || '') : null;
+function saveDraft() {
+  const key = draftKey();
+  if (!key) return;
+  try { localStorage.setItem(key, $('#edit-text').value); } catch (e) { /* no storage */ }
+}
+function dropDraft(name) {
+  try { localStorage.removeItem('hg-draft:' + name); } catch (e) { /* no storage */ }
+}
+function offerDraft(name, text) {
+  let draft = null;
+  try { draft = localStorage.getItem('hg-draft:' + name); } catch (e) { return; }
+  if (!draft || draft === text) return;
+  const m = $('#edit-msg');
+  m.className = 'msg';
+  m.innerHTML = '';
+  m.append('This browser has unsaved changes to "' + name + '" from before. ',
+    btn('Restore them', () => { snapshot($('#edit-text').value); applyText(draft); setMsg('Draft restored, not saved yet.'); }, false, 'small primary'),
+    ' ', btn('Forget them', () => { dropDraft(name); setMsg(''); }, false, 'small'));
+}
+
+$('#btn-help').addEventListener('click', () => { $('#help-overlay').style.display = 'flex'; });
+$('#btn-help-close').addEventListener('click', () => { $('#help-overlay').style.display = 'none'; });
+$('#help-overlay').addEventListener('click', ev => { if (ev.target === $('#help-overlay')) $('#help-overlay').style.display = 'none'; });
+
+$('#zoom-select').addEventListener('change', ev => {
+  const z = ev.target.value, c = $('#preview'), wrap = $('#preview-wrap');
+  if (z === 'fit') { c.style.width = ''; c.style.height = ''; c.style.maxWidth = ''; wrap.style.overflow = ''; wrap.style.maxHeight = ''; }
+  else { c.style.width = Math.round(466 * +z) + 'px'; c.style.height = c.style.width; c.style.maxWidth = 'none'; wrap.style.overflow = 'auto'; wrap.style.maxHeight = '70vh'; }
+});
+
 function openEditor(name, cfg, isNew) {
   state.editing = { name, isNew };
   $('#edit-name').value = name;
-  $('#edit-text').value = JSON.stringify(cfg, null, 2);
+  const text = JSON.stringify(cfg, null, 2);
+  $('#edit-text').value = text;
   $('#editor').style.display = '';
   state.faceIndex = 0;
   selected = -1;
+  extra.clear();
+  undoStack.length = 0;
+  redoStack.length = 0;
+  lastParsedText = text;
+  typingBurst = false;
+  updateUndoButtons();
   renderFontList();
   parseEditor();
   setMsg(isNew ? 'New config, not saved yet.' : '');
+  if (!isNew) offerDraft(name, text);
   $('#editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -869,10 +981,14 @@ function parseEditor() {
 
 let editTimer = null;
 $('#edit-text').addEventListener('input', () => {
+  if (!typingBurst) { typingBurst = true; snapshot(lastParsedText); }
   clearTimeout(editTimer);
-  editTimer = setTimeout(() => { if (parseEditor()) setMsg(''); }, 250);
+  editTimer = setTimeout(() => {
+    if (parseEditor()) { setMsg(''); lastParsedText = $('#edit-text').value; saveDraft(); }
+    typingBurst = false;
+  }, 600);
 });
-$('#face-select').addEventListener('change', ev => { state.faceIndex = +ev.target.value; selected = -1; renderWidgetTable(); });
+$('#face-select').addEventListener('change', ev => { state.faceIndex = +ev.target.value; selected = -1; extra.clear(); renderMultiTools(); renderWidgetTable(); });
 
 function currentName() {
   const name = $('#edit-name').value.trim();
@@ -894,6 +1010,7 @@ $('#btn-save').addEventListener('click', async () => {
   try {
     await api.put('/api/configs/' + name, withoutImageMap($('#edit-text').value), true);
     state.editing = { name, isNew: false };
+    dropDraft(name);
     forgetConfig(name);
     setMsg('Saved "' + name + '". Assigned gauges receive it within a few seconds.', 'ok');
     await loadConfigs();
@@ -914,6 +1031,7 @@ $('#btn-delete').addEventListener('click', async () => {
   if (!confirm('Delete "' + state.editing.name + '" from the hub?')) return;
   try {
     await api.del('/api/configs/' + state.editing.name);
+    dropDraft(state.editing.name);
     forgetConfig(state.editing.name);
     $('#editor').style.display = 'none';
     state.previewCfg = null;
@@ -1375,7 +1493,7 @@ function renderWidgetTable() {
       btn('\u25B2', () => { openMore.clear(); reorderWidget(i, i - 1); }, i === 0, 'small', 'Move up: drawn earlier, further back'),
       btn('\u25BC', () => { openMore.clear(); reorderWidget(i, i + 1); }, i === widgets.length - 1, 'small', 'Move down: drawn later, further forward'),
       btn('remove', () => { openMore.clear(); removeWidget(i); }, false, 'small'));
-    root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : ''),
+    root.append(el('div', { class: 'wrow' + (i === selected ? ' sel' : extra.has(i) ? ' sel2' : ''),
       ondragover: ev => { if (dragFrom < 0) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; ev.currentTarget.classList.add('dropTarget'); },
       ondragleave: ev => ev.currentTarget.classList.remove('dropTarget'),
       ondrop: ev => { ev.preventDefault(); ev.currentTarget.classList.remove('dropTarget'); if (dragFrom >= 0 && dragFrom !== i) { openMore.clear(); reorderWidget(dragFrom, i); } dragFrom = -1; } },
@@ -1441,11 +1559,17 @@ function removeWidget(i) {
 // Applies a change to the config in the editor and refreshes the preview.
 function editConfig(mutate) {
   let cfg;
-  try { cfg = JSON.parse($('#edit-text').value); }
+  const before = $('#edit-text').value;
+  try { cfg = JSON.parse(before); }
   catch (e) { setMsg('Fix the JSON first: ' + e.message, 'bad'); return; }
   mutate(cfg);
-  $('#edit-text').value = JSON.stringify(cfg, null, 2);
+  const after = JSON.stringify(cfg, null, 2);
+  if (after === before) return;
+  snapshot(before);
+  $('#edit-text').value = after;
   parseEditor();
+  lastParsedText = after;
+  saveDraft();
   setMsg('Changed, not saved yet.');
 }
 
@@ -3250,8 +3374,10 @@ function drawFace(canvas, cfg, faceIdx, t) {
 function tick(now) {
   if (state.previewCfg && $('#editor').style.display !== 'none' && $('#tab-configs').classList.contains('active')) {
     drawFace($('#preview'), state.previewCfg, state.faceIndex, now);
-    const w = currentWidgets()[selected];
-    if (w) drawSelection($('#preview').getContext('2d'), w, now);
+    const ws = currentWidgets(), ctx = $('#preview').getContext('2d');
+    for (const k of extra) if (ws[k] && k !== selected) drawOutline(ctx, ws[k], now);
+    const w = ws[selected];
+    if (w) drawSelection(ctx, w, now);
   }
   requestAnimationFrame(tick);
 }
@@ -3264,7 +3390,111 @@ requestAnimationFrame(tick);
 // to the face centre when close.
 
 let selected = -1;   // index of the selected widget on the current face
+const extra = new Set();  // more selected widgets (shift + click); they move with it
 let drag = null;     // { ox, oy, moved } while the pointer is down on a widget
+
+// Every selected index, the primary first.
+function selectionIndices() {
+  const out = [];
+  if (selected >= 0) out.push(selected);
+  for (const k of extra) if (k !== selected) out.push(k);
+  return out.filter(k => currentWidgets()[k]);
+}
+
+function renderMultiTools() {
+  const root = $('#multi-tools');
+  if (!root) return;
+  root.innerHTML = '';
+  if (selectionIndices().length < 2) return;
+  root.append(
+    btn('Same x', () => alignSelection('x'), false, 'small', 'Give every selected widget the first one\'s x'),
+    btn('Same y', () => alignSelection('y'), false, 'small', 'Give every selected widget the first one\'s y'),
+    btn('Spread x', () => spreadSelection('x'), false, 'small', 'Space them evenly between the leftmost and the rightmost'),
+    btn('Spread y', () => spreadSelection('y'), false, 'small', 'Space them evenly between the top and the bottom'));
+}
+
+function alignSelection(key) {
+  const idx = selectionIndices(), w0 = currentWidgets()[idx[0]];
+  if (!w0) return;
+  const v = w0[key] == null ? 233 : w0[key];
+  editConfig(cfg => {
+    const ws = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+    for (const i of idx) if (ws[i]) ws[i][key] = v;
+  });
+  selectWidget(selected, false, true);
+}
+
+function spreadSelection(key) {
+  const idx = selectionIndices();
+  if (idx.length < 3) { setMsg('Spread needs three or more selected.'); return; }
+  const ws = currentWidgets();
+  const order = idx.slice().sort((a, b) => (ws[a][key] == null ? 233 : ws[a][key]) - (ws[b][key] == null ? 233 : ws[b][key]));
+  const lo = ws[order[0]][key] == null ? 233 : ws[order[0]][key], hi = ws[order[order.length - 1]][key] == null ? 233 : ws[order[order.length - 1]][key];
+  editConfig(cfg => {
+    const list = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+    order.forEach((i, n) => { if (list[i]) list[i][key] = Math.round(lo + (hi - lo) * n / (order.length - 1)); });
+  });
+  selectWidget(selected, false, true);
+}
+
+function removeSelection() {
+  const idx = selectionIndices().sort((a, b) => b - a);
+  if (!idx.length) return;
+  openMore.clear();
+  editConfig(cfg => {
+    const ws = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+    for (const i of idx) ws.splice(i, 1);
+  });
+  extra.clear();
+  selectWidget(-1);
+}
+
+function duplicateSelection() {
+  const idx = selectionIndices().sort((a, b) => a - b);
+  if (!idx.length) return;
+  let first = -1, count = 0;
+  editConfig(cfg => {
+    const ws = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+    if (ws.length + idx.length > MAX_WIDGETS) { setMsg('A face holds at most ' + MAX_WIDGETS + ' widgets.', 'bad'); return; }
+    first = ws.length;
+    for (const i of idx) {
+      const c = Object.assign({}, ws[i]);
+      c.x = Math.min(466, (c.x == null ? 233 : c.x) + 10);
+      c.y = Math.min(466, (c.y == null ? 233 : c.y) + 10);
+      ws.push(c);
+      count++;
+    }
+  });
+  if (first < 0 || !count) return;
+  extra.clear();
+  for (let k = 1; k < count; k++) extra.add(first + k);
+  selected = first;
+  selectWidget(first, false, true);
+}
+
+function selectAll() {
+  const ws = currentWidgets();
+  if (!ws.length) return;
+  extra.clear();
+  for (let i = 1; i < ws.length; i++) extra.add(i);
+  selected = 0;
+  selectWidget(0, false, true);
+}
+
+function nudgeSelection(dx, dy) {
+  const idx = selectionIndices();
+  if (!idx.length) return;
+  editConfig(cfg => {
+    const ws = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+    for (const i of idx) {
+      const w = ws[i];
+      if (!w) continue;
+      w.x = Math.max(0, Math.min(466, (w.x == null ? 233 : w.x) + dx));
+      w.y = Math.max(0, Math.min(466, (w.y == null ? 233 : w.y) + dy));
+    }
+  });
+  selectWidget(selected, false, true);
+}
 
 function currentWidgets() {
   const cfg = state.previewCfg;
@@ -3435,6 +3665,16 @@ function hitWidget(ctx, px, py, t) {
   return -1;
 }
 
+// A secondary selection: the dashed outline alone, no handles.
+function drawOutline(ctx, w, t) {
+  const b = widgetBounds(ctx, w, t);
+  ctx.save();
+  ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#6cb2ff';
+  if (b.kind === 'ring') { ctx.beginPath(); ctx.arc(b.cx, b.cy, b.r + 2, 0, Math.PI * 2); ctx.stroke(); }
+  else { ctx.translate(b.cx, b.cy); ctx.rotate(rad(b.rotate || 0)); ctx.strokeRect(-b.w / 2 - 4, -b.h / 2 - 4, b.w + 8, b.h + 8); }
+  ctx.restore();
+}
+
 function drawSelection(ctx, w, t) {
   const b = widgetBounds(ctx, w, t);
   ctx.save();
@@ -3486,24 +3726,31 @@ function canvasPoint(ev) {
   return { x: (ev.clientX - r.left) * 466 / r.width, y: (ev.clientY - r.top) * 466 / r.height };
 }
 
-function selectWidget(i) {
-  selected = i;
-  $$('#widget-list .wrow').forEach((row, k) => row.classList.toggle('sel', k === i));
-  if (i >= 0) {
+// `add` (shift + click) keeps the others selected; `keep` leaves the set as it is.
+function selectWidget(i, add, keep) {
+  if (add && i >= 0) {
+    if (selected < 0) selected = i;
+    else if (i === selected) { /* already the primary */ }
+    else if (extra.has(i)) extra.delete(i);
+    else extra.add(i);
+  } else if (!keep) {
+    extra.clear();
+    selected = i;
+  } else {
+    if (selected >= 0 && i >= 0 && selected !== i) extra.add(selected);
+    selected = i;
+  }
+  extra.delete(selected);
+  $$('#widget-list .wrow').forEach((row, k) => { row.classList.toggle('sel', k === selected); row.classList.toggle('sel2', extra.has(k)); });
+  renderMultiTools();
+  const n = selectionIndices().length;
+  if (n > 1) setMsg(n + ' widgets selected. Drag or nudge them together; Delete removes them; Ctrl+D duplicates them.');
+  else if (i >= 0) {
     const w = currentWidgets()[i];
-    if (w) setMsg('Selected ' + (i + 1) + '. ' + w.type + ' at ' + (w.x == null ? 233 : w.x) + ', ' + (w.y == null ? 233 : w.y) + '. Drag it, or nudge with the arrow keys.');
+    if (w) setMsg('Selected ' + (i + 1) + '. ' + w.type + ' at ' + (w.x == null ? 233 : w.x) + ', ' + (w.y == null ? 233 : w.y) + '. Drag it, or nudge with the arrow keys. Shift + click adds another.');
   }
 }
 
-function moveWidget(i, x, y) {
-  editConfig(cfg => {
-    const face = (cfg.faces || [])[state.faceIndex];
-    const w = face && face.widgets ? face.widgets[i] : null;
-    if (!w) return;
-    w.x = x; w.y = y;
-  });
-  selectWidget(i);
-}
 
 
 $('#preview').addEventListener('pointerdown', ev => {
@@ -3518,10 +3765,13 @@ $('#preview').addEventListener('pointerdown', ev => {
     return;
   }
   const i = hitWidget(ctx, p.x, p.y, performance.now());
-  selectWidget(i);
+  selectWidget(i, ev.shiftKey, !ev.shiftKey && i >= 0 && extra.has(i));
   if (i < 0) return;
   const w = currentWidgets()[i];
-  drag = { ox: p.x - (w.x == null ? 233 : w.x), oy: p.y - (w.y == null ? 233 : w.y), moved: false };
+  const ws = currentWidgets();
+  drag = { ox: p.x - (w.x == null ? 233 : w.x), oy: p.y - (w.y == null ? 233 : w.y), moved: false,
+    others: [...extra].filter(k => ws[k]).map(k => ({ k, x0: ws[k].x == null ? 233 : ws[k].x, y0: ws[k].y == null ? 233 : ws[k].y })),
+    x0: w.x == null ? 233 : w.x, y0: w.y == null ? 233 : w.y };
   try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic event */ }
   ev.preventDefault();
 });
@@ -3540,35 +3790,57 @@ $('#preview').addEventListener('pointermove', ev => {
   if (drag.resize) { applyResize(w, p); return; }
   const s = snapMove(w, p.x - drag.ox, p.y - drag.oy);
   w.x = s.x; w.y = s.y;   // live object: the preview redraws it
+  const ws = currentWidgets();
+  for (const o of drag.others || []) {  // the rest of the selection keeps its offsets
+    if (!ws[o.k]) continue;
+    ws[o.k].x = Math.max(0, Math.min(466, o.x0 + (s.x - drag.x0)));
+    ws[o.k].y = Math.max(0, Math.min(466, o.y0 + (s.y - drag.y0)));
+  }
   drag.moved = true;
 });
 
 function endDrag() {
   if (!drag) return;
   const w = currentWidgets()[selected];
-  const moved = drag.moved, key = drag.rotate, resizeKeys = drag.resize ? drag.keys : null;
+  const moved = drag.moved, key = drag.rotate, resizeKeys = drag.resize ? drag.keys : null, others = drag.others || [];
   drag = null;
   guides = [];
   if (!moved || !w) return;
-  if (key) { setWidgetFields(selected, { [key]: w[key] }); selectWidget(selected); }
-  else if (resizeKeys) { const changes = {}; for (const k of resizeKeys) if (w[k] != null) changes[k] = w[k]; setWidgetFields(selected, changes); selectWidget(selected); }
-  else moveWidget(selected, w.x, w.y);
+  if (key) { setWidgetFields(selected, { [key]: w[key] }); selectWidget(selected, false, true); }
+  else if (resizeKeys) { const changes = {}; for (const k of resizeKeys) if (w[k] != null) changes[k] = w[k]; setWidgetFields(selected, changes); selectWidget(selected, false, true); }
+  else {
+    // The live objects already hold the new places; the text catches up in one step.
+    const places = [{ i: selected, x: w.x, y: w.y }];
+    const ws = currentWidgets();
+    for (const o of others) if (ws[o.k]) places.push({ i: o.k, x: ws[o.k].x, y: ws[o.k].y });
+    editConfig(cfg => {
+      const list = ((cfg.faces || [])[state.faceIndex] || {}).widgets || [];
+      for (const p of places) if (list[p.i]) { list[p.i].x = p.x; list[p.i].y = p.y; }
+    });
+    selectWidget(selected, false, true);
+  }
 }
 $('#preview').addEventListener('pointerup', endDrag);
 $('#preview').addEventListener('pointercancel', endDrag);
 
 document.addEventListener('keydown', ev => {
-  if (selected < 0 || !state.previewCfg) return;
   const tag = (ev.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-  if (!$('#tab-configs').classList.contains('active')) return;
+  if (ev.key === 'Escape' && $('#help-overlay').style.display === 'flex') { $('#help-overlay').style.display = 'none'; return; }
+  if (!state.previewCfg || !$('#tab-configs').classList.contains('active')) return;
+  const mod = ev.ctrlKey || ev.metaKey;
+  if (mod && ev.key.toLowerCase() === 'z' && !ev.shiftKey) { undo(); ev.preventDefault(); return; }
+  if (mod && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { redo(); ev.preventDefault(); return; }
+  if (ev.key === '?' && !mod) { $('#help-overlay').style.display = 'flex'; ev.preventDefault(); return; }
+  if (ev.key === 'Escape') { selectWidget(-1); setMsg(''); return; }
+  if (mod && ev.key.toLowerCase() === 'a') { selectAll(); ev.preventDefault(); return; }
+  if (selected < 0) return;
+  if (mod && ev.key.toLowerCase() === 'd') { duplicateSelection(); ev.preventDefault(); return; }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') { removeSelection(); ev.preventDefault(); return; }
   const step = ev.shiftKey ? 10 : 1;
   const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
-  if (ev.key === 'Escape') { selectWidget(-1); setMsg(''); return; }
   if (!d) return;
-  const w = currentWidgets()[selected];
-  if (!w) return;
-  moveWidget(selected, Math.max(0, Math.min(466, (w.x == null ? 233 : w.x) + d[0])), Math.max(0, Math.min(466, (w.y == null ? 233 : w.y) + d[1])));
+  nudgeSelection(d[0], d[1]);
   ev.preventDefault();
 });
 

@@ -126,6 +126,15 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | GET / PUT / DELETE `/api/wifi` | Home-network credentials `{"ssid","password"}` |
 | GET `/api/cloud` | The link to the online account: `{url, hub_id, name, linked, email, state, error, last_sync_s, rev, pending}`; also in `/api/status` as `cloud` |
 | POST `/api/cloud/link` `{"code":"ABC234"}`, `/api/cloud/unlink`, `/api/cloud/sync` | Link with a code from the site, unlink, sync now; each answers with the state (`docs/cloud-sync.md`) |
+| (in `/api/status`) `ip_bus` | Gauges linked over Wi-Fi: `{port, peers: [{ip, node, age_s}], rx_frames, tx_packets, dropped}` (`docs/ip-link.md`); each gauge in `/api/gauges` has `link`: `can` or `wifi` |
+| GET `/api/time`, PUT `/api/time` `{"unix": n}` or `{"tz": "AEST-10", "tz_name": "Australia/Brisbane"}` | The hub's clock and zone: set from the page's device, or the zone (`docs/time-of-day.md`) |
+| GET `/api/intro`, PUT `/api/intro` `{enabled, style, stagger, duration}`, POST `/api/intro/play` | The key-on intro's settings, and playing it now (`docs/startup-animation.md`) |
+| GET `/api/gauge-firmware`, POST `/api/gauge-firmware/check`, `/fetch` `{"board": 1}`, `/remove` `{"board": 1}` | The gauge builds the hub keeps: check the site, fetch one onto the hub, remove one (`docs/firmware-updates.md`, "Gauges") |
+| POST `/api/gauges/{node}/update` | Sends that gauge the hub's build for its board over Wi-Fi |
+| GET `/gauge/image/{crc}?token=…`, GET `/gauge/firmware?token=…` | What a gauge fetches over the hub's Wi-Fi, with the token the hub gave it (`docs/images.md`, "Over Wi-Fi") |
+| GET `/api/update` | Firmware: this build, the latest on the site, the state and progress; also in `/api/status` as `update` (`docs/firmware-updates.md`) |
+| POST `/api/update/check`, `/api/update/install` | Check the site now; install the build the last check found |
+| PUT `/api/update` (body: a `firmware.bin`) | Flash an uploaded hub image into the spare app slot and restart |
 
 `/ws` is a WebSocket that pushes `{"t":"status"}` once a second,
 `{"t":"gauges"}` on change, `{"t":"live","v":{...}}` three times a second, and

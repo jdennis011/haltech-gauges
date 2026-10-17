@@ -131,6 +131,14 @@ bool HubManager::command(uint32_t node, Cmd cmd, uint8_t arg) {
     return true;
 }
 
+bool HubManager::intro(uint32_t node, const Intro& intro) {
+    Gauge* g = findMutable(node);
+    if (!g || !g->online) return false;
+    if (!send(pack(intro, node))) return false;
+    g->haveAck = false;
+    return true;
+}
+
 bool HubManager::alert(uint32_t node, const Alert& alert, uint8_t seq) {
     const Gauge* g = find(node);
     if (!g || !g->online) return false;
@@ -173,6 +181,19 @@ bool HubManager::tryConfig(uint32_t node, const uint8_t* data, uint32_t size, ui
     return true;
 }
 
+bool HubManager::wifiJoin(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs) {
+    const Gauge* g = find(node);
+    if (!g || !g->online || pushBusy()) return false;
+    pushActive_ = true;
+    pushKind_ = XferKind::WifiJoin;
+    pushCrc_ = 0;
+    pushImageCount_ = 0;
+    wifiWaitMs_ = 0;
+    sender_.start(link_, node, Dir::HubToGauge, ++session_, XferKind::WifiJoin, data, size, nowMs);
+    notify();
+    return true;
+}
+
 bool HubManager::requestUpload(uint32_t node, uint32_t nowMs) {
     const Gauge* g = find(node);
     (void)nowMs;
@@ -212,6 +233,8 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
             g->pushFailed = false;
             g->nextPushMs = nowMs;
             g->imageCount = 0;
+            g->wifiTried = false;
+            g->wifiUntilMs = 0;
             if (queryActive_ && queryNode_ == node) queryActive_ = false;
             notify();
             break;
@@ -310,6 +333,17 @@ void HubManager::finishPush(uint32_t nowMs) {
         return;
     }
 
+    if (pushKind_ == XferKind::WifiJoin) {
+        if (result == XferStatus::Done) {
+            // The gauge is fetching: its reports, or the wait running out, say what it got.
+            for (size_t i = 0; i < pushImageCount_; i++) setImageState(*g, pushImages_[i], ImageState::Wifi);
+            g->wifiUntilMs = nowMs + wifiWaitMs_;
+        }
+        // Refused (firmware without Wi-Fi) or lost: the bus it is, this session.
+        notify();
+        return;
+    }
+
     g->pushResult = result;
     if (pushKind_ == XferKind::TryConfig || pushKind_ == XferKind::SwitchConfig) {
         notify();
@@ -346,26 +380,36 @@ void HubManager::finishPush(uint32_t nowMs) {
 }
 
 HubManager::Step HubManager::images(Gauge& g, const uint32_t* crcs, size_t count, uint32_t nowMs) {
+    // Ask about every image not asked about yet, so that the ones the gauge
+    // lacks are known before any is sent: they can then go in one Wi-Fi job.
+    for (size_t i = 0; i < count; i++) {
+        if (imageState(g, crcs[i]) != ImageState::Unknown) continue;
+        if (queryActive_) return Step::Working;  // an answer is awaited first
+        AssetQuery q;
+        q.crc = crcs[i];
+        if (send(pack(q, g.node))) {
+            queryActive_ = true;
+            queryNode_ = g.node;
+            queryCrc_ = crcs[i];
+            querySentMs_ = nowMs;
+            queryTries_ = 1;
+        }
+        return Step::Working;
+    }
+
     for (size_t i = 0; i < count; i++) {
         const uint32_t crc = crcs[i];
         switch (imageState(g, crc)) {
             case ImageState::Have:
             case ImageState::Refused:
+            case ImageState::Unknown:
                 break;
 
-            case ImageState::Unknown: {
-                if (queryActive_) return Step::Working;  // an answer is awaited first
-                AssetQuery q;
-                q.crc = crc;
-                if (send(pack(q, g.node))) {
-                    queryActive_ = true;
-                    queryNode_ = g.node;
-                    queryCrc_ = crc;
-                    querySentMs_ = nowMs;
-                    queryTries_ = 1;
-                }
-                return Step::Working;
-            }
+            case ImageState::Wifi:
+                // Being fetched over Wi-Fi: wait for the gauge's word, then ask again.
+                if (!reached(nowMs, g.wifiUntilMs)) return Step::Waiting;
+                setImageState(g, crc, ImageState::Unknown);
+                return Step::Waiting;
 
             case ImageState::Missing: {
                 if (!reached(nowMs, g.nextPushMs)) return Step::Waiting;
@@ -375,6 +419,35 @@ HubManager::Step HubManager::images(Gauge& g, const uint32_t* crcs, size_t count
                     // The hub no longer has it: the config goes without it.
                     setImageState(g, crc, ImageState::Refused);
                     break;
+                }
+                if (handler_.wifiJoin && !g.wifiTried && size >= kWifiImageBytes) {
+                    // A big one: everything the gauge lacks is offered over Wi-Fi in one go.
+                    if (handler_.closeImage) handler_.closeImage(handler_.ctx);
+                    g.wifiTried = true;
+                    uint32_t want[kMaxImages];
+                    size_t n = 0;
+                    for (size_t k = 0; k < count && n < kMaxImages; k++) {
+                        if (imageState(g, crcs[k]) == ImageState::Missing) want[n++] = crcs[k];
+                    }
+                    const uint8_t* data = nullptr;
+                    uint32_t bytes = 0, waitMs = 0;
+                    if (handler_.wifiJoin(g, want, n, &data, &bytes, &waitMs, handler_.ctx) && data && bytes) {
+                        pushActive_ = true;
+                        pushKind_ = XferKind::WifiJoin;
+                        pushCrc_ = 0;
+                        pushImageCount_ = uint8_t(n);
+                        for (size_t k = 0; k < n; k++) pushImages_[k] = want[k];
+                        wifiWaitMs_ = waitMs;
+                        sender_.start(link_, g.node, Dir::HubToGauge, ++session_, XferKind::WifiJoin, data, bytes,
+                                      nowMs);
+                        notify();
+                        return Step::Working;
+                    }
+                    // Not on offer after all: the bus it is.
+                    if (!handler_.openImage(crc, source, size, handler_.ctx)) {
+                        setImageState(g, crc, ImageState::Refused);
+                        break;
+                    }
                 }
                 imageOpen_ = true;
                 pushActive_ = true;
@@ -439,6 +512,7 @@ void HubManager::poll(uint32_t nowMs) {
         Beacon b;
         b.flags = beaconFlags_;
         b.uptimeSec = uint16_t(uint32_t(nowMs - startMs_) / 1000);
+        b.localTime = localTime_;
         if (send(pack(b))) {
             beaconSent_ = true;
             lastBeaconMs_ = nowMs;

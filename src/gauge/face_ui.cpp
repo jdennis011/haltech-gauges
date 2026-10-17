@@ -9,6 +9,8 @@
 #include "face_renderer.h"
 #include "face_store.h"
 #include "font_manager.h"
+#include "ip_link.h"
+#include "proto.h"
 
 using hg::cfg::Font;
 
@@ -32,6 +34,21 @@ uint8_t lastBrightness = 200;
 bool screenOff = false;
 char alertShown[33] = {};
 uint32_t alertColour = 0;
+
+// The key-on intro (docs/startup-animation.md): dark until the hub's intro
+// frame, or this gauge's own if no hub speaks up, then the style, then live.
+enum class IntroState : uint8_t { Waiting, Delay, Playing, Done };
+const uint32_t kSoloAfterBootMs = 3000;  // no beacon at all: play alone
+const uint32_t kSoloAfterHubMs = 2000;   // beacons but no intro frame: play alone
+IntroState introState = IntroState::Waiting;
+hg::proto::IntroStyle introStyle = hg::proto::IntroStyle::Sweep;
+uint32_t bootMs = 0;
+uint32_t introStartMs = 0;
+uint32_t introDurationMs = 1200;
+bool hubSeen = false;
+uint32_t hubSeenMs = 0;
+
+bool introDone() { return introState == IntroState::Done; }
 
 uint16_t fontPx(int designPx) {
     const int px = scaled(designPx);
@@ -145,6 +162,54 @@ void updateOverlays(uint32_t now) {
     }
 }
 
+void startIntro(const hg::proto::Intro& i, uint32_t now) {
+    introStyle = i.style;
+    introDurationMs = i.durationMs < 200 ? 200 : i.durationMs;
+    introStartMs = now + i.delayMs;
+    introState = IntroState::Delay;
+}
+
+void runIntro(uint32_t now) {
+    hg::proto::Intro frame;
+    if (can_task::takeIntro(frame)) {
+        // Once per start; the page's Play forces another.
+        if (introState != IntroState::Done || frame.force) startIntro(frame, now);
+    }
+    if (!hubSeen && can_task::hubPresent()) {
+        hubSeen = true;
+        hubSeenMs = now;
+    }
+    switch (introState) {
+        case IntroState::Waiting:
+            if ((hubSeen && now - hubSeenMs >= kSoloAfterHubMs) || (!hubSeen && now - bootMs >= kSoloAfterBootMs)) {
+                startIntro(hg::proto::Intro(), now);
+            }
+            break;
+        case IntroState::Delay:
+            if (int32_t(now - introStartMs) >= 0) {
+                introState = IntroState::Playing;
+                if (introStyle != hg::proto::IntroStyle::Fade) face_renderer::setIntro(introStyle, 0);
+            }
+            break;
+        case IntroState::Playing: {
+            const float phase = float(now - introStartMs) / float(introDurationMs);
+            if (phase >= 1) {
+                introState = IntroState::Done;
+                face_renderer::endIntro();
+                if (!screenOff) display::setBrightness(lastBrightness);
+                break;
+            }
+            if (introStyle != hg::proto::IntroStyle::Fade) face_renderer::setIntro(introStyle, phase);
+            // The sweep styles light up over the first quarter; fade takes the whole duration.
+            const float ramp = introStyle == hg::proto::IntroStyle::Fade ? phase : (phase < 0.25f ? phase / 0.25f : 1.0f);
+            if (!screenOff) display::setBrightness(uint8_t(lastBrightness * ramp));
+            break;
+        }
+        case IntroState::Done:
+            break;
+    }
+}
+
 }  // namespace
 
 void begin() {
@@ -153,8 +218,11 @@ void begin() {
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(screen, onGesture, LV_EVENT_GESTURE, nullptr);
     makeOverlays();
+    // Dark until the intro: the hub's, or this gauge's own if no hub speaks up.
+    display::setBrightness(0);
     rebuild();
     startedMs = millis();
+    bootMs = startedMs;
 }
 
 void update() {
@@ -165,10 +233,11 @@ void update() {
     const int face = can_task::takeFaceRequest();
     if (face >= 0) showFace(face);
 
+    // Brightness and screen commands before the intro are kept for after it.
     const int brightness = can_task::takeBrightnessRequest();
     if (brightness >= 0) {
         lastBrightness = uint8_t(brightness);
-        if (!screenOff) display::setBrightness(lastBrightness);
+        if (!screenOff && introDone()) display::setBrightness(lastBrightness);
     }
     const int displayOn = can_task::takeDisplayRequest();
     if (displayOn == 0 && !screenOff) {
@@ -176,11 +245,12 @@ void update() {
         display::setBrightness(0);
     } else if (displayOn == 1 && screenOff) {
         screenOff = false;
-        display::setBrightness(lastBrightness);
+        if (introDone()) display::setBrightness(lastBrightness);
     }
 
     if (now - lastUpdateMs >= 33) {
         lastUpdateMs = now;
+        runIntro(now);
         face_renderer::update(now);
         updateOverlays(now);
         can_task::setDemo(face_renderer::demo());
@@ -195,11 +265,11 @@ void update() {
 
     if (now - lastReportMs >= 5000) {
         lastReportMs = now;
-        Serial.printf("fps %u, face %u/%u, %s, hub %d, can frames %u, internal heap %u (min %u), psram %u\n",
+        Serial.printf("fps %u, face %u/%u, %s, hub %d, frames %u, link %s, internal heap %u (min %u), psram %u\n",
                       unsigned(display::framesPerSecond()), unsigned(face_store::activeFace() + 1),
                       unsigned(face_store::faceCount()),
-                      face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "CAN"),
-                      int(can_task::hubPresent()), unsigned(can_task::framesReceived()),
+                      face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "LIVE"),
+                      int(can_task::hubPresent()), unsigned(can_task::framesReceived()), ip_link::status(),
                       unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
                       unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)),
                       unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));

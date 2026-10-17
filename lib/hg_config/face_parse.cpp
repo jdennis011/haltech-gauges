@@ -31,6 +31,16 @@ const Name kWidgetTypes[] = {
     {"label", uint8_t(WidgetType::Label)},   {"light", uint8_t(WidgetType::Light)},
     {"rim", uint8_t(WidgetType::Rim)},       {"shape", uint8_t(WidgetType::Shape)},
     {"path", uint8_t(WidgetType::Path)},     {"image", uint8_t(WidgetType::Image)},
+    {"clock", uint8_t(WidgetType::Clock)},
+};
+const Name kClockStyles[] = {
+    {"digital", uint8_t(ClockStyle::Digital)},
+    {"analogue", uint8_t(ClockStyle::Analogue)},
+    {"analog", uint8_t(ClockStyle::Analogue)},
+};
+const Name kClockFormats[] = {
+    {"24h", 0},
+    {"12h", 1},
 };
 const Name kFonts[] = {
     {"sans", uint8_t(Font::Sans)},       {"condensed", uint8_t(Font::Condensed)},
@@ -511,7 +521,8 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     // A shape, path or image is plain decoration unless it names a channel.
     const bool decoration =
         w.type == WidgetType::Shape || w.type == WidgetType::Path || w.type == WidgetType::Image;
-    if (w.type != WidgetType::Label && !(decoration && obj["channel"].isNull())) readChannel(obj, w, ctx);
+    const bool noChannel = w.type == WidgetType::Label || w.type == WidgetType::Clock;
+    if (!noChannel && !(decoration && obj["channel"].isNull())) readChannel(obj, w, ctx);
     if (!ctx.ok()) return;
 
     switch (w.type) {
@@ -592,6 +603,19 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.arcAngle = int16_t(readInt(obj, "arcAngle", 270, -360, 360, ctx));
             w.arcAngle = int16_t(((w.arcAngle % 360) + 360) % 360);
             w.arcSide = ArcSide(readEnum(obj, "arcSide", kArcSides, uint8_t(ArcSide::Auto), ctx));
+            break;
+
+        case WidgetType::Clock:
+            w.clockStyle = ClockStyle(readEnum(obj, "style", kClockStyles, uint8_t(ClockStyle::Digital), ctx));
+            readTextStyle(obj, w, 56, ctx);
+            w.clockSeconds = readBool(obj, "seconds", false, ctx);
+            w.hour12 = readEnum(obj, "format", kClockFormats, 0, ctx) == 1;
+            w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
+            w.r = int16_t(readInt(obj, "r", 120, 20, kScreenSize / 2, ctx));
+            w.thickness = int16_t(readInt(obj, "thickness", 6, 1, 20, ctx));
+            w.ticks = readBool(obj, "ticks", true, ctx);
+            w.trackColor = readColor(obj, "tickColor", t.dim, ctx);
+            w.needleColor = readColor(obj, "secondColor", t.accent, ctx);
             break;
 
         case WidgetType::Light:

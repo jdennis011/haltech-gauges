@@ -17,19 +17,25 @@
 #include "cloud_sync.h"
 #include "display_control.h"
 #include "face_model.h"
+#include "firmware_update.h"
+#include "gauge_firmware.h"
 #include "haltech.h"
 #include "hub_config.h"
 #include "hub_state.h"
 #include "image_store.h"
+#include "intro.h"
+#include "ip_bus.h"
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
 #include "simulator.h"
 #include "theme_colours.h"
+#include "time_service.h"
 #include "units.h"
 #include "virtual_gauges.h"
 #include "web_assets.h"
 #include "wifi_ap.h"
+#include "wifi_xfer.h"
 
 using namespace hg;
 using proto::HubManager;
@@ -229,6 +235,7 @@ const char* kindName(proto::XferKind k) {
         case proto::XferKind::Config: return "config";
         case proto::XferKind::TryConfig: return "try";
         case proto::XferKind::SwitchConfig: return "switch";
+        case proto::XferKind::WifiJoin: return "wifi";
         case proto::XferKind::Image: return "image";
     }
     return "?";
@@ -289,7 +296,11 @@ void buildStatus(JsonObject o) {
         }
     }
     wifi_ap::statusJson(o);
+    ip_bus::statusJson(o["ip_bus"].to<JsonObject>());
+    time_service::statusJson(o["time"].to<JsonObject>());
     cloud_sync::statusJson(o["cloud"].to<JsonObject>());
+    firmware_update::statusJson(o["update"].to<JsonObject>());
+    gauge_firmware::statusJson(o["gauge_firmware"].to<JsonObject>());
 }
 
 void buildGauges(JsonArray arr) {
@@ -300,14 +311,38 @@ void buildGauges(JsonArray arr) {
         hub::Lock lock;
         HubManager& m = hub::manager();
         const uint32_t now = millis();
+        // In display order: the slot each plays in the intro, then the rest.
+        size_t seq[HubManager::kMaxGauges];
+        int keys[HubManager::kMaxGauges];
+        int slots[HubManager::kMaxGauges];
+        size_t count = 0;
         for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
             const HubManager::Gauge& g = m.gauge(i);
             if (!g.used) continue;
+            slots[i] = g.haveHello ? intro::slotOf(g.mac) : -1;
+            keys[i] = slots[i] >= 0 ? slots[i] : 100 + int(i);
+            size_t at = count;
+            while (at > 0 && keys[seq[at - 1]] > keys[i]) {
+                seq[at] = seq[at - 1];
+                at--;
+            }
+            seq[at] = i;
+            count++;
+        }
+        for (size_t s = 0; s < count; s++) {
+            const size_t i = seq[s];
+            const HubManager::Gauge& g = m.gauge(i);
             JsonObject o = arr.add<JsonObject>();
             char buf[24];
             snprintf(buf, sizeof(buf), "%06lX", (unsigned long)g.node);
             o["node"] = buf;
             o["virtual"] = false;
+            o["link"] = ip_bus::isIpNode(g.node) ? "wifi" : "can";
+            if (slots[i] >= 0) {
+                o["order"] = slots[i];
+            } else {
+                o["order"] = nullptr;
+            }
             o["online"] = g.online;
             o["last_seen_s"] = (now - g.lastSeenMs) / 1000;
             o["duplicate"] = g.duplicateId;
@@ -328,12 +363,16 @@ void buildGauges(JsonArray arr) {
                     if (planned[k].mac != buf) continue;
                     o["id"] = planned[k].id;
                     o["label"] = planned[k].label;
+                    o["position"] = k;
                     linked[k] = true;
                 }
             }
             if (g.haveInfo) {
                 snprintf(buf, sizeof(buf), "%u.%u.%u", g.info.fwMajor, g.info.fwMinor, g.info.fwPatch);
                 o["fw"] = buf;
+                o["hw"] = g.info.hwRevision;
+                // The hub holds a newer build for this gauge's board.
+                o["fw_update"] = gauge_firmware::newerThan(g.info.hwRevision, g.info.fwMajor, g.info.fwMinor, g.info.fwPatch);
             }
             if (g.haveStatus) {
                 o["face"] = g.status.activeFace;
@@ -342,6 +381,7 @@ void buildGauges(JsonArray arr) {
                 o["config_crc"] = buf;
                 o["vbus_mv"] = g.status.vbusMillivolts;
                 o["trying"] = (g.status.flags & proto::kStatusFlagTrying) != 0;
+                o["wifi"] = (g.status.flags & proto::kStatusFlagWifi) != 0;
                 o["demo"] = (g.status.flags & proto::kStatusFlagDemo) != 0;
             }
             JsonObject push = o["push"].to<JsonObject>();
@@ -388,6 +428,8 @@ void buildGauges(JsonArray arr) {
         o["mac"] = planned[k].mac;
         o["online"] = false;
         o["face"] = planned[k].face;
+        o["position"] = k;
+        o["order"] = nullptr;
         std::string name;
         if (library_store::assignmentFor(planned[k].mac.c_str(), name)) {
             o["assigned"] = name;
@@ -587,6 +629,13 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
         return sendOk(r);
     }
 
+    if (action == "update") {
+        // Takes the hub lock itself.
+        std::string error;
+        if (!wifi_xfer::sendFirmware(node, error)) return sendError(r, 409, error.c_str());
+        return sendOk(r);
+    }
+
     JsonDocument body;
     if (!parseBody(r, body)) return;
     hub::Lock lock;
@@ -781,6 +830,10 @@ void handleVirtual(AsyncWebServerRequest* r) {
     bool found = true;
     if (body["label"].is<const char*>()) found = virtual_gauges::setLabel(id, body["label"]) && found;
     if (body["face"].is<int>()) found = virtual_gauges::setFace(id, uint8_t(body["face"].as<int>())) && found;
+    if (body["order"].is<int>()) {
+        const int at = body["order"].as<int>();
+        found = virtual_gauges::move(id, size_t(at < 0 ? 0 : at)) && found;
+    }
     if (!found) return sendError(r, 404, "no such planned gauge");
     if (body["mac"].is<const char*>() && !virtual_gauges::setMac(id, body["mac"])) {
         return sendError(r, 400, "MAC must look like AA:BB:CC:DD:EE:FF and not already be linked");
@@ -1077,6 +1130,149 @@ void handleCloud(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
+// A firmware image uploaded from the page, streamed into the spare app slot
+// as it arrives (docs/firmware-updates.md).
+struct UpdateMark {
+    bool ok;
+    char error[96];
+};
+
+void updateBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t index, size_t total) {
+    if (index == 0) {
+        UpdateMark* m = static_cast<UpdateMark*>(malloc(sizeof(UpdateMark)));
+        if (!m) return;
+        m->ok = false;
+        m->error[0] = 0;
+        r->_tempObject = m;
+        std::string error;
+        if (!firmware_update::uploadBegin(total, error)) {
+            snprintf(m->error, sizeof(m->error), "%s", error.c_str());
+            return;
+        }
+        m->ok = true;
+    }
+    UpdateMark* m = static_cast<UpdateMark*>(r->_tempObject);
+    if (!m || !m->ok) return;
+    if (!firmware_update::uploadWrite(data, len)) {
+        m->ok = false;
+        snprintf(m->error, sizeof(m->error), "writing the image failed; see the Firmware card");
+    }
+}
+
+void handleUpdate(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_PUT) {
+        UpdateMark* m = static_cast<UpdateMark*>(r->_tempObject);
+        if (!m) return sendError(r, 400, "no file was sent");
+        if (!m->ok) {
+            firmware_update::uploadAbort();
+            return sendError(r, 400, m->error[0] ? m->error : "the upload failed");
+        }
+        std::string error;
+        if (!firmware_update::uploadEnd(error)) return sendError(r, 500, error.c_str());
+        return sendOk(r);
+    }
+    if (r->method() == HTTP_POST) {
+        const String action = segment(r->url(), 2);
+        if (action == "check") {
+            firmware_update::requestCheck();
+        } else if (action == "install") {
+            std::string error;
+            if (!firmware_update::requestInstall(error)) return sendError(r, 409, error.c_str());
+        } else {
+            return sendError(r, 404, "unknown action");
+        }
+    }
+    JsonDocument doc;
+    firmware_update::statusJson(doc.to<JsonObject>());
+    sendJson(r, doc);
+}
+
+// The key-on intro: its settings, and playing it now (docs/startup-animation.md).
+void handleIntro(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_POST) {
+        if (segment(r->url(), 2) != "play") return sendError(r, 404, "unknown action");
+        JsonDocument doc;
+        doc["ok"] = true;
+        doc["gauges"] = intro::play();
+        return sendJson(r, doc);
+    }
+    if (r->method() == HTTP_PUT) {
+        JsonDocument body;
+        if (!parseBody(r, body)) return;
+        std::string error;
+        if (!intro::setSettings(body.as<JsonObjectConst>(), error)) return sendError(r, 400, error.c_str());
+    }
+    JsonDocument doc;
+    intro::settingsJson(doc.to<JsonObject>());
+    sendJson(r, doc);
+}
+
+// Downloads by a gauge over the hub's Wi-Fi, with the token it was given (docs/images.md).
+void handleGaugeImage(AsyncWebServerRequest* r) {
+    if (heapLow(r)) return;
+    const String hex = segment(r->url(), 2);
+    const String token = r->hasParam("token") ? r->getParam("token")->value() : String();
+    if (hex.length() != 8) return sendError(r, 404, "no such image");
+    const uint32_t crc = strtoul(hex.c_str(), nullptr, 16);
+    if (!wifi_xfer::allowsImage(token.c_str(), crc)) return sendError(r, 403, "no token for this image");
+    std::string path;
+    const char* type = nullptr;
+    if (!image_store::fileByCrc(crc, path, type)) return sendError(r, 404, "no such image");
+    r->send(LittleFS, path.c_str(), type);
+}
+
+void handleGaugeFirmwareFile(AsyncWebServerRequest* r) {
+    if (heapLow(r)) return;
+    const String token = r->hasParam("token") ? r->getParam("token")->value() : String();
+    std::string path;
+    if (!wifi_xfer::allowsFirmware(token.c_str(), path)) return sendError(r, 403, "no token for the firmware");
+    r->send(LittleFS, path.c_str(), "application/octet-stream");
+}
+
+// The gauge firmware builds the hub keeps (docs/firmware-updates.md, "Gauges").
+void handleGaugeFirmware(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_POST) {
+        const String action = segment(r->url(), 2);
+        if (action == "check") {
+            gauge_firmware::requestCheck();
+        } else if (action == "fetch" || action == "remove") {
+            JsonDocument body;
+            if (!parseBody(r, body)) return;
+            const uint8_t board = uint8_t(body["board"] | 0);
+            std::string error;
+            if (action == "fetch" && !gauge_firmware::requestFetch(board, error)) return sendError(r, 409, error.c_str());
+            if (action == "remove" && !gauge_firmware::remove(board)) {
+                return sendError(r, 409, "nothing to remove, or a fetch is running");
+            }
+        } else {
+            return sendError(r, 404, "unknown action");
+        }
+    }
+    JsonDocument doc;
+    gauge_firmware::statusJson(doc.to<JsonObject>());
+    sendJson(r, doc);
+}
+
+// The hub's time of day and zone (docs/time-of-day.md).
+void handleTime(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_PUT) {
+        JsonDocument body;
+        if (!parseBody(r, body)) return;
+        if (!body["tz"].isNull()) {
+            std::string error;
+            if (!time_service::setZone(body["tz"] | "", body["tz_name"] | "", error)) return sendError(r, 400, error.c_str());
+        }
+        if (!body["unix"].isNull()) {
+            if (!time_service::setFromDevice(uint32_t(body["unix"].as<uint64_t>()))) {
+                return sendError(r, 409, "the hub already has the time from NTP");
+            }
+        }
+    }
+    JsonDocument doc;
+    time_service::statusJson(doc.to<JsonObject>());
+    sendJson(r, doc);
+}
+
 void handleWifi(AsyncWebServerRequest* r) {
     switch (r->method()) {
         case HTTP_GET: {
@@ -1178,6 +1374,15 @@ void begin() {
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.on("/api/cloud/*", HTTP_POST, handleCloud, nullptr, collectBody);
     server.on("/api/cloud", HTTP_GET, handleCloud);
+    server.on("/gauge/image/*", HTTP_GET, handleGaugeImage);
+    server.on("/gauge/firmware", HTTP_GET, handleGaugeFirmwareFile);
+    server.on("/api/gauge-firmware/*", HTTP_POST, handleGaugeFirmware, nullptr, collectBody);
+    server.on("/api/gauge-firmware", HTTP_GET, handleGaugeFirmware);
+    server.on("/api/time", HTTP_GET | HTTP_PUT, handleTime, nullptr, collectBody);
+    server.on("/api/intro/*", HTTP_POST, handleIntro);
+    server.on("/api/intro", HTTP_GET | HTTP_PUT, handleIntro, nullptr, collectBody);
+    server.on("/api/update/*", HTTP_POST, handleUpdate);
+    server.on("/api/update", HTTP_GET | HTTP_PUT, handleUpdate, nullptr, updateBody);
     server.onNotFound(handleNotFound);
 
     server.begin();

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "alert_dispatch.h"
+#include "intro_sequencer.h"
 #include "alert_rules.h"
 #include "channel_store.h"
 #include "crc32.h"
@@ -73,6 +74,12 @@ bool Port::send(const CanFrame& frame, void* ctx) {
 
 Bytes makeConfig(const char* text) { return Bytes(text, text + strlen(text)); }
 
+struct SimGauge;
+struct SimHub;
+// A simulated gauge's "fetch" over Wi-Fi: copies the wanted images from the
+// hub's library and queues a report of each. Defined after SimHub.
+void simWifiFetch(SimGauge& g, const uint8_t* data, uint32_t size);
+
 struct SimGauge {
     Port port;
     GaugeNode node;
@@ -105,6 +112,14 @@ struct SimGauge {
     int imageStores = 0;
     int imageQueries = 0;
     std::vector<std::string> storeLog;  // "image" or "config", in order
+    std::vector<Intro> intros;          // key-on intros received, in order
+    // Fetching over Wi-Fi: a join message carries the CRCs wanted; the "fetch"
+    // copies them from the hub's library and reports each.
+    struct SimHub* hub = nullptr;
+    bool wifiSupported = true;  // firmware that understands WifiJoin
+    bool wifiWorks = true;      // and can reach the hub
+    int wifiJoins = 0;
+    std::vector<uint32_t> toReport;
 
     static bool onCommand(Cmd cmd, uint8_t arg, void* ctx) {
         SimGauge* g = static_cast<SimGauge*>(ctx);
@@ -122,6 +137,7 @@ struct SimGauge {
         g->alertText = a.text;
         g->alertChanges++;
     }
+    static void onIntro(const Intro& i, void* ctx) { static_cast<SimGauge*>(ctx)->intros.push_back(i); }
     static void onThemeColours(const uint32_t colours[kThemeColourCount], void* ctx) {
         SimGauge* g = static_cast<SimGauge*>(ctx);
         memcpy(g->theme, colours, sizeof(g->theme));
@@ -144,6 +160,7 @@ struct SimGauge {
         SimGauge* g = static_cast<SimGauge*>(ctx);
         g->transfersOffered++;
         if (kind == XferKind::Image && !g->imagesSupported) return XferStatus::BadKind;
+        if (kind == XferKind::WifiJoin && !g->wifiSupported) return XferStatus::BadKind;
         if (size > (kind == XferKind::Image ? kMaxImageBytes : 32 * 1024)) return XferStatus::TooBig;
         g->rxBuffer.assign(size ? size : 1, 0);
         *buffer = g->rxBuffer.data();
@@ -154,6 +171,12 @@ struct SimGauge {
         if (g->rejectConfigs) {
             g->rejectCount++;
             return false;
+        }
+        if (kind == XferKind::WifiJoin) {
+            g->wifiJoins++;
+            // Without Wi-Fi it joins nothing, and the hub's wait runs out.
+            if (g->wifiWorks && g->hub) simWifiFetch(*g, data, size);
+            return true;
         }
         if (kind == XferKind::Image) {
             g->images[crc32(data, size)] = Bytes(data, data + size);
@@ -185,6 +208,7 @@ struct SimGauge {
 
     void boot(uint32_t nodeId) {
         trying = false;
+        toReport.clear();
         tryConfig.clear();
         activeFace = 0;
         port.rx.clear();
@@ -195,6 +219,7 @@ struct SimGauge {
         h.hasImage = imagesSupported ? onHasImage : nullptr;
         h.alert = onAlert;
         h.themeColours = onThemeColours;
+        h.intro = onIntro;
         h.ctx = this;
         Info info;
         info.fwMajor = 1;
@@ -210,6 +235,7 @@ struct SimGauge {
             port.rx.pop_front();
         }
         node.poll(*now);
+        while (!toReport.empty() && node.reportAsset(toReport.front(), true)) toReport.erase(toReport.begin());
         if (node.idConflict()) {
             // What the firmware does: pick a new random id and carry on.
             rng = rng * 1103515245u + 12345u + mac[5];
@@ -233,6 +259,10 @@ struct SimHub {
     std::map<Mac, std::vector<uint32_t>> wantImages;
     const Bytes* sending = nullptr;
     int openImages = 0;
+    // Wi-Fi for big images: the join message is the wanted CRCs, four bytes each.
+    bool wifiOffered = false;
+    int wifiJoins = 0;
+    Bytes wifiPayload;
 
     static bool onDesired(const HubManager::Gauge& g, HubManager::Desired& out, void* ctx) {
         SimHub* h = static_cast<SimHub*>(ctx);
@@ -260,6 +290,20 @@ struct SimHub {
         out.crc = crc32(out.data, out.size);
         out.schema = h->configSchema;
         out.imageCount = 0;
+        return true;
+    }
+    static bool onWifiJoin(const HubManager::Gauge&, const uint32_t* crcs, size_t count, const uint8_t** data,
+                           uint32_t* size, uint32_t* waitMs, void* ctx) {
+        SimHub* h = static_cast<SimHub*>(ctx);
+        if (!h->wifiOffered) return false;
+        h->wifiJoins++;
+        h->wifiPayload.clear();
+        for (size_t i = 0; i < count; i++) {
+            for (int b = 0; b < 4; b++) h->wifiPayload.push_back(uint8_t(crcs[i] >> (8 * b)));
+        }
+        *data = h->wifiPayload.data();
+        *size = uint32_t(h->wifiPayload.size());
+        *waitMs = 2000;
         return true;
     }
     static bool readImage(uint32_t offset, uint8_t* out, uint32_t len, void* ctx) {
@@ -303,6 +347,7 @@ struct SimHub {
         h.changed = onChanged;
         h.openImage = onOpenImage;
         h.closeImage = onCloseImage;
+        h.wifiJoin = onWifiJoin;
         h.ctx = this;
         openImages = 0;
         mgr.init(port.link(), h, *now);
@@ -331,6 +376,18 @@ struct SimHub {
     }
 };
 
+void simWifiFetch(SimGauge& g, const uint8_t* data, uint32_t size) {
+    for (uint32_t i = 0; i + 4 <= size; i += 4) {
+        const uint32_t crc = uint32_t(data[i]) | (uint32_t(data[i + 1]) << 8) | (uint32_t(data[i + 2]) << 16) |
+                             (uint32_t(data[i + 3]) << 24);
+        auto it = g.hub->library.find(crc);
+        if (it == g.hub->library.end()) continue;
+        g.images[crc] = it->second;
+        g.storeLog.push_back("wifi-image");
+        g.toReport.push_back(crc);
+    }
+}
+
 struct World {
     uint32_t now = 5000;
     Bus bus;
@@ -342,6 +399,7 @@ struct World {
         g1.mac = {0x24, 0x6F, 0x28, 0x11, 0x22, 0x33};
         g2.mac = {0x24, 0x6F, 0x28, 0x44, 0x55, 0x66};
         hub.now = g1.now = g2.now = &now;
+        g1.hub = g2.hub = &hub;
         bus.attach(hub.port);
         bus.attach(g1.port);
         bus.attach(g2.port);
@@ -722,6 +780,115 @@ void test_alert_naming_a_missing_config_does_nothing() {
     TEST_ASSERT_FALSE(w.g1.alertShown);
 }
 
+void test_hub_time_reaches_the_gauges() {
+    World w;
+    w.run(1500);
+    uint32_t seconds = 0;
+    TEST_ASSERT_FALSE(w.g1.node.localTime(w.now, seconds));  // the hub has no time yet
+
+    w.hub.mgr.setLocalTime(1760600000);
+    w.run(1200);  // at least one beacon
+    TEST_ASSERT_TRUE(w.g1.node.localTime(w.now, seconds));
+    TEST_ASSERT_TRUE(seconds >= 1760600000 && seconds <= 1760600002);
+    TEST_ASSERT_TRUE(w.g2.node.localTime(w.now, seconds));
+
+    // Between beacons, and after the hub goes away, the gauge keeps counting.
+    w.hubRunning = false;
+    w.run(10000);
+    TEST_ASSERT_TRUE(w.g1.node.localTime(w.now, seconds));
+    TEST_ASSERT_TRUE(seconds >= 1760600010 && seconds <= 1760600012);
+}
+
+void test_intro_plays_across_the_gauges_in_order() {
+    World w;
+    // Gauge 2 sits left of gauge 1 on the dash: the planned order says so.
+    hg::intro::Sequencer seq;
+    hg::intro::Slot order[2];
+    memcpy(order[0].mac, w.g2.mac.data(), 6);
+    memcpy(order[1].mac, w.g1.mac.data(), 6);
+    seq.setOrder(order, 2);
+    seq.begin(w.now, 2);
+
+    // Both announce themselves within a second; the intro goes as soon as both are heard.
+    uint32_t waited = 0;
+    while (!seq.done() && waited < 5000) {
+        w.run(100);
+        seq.poll(w.hub.mgr, w.now);
+        waited += 100;
+    }
+    TEST_ASSERT_TRUE(seq.done());
+    TEST_ASSERT_TRUE(waited < hg::intro::Sequencer::kSettleMs + 1000);
+    w.run(50);
+    TEST_ASSERT_EQUAL(1, w.g2.intros.size());
+    TEST_ASSERT_EQUAL(1, w.g1.intros.size());
+    TEST_ASSERT_EQUAL(0, w.g2.intros[0].index);
+    TEST_ASSERT_EQUAL(0, w.g2.intros[0].delayMs);
+    TEST_ASSERT_EQUAL(1, w.g1.intros[0].index);
+    TEST_ASSERT_EQUAL(250, w.g1.intros[0].delayMs);
+    TEST_ASSERT_EQUAL(2, w.g1.intros[0].count);
+    TEST_ASSERT_EQUAL(1200, w.g1.intros[0].durationMs);
+    TEST_ASSERT_FALSE(w.g1.intros[0].force);
+    TEST_ASSERT_EQUAL(int(IntroStyle::Sweep), int(w.g1.intros[0].style));
+    TEST_ASSERT_EQUAL(1, seq.slotOf(w.hub.mgr, w.g1.mac.data()));
+    TEST_ASSERT_EQUAL(0, seq.slotOf(w.hub.mgr, w.g2.mac.data()));
+
+    // A gauge that resets later is not told again: it plays alone on its own clock.
+    w.g1.boot();
+    w.g1.intros.clear();
+    for (int i = 0; i < 30; i++) {
+        w.run(100);
+        seq.poll(w.hub.mgr, w.now);
+    }
+    TEST_ASSERT_EQUAL(0, w.g1.intros.size());
+
+    // Play from the page: everyone again, forced, in the same order.
+    TEST_ASSERT_EQUAL(2, seq.play(w.hub.mgr, w.now));
+    w.run(50);
+    TEST_ASSERT_EQUAL(1, w.g1.intros.size());
+    TEST_ASSERT_TRUE(w.g1.intros[0].force);
+    TEST_ASSERT_EQUAL(1, w.g1.intros[0].index);
+    TEST_ASSERT_TRUE(w.g2.intros.back().force);
+}
+
+void test_intro_goes_after_a_wait_when_a_gauge_is_missing() {
+    World w;
+    w.g2.port.connected = false;  // one of the two expected gauges never turns up
+    hg::intro::Sequencer seq;
+    seq.begin(w.now, 2);
+    uint32_t waited = 0;
+    uint32_t firstHello = 0;
+    while (!seq.done() && waited < 10000) {
+        w.run(100);
+        waited += 100;
+        if (!firstHello && w.hub.onlineCount() > 0) firstHello = waited;
+        seq.poll(w.hub.mgr, w.now);
+    }
+    TEST_ASSERT_TRUE(seq.done());
+    TEST_ASSERT_TRUE(firstHello > 0);
+    // Sent the settle time after the first hello, not at once and not never.
+    TEST_ASSERT_TRUE(waited >= firstHello + hg::intro::Sequencer::kSettleMs - 100);
+    TEST_ASSERT_TRUE(waited <= firstHello + hg::intro::Sequencer::kSettleMs + 300);
+    w.run(50);
+    TEST_ASSERT_EQUAL(1, w.g1.intros.size());
+    TEST_ASSERT_EQUAL(0, w.g1.intros[0].index);
+    TEST_ASSERT_EQUAL(1, w.g1.intros[0].count);
+
+    // Switched off: the wait still ends, nothing is sent.
+    World w2;
+    hg::intro::Sequencer off;
+    hg::intro::Settings s;
+    s.enabled = false;
+    off.setSettings(s);
+    off.begin(w2.now, 2);
+    for (int i = 0; i < 40; i++) {
+        w2.run(100);
+        off.poll(w2.hub.mgr, w2.now);
+    }
+    TEST_ASSERT_TRUE(off.done());
+    TEST_ASSERT_EQUAL(0, w2.g1.intros.size());
+    TEST_ASSERT_EQUAL(0, w2.g2.intros.size());
+}
+
 void test_higher_alert_takes_over_the_message() {
     World w;
     w.run(1500);
@@ -1069,6 +1236,68 @@ void test_try_sends_its_images_first() {
     TEST_ASSERT_FALSE(w.hub.mgr.pushBusy());
 }
 
+void test_big_images_go_over_wifi() {
+    World w;
+    w.hub.wifiOffered = true;
+    const Bytes big = makeImage(40000, 7), small = makeImage(2000, 8);
+    giveImages(w, w.g1.mac, {big, small});
+    const Bytes cfg = configWithImages("A", {{"bg", crcOf(big)}, {"icon", crcOf(small)}});
+    w.hub.assignments[w.g1.mac] = cfg;
+    w.run(6000);
+    TEST_ASSERT_TRUE(w.g1.stored == cfg);
+    TEST_ASSERT_EQUAL(1, w.hub.wifiJoins);
+    TEST_ASSERT_EQUAL(1, w.g1.wifiJoins);
+    TEST_ASSERT_EQUAL(2, w.g1.images.size());
+    // Both came over Wi-Fi in the one job, none over the bus, and the config followed.
+    int wifi = 0, bus = 0;
+    for (const std::string& s : w.g1.storeLog) {
+        if (s == "wifi-image") wifi++;
+        if (s == "image") bus++;
+    }
+    TEST_ASSERT_EQUAL(2, wifi);
+    TEST_ASSERT_EQUAL(0, bus);
+    TEST_ASSERT_EQUAL_STRING("config", w.g1.storeLog.back().c_str());
+    TEST_ASSERT_EQUAL(0, w.hub.openImages);
+
+    // Small images alone stay on the bus.
+    const Bytes tiny = makeImage(1000, 9);
+    giveImages(w, w.g2.mac, {tiny});
+    w.hub.assignments[w.g2.mac] = configWithImages("B", {{"dot", crcOf(tiny)}});
+    w.run(4000);
+    TEST_ASSERT_EQUAL(1, w.hub.wifiJoins);
+    TEST_ASSERT_EQUAL(1, w.g2.images.size());
+    TEST_ASSERT_EQUAL_STRING("image", w.g2.storeLog[0].c_str());
+}
+
+void test_wifi_falls_back_to_the_bus() {
+    World w;
+    w.hub.wifiOffered = true;
+    w.g1.wifiWorks = false;  // takes the join, reaches nothing
+    const Bytes big = makeImage(40000, 11);
+    giveImages(w, w.g1.mac, {big});
+    const Bytes cfg = configWithImages("A", {{"bg", crcOf(big)}});
+    w.hub.assignments[w.g1.mac] = cfg;
+    w.run(2500);
+    TEST_ASSERT_EQUAL(1, w.hub.wifiJoins);
+    TEST_ASSERT_TRUE(w.g1.images.empty());  // the hub is giving Wi-Fi its chance
+    w.run(12000);                            // the wait runs out: asked again, sent over the bus
+    TEST_ASSERT_EQUAL(1, w.hub.wifiJoins);  // not offered twice
+    TEST_ASSERT_TRUE(w.g1.stored == cfg);
+    TEST_ASSERT_EQUAL(1, w.g1.images.size());
+    TEST_ASSERT_EQUAL_STRING("image", w.g1.storeLog[0].c_str());
+
+    // Firmware without Wi-Fi refuses the join: the bus at once.
+    World w2;
+    w2.hub.wifiOffered = true;
+    w2.g1.wifiSupported = false;
+    giveImages(w2, w2.g1.mac, {big});
+    w2.hub.assignments[w2.g1.mac] = cfg;
+    w2.run(5000);
+    TEST_ASSERT_EQUAL(1, w2.hub.wifiJoins);
+    TEST_ASSERT_TRUE(w2.g1.stored == cfg);
+    TEST_ASSERT_EQUAL_STRING("image", w2.g1.storeLog[0].c_str());
+}
+
 void test_images_converge_on_a_lossy_bus() {
     World w;
     w.bus.dropPermille = 20;
@@ -1102,6 +1331,9 @@ int main(int, char**) {
     RUN_TEST(test_alert_rules_are_carried_out_on_the_gauges);
     RUN_TEST(test_alert_switches_a_gauge_to_another_config_and_back);
     RUN_TEST(test_alert_naming_a_missing_config_does_nothing);
+    RUN_TEST(test_hub_time_reaches_the_gauges);
+    RUN_TEST(test_intro_plays_across_the_gauges_in_order);
+    RUN_TEST(test_intro_goes_after_a_wait_when_a_gauge_is_missing);
     RUN_TEST(test_higher_alert_takes_over_the_message);
     RUN_TEST(test_theme_colours_reach_every_gauge);
     RUN_TEST(test_try_config_is_shown_but_not_stored);
@@ -1117,5 +1349,7 @@ int main(int, char**) {
     RUN_TEST(test_image_gone_from_the_hub_is_skipped);
     RUN_TEST(test_try_sends_its_images_first);
     RUN_TEST(test_images_converge_on_a_lossy_bus);
+    RUN_TEST(test_big_images_go_over_wifi);
+    RUN_TEST(test_wifi_falls_back_to_the_bus);
     return UNITY_END();
 }

@@ -1,6 +1,7 @@
 #include "face_renderer.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "can_task.h"
+#include "clock_text.h"
 #include "channel_store.h"
 #include "display.h"
 #include "font_manager.h"
@@ -50,6 +52,12 @@ Theme theme;
 float k = 1;  // panel pixels per design pixel
 uint32_t now = 0;
 bool everLive = false;
+// The key-on intro (setIntro()); introSlot counts the widgets through update().
+bool introOn = false;
+hg::proto::IntroStyle introStyle = hg::proto::IntroStyle::Sweep;
+float introPhase = 0;
+size_t introSlot = 0;
+size_t introSlots = 1;
 bool anyLive = false;
 uint32_t themeCols[kMaxThemeColours];
 uint32_t lastThemeCheckMs = 0;
@@ -81,40 +89,64 @@ bool flashOn(uint32_t periodMs) { return (now / periodMs) % 2 == 0; }
 // The channel's value in the widget's display unit. Live when the bus has
 // it; a slow sweep while no live data has ever arrived, so the layout can be
 // judged; nothing once live data has stopped.
+// A made-up reading for a widget: `p` from 0 to 1 across its range, lights
+// on or off. The demo sweep and the key-on intro both use it.
+void syntheticValue(const Widget& w, float p, bool lit, float& out) {
+    switch (w.type) {
+        case WidgetType::Number:
+            out = w.format == NumberFormat::Gear ? floorf(p * 6.99f) : 100 * p;
+            return;
+        case WidgetType::Light:
+        case WidgetType::Shape:
+        case WidgetType::Path:
+        case WidgetType::Image:
+            out = lit ? 1.0f : 0.0f;
+            return;
+        case WidgetType::Rim: {
+            const float lo = w.from * 0.8f, hi = w.rimMode == RimMode::Fill ? w.to : w.from * 1.2f;
+            out = lo + (hi - lo) * p;
+            return;
+        }
+        default:
+            out = w.min + (w.max - w.min) * p;
+            return;
+    }
+}
+
+// The intro's sweep: up to full scale and back over the phase. With the
+// chase style each widget starts a little after the one before it.
+float introSweep() {
+    float local = introPhase;
+    if (introStyle == hg::proto::IntroStyle::Chase && introSlots > 1) {
+        const float offset = 0.5f * float(introSlot) / float(introSlots);
+        local = (introPhase - offset) / 0.5f;
+        if (local < 0) local = 0;
+        if (local > 1) local = 1;
+    }
+    return local < 0.5f ? local * 2 : (1 - local) * 2;
+}
+
 bool readValue(const Widget& w, float& out) {
     if (w.channel < 0) return false;
     float raw;
-    if (can_task::channels().get(ChannelId(w.channel), now, raw)) {
+    const bool live = can_task::channels().get(ChannelId(w.channel), now, raw);
+    if (live) {
         everLive = true;
         anyLive = true;
+    }
+    if (introOn) {
+        const float s = introSweep();
+        syntheticValue(w, s, s > 0.3f, out);
+        return true;
+    }
+    if (live) {
         out = w.unit ? toDisplay(*w.unit, raw) : raw;
         return true;
     }
     if (everLive) return false;
     const float p = 0.5f - 0.5f * cosf(float(now % 4000) * (2.0f * kPi / 4000.0f));
-    switch (w.type) {
-        case WidgetType::Number:
-            if (w.format == NumberFormat::Gear) {
-                out = floorf(p * 6.99f);
-            } else {
-                out = 100 * p;
-            }
-            return true;
-        case WidgetType::Light:
-        case WidgetType::Shape:
-        case WidgetType::Path:
-        case WidgetType::Image:
-            out = float((now / 3000) % 2);
-            return true;
-        case WidgetType::Rim: {
-            const float lo = w.from * 0.8f, hi = w.rimMode == RimMode::Fill ? w.to : w.from * 1.2f;
-            out = lo + (hi - lo) * p;
-            return true;
-        }
-        default:
-            out = w.min + (w.max - w.min) * p;
-            return true;
-    }
+    syntheticValue(w, p, (now / 3000) % 2 == 1, out);
+    return true;
 }
 
 float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -636,6 +668,16 @@ lv_obj_t* makeImage(const std::string& src, float cx, float cy, float boxW, floa
         Serial.printf("image %s could not be read\n", src.c_str());
         return nullptr;
     }
+    // Decoded pixels live in RAM, and are decoded again every frame when they
+    // do not fit the cache: a board with no PSRAM draws only small images.
+    if (heap_caps_get_total_size(MALLOC_CAP_SPIRAM) == 0) {
+        const uint32_t decoded = uint32_t(header.w) * uint32_t(header.h) * (header.cf == LV_COLOR_FORMAT_RGB565 ? 2u : 4u);
+        if (decoded > 60u * 1024u) {
+            Serial.printf("image %s is %ux%u: too large to draw on this board\n", src.c_str(), unsigned(header.w),
+                          unsigned(header.h));
+            return nullptr;
+        }
+    }
     lv_obj_t* img = lv_image_create(screen);
     lv_image_set_src(img, src.c_str());
     lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
@@ -832,6 +874,40 @@ void drawPath(lv_layer_t* layer, Item& it) {
 // Images are objects of their own (above), nothing to paint here.
 void drawImage(lv_layer_t*, Item&) {}
 
+// The hub's time of day: digits, or hands over twelve marks.
+void drawClock(lv_layer_t* layer, Item& it) {
+    const Widget& w = *it.w;
+    const float cx = widgetX(w), cy = widgetY(w);
+    if (w.clockStyle == ClockStyle::Digital) {
+        if (it.label) return;  // rotated: an LVGL label, updated in update()
+        drawText(layer, it.text.c_str(), font(w.font, float(w.size)), col(w.color), cx, cy, w.align);
+        return;
+    }
+    const float r = float(w.r) * k;
+    if (w.ticks) {
+        const lv_color_t tc = col(w.trackColor);
+        for (int i = 0; i < 12; i++) {
+            const float a = float(i) * 30.0f * kPi / 180.0f;
+            const float len = (i % 3 == 0 ? 0.14f : 0.07f) * r;
+            drawLine(layer, cx + (r - len) * sinf(a), cy - (r - len) * cosf(a), cx + r * sinf(a), cy - r * cosf(a), tc,
+                     (i % 3 == 0 ? 2.0f : 1.0f) * float(w.thickness) * k / 2, true);
+        }
+    }
+    if (!it.valid) return;
+    const hg::cfg::ClockParts p = hg::cfg::clockParts(uint32_t(it.value));
+    const lv_color_t hc = col(w.color);
+    const float hw = float(w.thickness) * k;
+    auto hand = [&](float deg, float len, float width, lv_color_t c) {
+        const float a = deg * kPi / 180.0f;
+        drawLine(layer, cx - 0.12f * len * sinf(a), cy + 0.12f * len * cosf(a), cx + len * sinf(a), cy - len * cosf(a), c,
+                 width, true);
+    };
+    hand(hg::cfg::hourHandDegrees(p), r * 0.55f, hw, hc);
+    hand(hg::cfg::minuteHandDegrees(p), r * 0.82f, hw * 0.7f, hc);
+    if (w.clockSeconds) hand(hg::cfg::secondHandDegrees(p), r * 0.9f, hw > 4 ? 2.0f : hw / 2, col(w.needleColor));
+    drawDisc(layer, cx, cy, hw * 0.9f, hc);
+}
+
 void drawItem(lv_layer_t* layer, Item& it) {
     switch (it.w->type) {
         case WidgetType::Dial: drawDial(layer, it); break;
@@ -844,6 +920,7 @@ void drawItem(lv_layer_t* layer, Item& it) {
         case WidgetType::Shape: drawShape(layer, it); break;
         case WidgetType::Path: drawPath(layer, it); break;
         case WidgetType::Image: drawImage(layer, it); break;
+        case WidgetType::Clock: drawClock(layer, it); break;
     }
 }
 
@@ -890,6 +967,9 @@ lv_area_t areaOf(const Item& it) {
             const float hw = float(w.text.size()) * float(w.size) * 0.4f + 4;
             return boxAround(cx, cy, hw, float(w.size) * 0.7f);
         }
+        case WidgetType::Clock:
+            if (w.clockStyle == ClockStyle::Analogue) return boxAround(cx, cy, float(w.r) + 2, float(w.r) + 2);
+            return boxAround(cx, cy, float(w.size) * 0.4f * 11, float(w.size) * 0.7f);
         case WidgetType::Path:
         case WidgetType::Image:
             return boxAround(cx, cy, float(w.type == WidgetType::Path ? w.size : w.w) / 2 + 2,
@@ -1005,6 +1085,15 @@ uint32_t lookKey(const Item& it) {
                 key |= uint32_t(frac * 720) << 1;
             }
             break;
+        case WidgetType::Clock:
+            if (w.clockStyle == ClockStyle::Analogue) {
+                key |= (it.valid ? uint32_t(it.value) / (w.clockSeconds ? 1u : 60u) : 0u) << 1;
+            } else {
+                uint32_t h = 2166136261u;
+                for (char ch : it.text) h = (h ^ uint8_t(ch)) * 16777619u;
+                key ^= h;
+            }
+            break;
         case WidgetType::Label:
             break;
     }
@@ -1051,7 +1140,8 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         const Widget& w = *it.w;
         if (w.type == WidgetType::Label && w.arc > 0) {
             buildArcText(it);
-        } else if ((w.type == WidgetType::Label || w.type == WidgetType::Number) && w.rotate) {
+        } else if ((w.type == WidgetType::Label || w.type == WidgetType::Number ||
+                    (w.type == WidgetType::Clock && w.clockStyle == ClockStyle::Digital)) && w.rotate) {
             const char* text = w.type == WidgetType::Label ? w.text.c_str() : "---";
             it.label = makeLabel(text, font(w.font, float(w.size)), col(w.color), widgetX(w), widgetY(w), float(w.rotate));
         } else if (w.type == WidgetType::Image) {
@@ -1105,11 +1195,22 @@ void update(uint32_t nowMs) {
 
     const bool wasLive = anyLive;
     anyLive = false;
+    introSlots = items.size();
+    introSlot = 0;
     for (Item& it : items) {
         const Widget& w = *it.w;
         if (w.type == WidgetType::Label) continue;
         float v = 0;
-        bool valid = readValue(w, v);
+        bool valid;
+        if (w.type == WidgetType::Clock) {
+            // The hub's time of day, as seconds into the day (a float holds that exactly).
+            uint32_t seconds = 0;
+            valid = can_task::localTime(seconds);
+            v = float(seconds % 86400u);
+        } else {
+            valid = readValue(w, v);
+        }
+        introSlot++;
         if (valid && w.type == WidgetType::Number && w.hold != Hold::None) {
             if (!it.holdSet || (w.hold == Hold::Max ? v > it.hold : v < it.hold)) {
                 it.hold = v;
@@ -1119,8 +1220,15 @@ void update(uint32_t nowMs) {
         }
         it.valid = valid;
         it.value = v;
-        if (w.type == WidgetType::Number) {
-            std::string text = numberText(w, valid, v);
+        if (w.type == WidgetType::Number || (w.type == WidgetType::Clock && w.clockStyle == ClockStyle::Digital)) {
+            std::string text;
+            if (w.type == WidgetType::Clock) {
+                char buf[16];
+                hg::cfg::clockText(valid, uint32_t(v), w.clockSeconds, w.hour12, buf, sizeof(buf));
+                text = buf;
+            } else {
+                text = numberText(w, valid, v);
+            }
             if (text != it.text) {
                 it.text = text;
                 if (it.label) {
@@ -1151,6 +1259,14 @@ void update(uint32_t nowMs) {
     }
     (void)wasLive;
 }
+
+void setIntro(hg::proto::IntroStyle style, float phase) {
+    introOn = true;
+    introStyle = style;
+    introPhase = phase < 0 ? 0 : (phase > 1 ? 1 : phase);
+}
+
+void endIntro() { introOn = false; }
 
 bool demo() { return !everLive; }
 bool stale() { return everLive && !anyLive; }

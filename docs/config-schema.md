@@ -101,8 +101,8 @@ config that already has one.
 
 ## Widgets
 
-Every widget takes `type`, `x`, `y`, `color` (default `fg`). Every widget except `label` needs
-`channel` and may take `unit`; for `shape`, `path` and `image` the channel is optional. Every widget except
+Every widget takes `type`, `x`, `y`, `color` (default `fg`). Every widget except `label` and
+`clock` needs `channel` and may take `unit`; for `shape`, `path` and `image` the channel is optional. Every widget except
 `light`, `shape`, `path` and `image` may take
 `warn: { "above": n }` or `{ "below": n }` with optional `color` (default `alert`) and `flash`,
 which recolours it past the threshold.
@@ -118,6 +118,7 @@ which recolours it past the threshold.
 | `rim` | `from` (required); `mode`: `flash` (whole rim lights from `from` upward) or `fill` (fills between `from` and `to`, `to` required); `r` (233), `thickness` (12); `color` (`alert`) |
 | `shape` | `shape`: `rect`, `ellipse`, `line`, `triangle`, `polygon` (`rect`); `w`, `h` (100 x 60; a line's length is `w`); `cornerRadius` (0); `filled` (true), `color` fill, `strokeColor`, `strokeWidth` (0, or 3 when not filled), `opacity` (100), `rotate` (0); a polygon takes `points`, 3 to 16 x, y pairs relative to `x`, `y`. `channel` is optional: with one, the shape is drawn in `color` while `on` holds (as for a light) and in `offColor` otherwise, or not at all with `hideWhenOff`; `flash` |
 | `path` | `d` (required): SVG path data, up to 1024 characters, as copied from an icon's `<path d="...">`; `box` (24), the size of the path's own coordinate square; `size` (48), how large to draw it; `filled`, `color`, `strokeColor`, `strokeWidth`, `opacity`, `rotate`, and the optional `channel`, `on`, `offColor`, `hideWhenOff`, `flash` as for `shape`. A path with a channel is a vector warning icon |
+| `clock` | The hub's time of day (`docs/time-of-day.md`), no channel. `style`: `digital`, `analogue` (`digital`); `seconds` (false); `format`: `24h`, `12h` (`24h`, digital); `font`, `size` (56), `align`, `rotate`; analogue: `r` (120), `thickness` hour-hand width (6), `ticks` (true), `tickColor` (`dim`), `secondColor` (`accent`) |
 | `image` | `image` (required): the name of an image in the hub's library (1-32 letters, digits, `-` and `_`); `w`, `h` (160 x 160), the box it is drawn in; `fit`: `contain` (whole image, in proportion), `cover` (fills the box in proportion, edges cut off), `stretch` (`contain`); `opacity` (100), `rotate` (0). `channel` is optional: with one, the image shows only while `on` holds (default above 0.5) and can `flash`. See `docs/images.md` |
 
 `zones` is a list of up to 6 `{ "from": a, "to": b, "color": c }` ranges. On a dial they are

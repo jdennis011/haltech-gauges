@@ -72,6 +72,11 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
         hubPresent_ = true;
         lastBeaconMs_ = nowMs;
         lastUptime_ = b.uptimeSec;
+        if (b.flags & kBeaconFlagTime) {
+            haveTime_ = true;
+            timeSeconds_ = b.localTime;
+            timeAtMs_ = nowMs;
+        }
         return;
     }
 
@@ -86,7 +91,13 @@ void GaugeNode::onFrame(const CanFrame& frame, uint32_t nowMs) {
             Command c;
             if (node != node_ || !unpack(frame, c)) return;
             ack_.cmd = c.cmd;
-            ack_.ok = handler_.command(c.cmd, c.arg, handler_.ctx);
+            if (c.cmd == Cmd::Intro) {
+                Intro i;
+                ack_.ok = handler_.intro && unpack(frame, i);
+                if (ack_.ok) handler_.intro(i, handler_.ctx);
+            } else {
+                ack_.ok = handler_.command(c.cmd, c.arg, handler_.ctx);
+            }
             ackPending_ = true;
             statusDue_ = true;  // let the hub see the effect promptly
             break;

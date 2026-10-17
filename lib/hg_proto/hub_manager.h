@@ -25,6 +25,9 @@ public:
     static constexpr size_t kMaxGauges = 8;
     // Different images one config may use (cfg::kMaxImagesPerConfig).
     static constexpr size_t kMaxImages = 16;
+    // An image this big is offered over Wi-Fi rather than the bus, when the
+    // hub and the gauge can (Handler::wifiJoin).
+    static constexpr uint32_t kWifiImageBytes = 24 * 1024;
 
     // What the hub knows of one image on one gauge.
     enum class ImageState : uint8_t {
@@ -32,6 +35,7 @@ public:
         Have = 1,     // the gauge has it
         Missing = 2,  // the gauge said no (or never answered); it will be sent
         Refused = 3,  // the gauge would not take it; given up until it says hello again
+        Wifi = 4,     // being fetched over Wi-Fi; asked about again when the wait is up
     };
 
     struct Gauge {
@@ -72,6 +76,10 @@ public:
         };
         Image images[2 * kMaxImages];
         uint8_t imageCount = 0;
+
+        // Fetching over Wi-Fi: offered once per hello, the bus after that.
+        bool wifiTried = false;
+        uint32_t wifiUntilMs = 0;
     };
 
     struct Desired {
@@ -101,11 +109,20 @@ public:
         bool (*openImage)(uint32_t crc, XferSource& source, uint32_t& size, void* ctx);
         // The image opened last has been sent, or the send failed. May be null.
         void (*closeImage)(void* ctx);
+        // Offers to get these images to the gauge over Wi-Fi instead of the
+        // bus (docs/images.md): fills `data` and `size` with the WifiJoin
+        // message the gauge is sent, valid until pushBusy() is false, and
+        // `waitMs` with how long to give it. Return false for the bus. May be null.
+        bool (*wifiJoin)(const Gauge& gauge, const uint32_t* crcs, size_t count, const uint8_t** data,
+                         uint32_t* size, uint32_t* waitMs, void* ctx);
         void* ctx;
     };
 
     void init(const XferLink& link, const Handler& handler, uint32_t nowMs);
     void setBeaconFlags(uint8_t flags) { beaconFlags_ = flags; }
+    // The time of day the beacon carries: seconds since 1970 in the hub's
+    // zone, or 0 for none (docs/time-of-day.md).
+    void setLocalTime(uint32_t seconds) { localTime_ = seconds; }
     void onFrame(const CanFrame& frame, uint32_t nowMs);
     void poll(uint32_t nowMs);
 
@@ -117,6 +134,8 @@ public:
 
     // Sends a command. The gauge's answer appears in its roster entry.
     bool command(uint32_t node, Cmd cmd, uint8_t arg);
+    // Sends the key-on intro, or a replay, to a gauge. False if it is offline.
+    bool intro(uint32_t node, const Intro& intro);
     // Shows a message over a gauge's face, or takes it down. Repeat it every
     // kAlertRepeatMs while it applies; the gauge drops it when the repeats stop.
     // False if the gauge is offline or the bus could not take every frame.
@@ -132,6 +151,10 @@ public:
     bool tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs,
                    const uint32_t* images = nullptr, size_t imageCount = 0,
                    XferKind kind = XferKind::TryConfig);
+    // Sends a gauge a WifiJoin message on its own (a firmware fetch). `data`
+    // must stay valid until pushBusy() is false. False if the gauge is
+    // offline or a transfer is running.
+    bool wifiJoin(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs);
     // Asks a gauge to upload its stored config; it arrives through Handler::upload.
     bool requestUpload(uint32_t node, uint32_t nowMs);
 
@@ -167,6 +190,7 @@ private:
     uint32_t lastBeaconMs_ = 0;
     bool beaconSent_ = false;
     uint8_t beaconFlags_ = 0;
+    uint32_t localTime_ = 0;
 
     XferSender sender_;
     bool pushActive_ = false;
@@ -174,6 +198,7 @@ private:
     uint32_t pushCrc_ = 0;
     uint32_t pushImages_[kMaxImages] = {};  // the images of the config being pushed
     uint8_t pushImageCount_ = 0;
+    uint32_t wifiWaitMs_ = 0;  // how long the gauge gets for the Wi-Fi job being sent
     bool imageOpen_ = false;
     uint8_t session_ = 0;
 

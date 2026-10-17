@@ -31,11 +31,15 @@ uint32_t get32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | get24(p + 1);
 }  // namespace
 
 CanFrame pack(const Beacon& m) {
-    CanFrame f = makeFrame(Msg::Beacon, Dir::HubToGauge, kBroadcastNode, 4);
+    CanFrame f = makeFrame(Msg::Beacon, Dir::HubToGauge, kBroadcastNode, 8);
     f.data[0] = m.protocolVersion;
-    f.data[1] = m.flags;
+    f.data[1] = uint8_t(m.localTime ? (m.flags | kBeaconFlagTime) : (m.flags & ~kBeaconFlagTime));
     f.data[2] = uint8_t(m.uptimeSec >> 8);
     f.data[3] = uint8_t(m.uptimeSec);
+    f.data[4] = uint8_t(m.localTime >> 24);
+    f.data[5] = uint8_t(m.localTime >> 16);
+    f.data[6] = uint8_t(m.localTime >> 8);
+    f.data[7] = uint8_t(m.localTime);
     return f;
 }
 
@@ -44,6 +48,13 @@ bool unpack(const CanFrame& f, Beacon& m) {
     m.protocolVersion = f.data[0];
     m.flags = f.data[1];
     m.uptimeSec = uint16_t((f.data[2] << 8) | f.data[3]);
+    // Older hubs send four bytes and no time.
+    m.localTime = 0;
+    if (f.len >= 8 && (m.flags & kBeaconFlagTime)) {
+        m.localTime = (uint32_t(f.data[4]) << 24) | (uint32_t(f.data[5]) << 16) | (uint32_t(f.data[6]) << 8) | f.data[7];
+    } else {
+        m.flags = uint8_t(m.flags & ~kBeaconFlagTime);
+    }
     return true;
 }
 
@@ -145,6 +156,32 @@ bool unpack(const CanFrame& f, CommandAck& m) {
     if (f.len < 2) return false;
     m.cmd = Cmd(f.data[0]);
     m.ok = f.data[1] != 0;
+    return true;
+}
+
+CanFrame pack(const Intro& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Command, Dir::HubToGauge, node, 8);
+    f.data[0] = uint8_t(Cmd::Intro);
+    f.data[1] = uint8_t((uint8_t(m.style) & 0x0F) | (m.force ? kIntroFlagForce : 0));
+    f.data[2] = uint8_t(m.delayMs >> 8);
+    f.data[3] = uint8_t(m.delayMs);
+    f.data[4] = uint8_t(m.durationMs >> 8);
+    f.data[5] = uint8_t(m.durationMs);
+    f.data[6] = m.index;
+    f.data[7] = m.count;
+    return f;
+}
+
+bool unpack(const CanFrame& f, Intro& m) {
+    if (f.len < 8 || f.data[0] != uint8_t(Cmd::Intro)) return false;
+    const uint8_t style = f.data[1] & 0x0F;
+    if (style > uint8_t(IntroStyle::Fade)) return false;
+    m.style = IntroStyle(style);
+    m.force = (f.data[1] & kIntroFlagForce) != 0;
+    m.delayMs = uint16_t((uint16_t(f.data[2]) << 8) | f.data[3]);
+    m.durationMs = uint16_t((uint16_t(f.data[4]) << 8) | f.data[5]);
+    m.index = f.data[6];
+    m.count = f.data[7] ? f.data[7] : 1;
     return true;
 }
 

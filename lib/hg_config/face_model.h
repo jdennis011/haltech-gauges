@@ -66,7 +66,8 @@ struct ThemeColours {
     ThemeColours();  // the eight defaults: white, orange, red, yellow, green, blue, grey, black
 };
 
-enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path, Image };
+enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path, Image, Clock };
+enum class ClockStyle : uint8_t { Digital, Analogue };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
 // Marker: arrow at radius r pointing inward; MarkerOut: arrow inside r pointing outward.
 enum class NeedleStyle : uint8_t { Line, Tapered, TaperedCap, None, Marker, MarkerOut };
@@ -204,6 +205,13 @@ struct Widget {
     RimMode rimMode = RimMode::Flash;
     float from = 0;
     float to = 0;
+
+    // clock: the hub's time of day, no channel. Digital uses the text style;
+    // analogue uses r, thickness (hour hand), trackColor (the twelve marks),
+    // ticks, and needleColor for the second hand.
+    ClockStyle clockStyle = ClockStyle::Digital;
+    bool clockSeconds = false;
+    bool hour12 = false;
 
     std::vector<Zone> zones;
     Warn warn;

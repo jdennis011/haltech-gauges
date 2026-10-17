@@ -55,6 +55,7 @@ export default {
       return new Response(res.body, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', 'access-control-allow-origin': '*' } });
     }
 
+    if (path.startsWith('/fw/')) return firmwareApi(request, env, path);
     if (path === '/api/me' || path.startsWith('/api/auth/')) return auth(request, env, path);
     if (path === '/api/hubs' || path.startsWith('/api/hubs/')) return hubsApi(request, env, path, await sessionUser(request, env));
 
@@ -295,7 +296,7 @@ async function hubsApi(request, env, path, user) {
     if (!(idx.hubs || []).includes(hubId) && (idx.hubs || []).length >= MAX_HUBS) return json({ ok: false, error: 'at most ' + MAX_HUBS + ' hubs per account' }, 409);
     const token = randomToken(), tokenHash = await sha256hex(token);
     const rec = { sub: owner.sub, email: owner.email, hubId, name: String(body.name || 'hub').slice(0, 32), fw: String(body.fw || '').slice(0, 32),
-      board: String(body.board || '').slice(0, 64), tokenHash, created: Date.now(), lastSeen: Date.now() };
+      board: String(body.board || '').slice(0, 64), chip: String(body.chip || '').slice(0, 16), tokenHash, created: Date.now(), lastSeen: Date.now() };
     await env.HG.put('hub:' + hubId, JSON.stringify(rec));
     await env.HG.put('hubtoken:' + tokenHash, JSON.stringify({ sub: owner.sub, email: owner.email, hubId }));
     idx.hubs = [...new Set([...(idx.hubs || []), hubId])];
@@ -315,7 +316,7 @@ async function hubsApi(request, env, path, user) {
     if (!user.hub) return json({ ok: false, error: 'hubs only' }, 403);
     const rec = await env.HG.get('hub:' + user.hub, 'json');
     if (!rec) return json({ ok: false, error: 'unknown hub' }, 404);
-    Object.assign(rec, { lastSeen: Date.now(), fw: String(body.fw || rec.fw || '').slice(0, 32), board: String(body.board || rec.board || '').slice(0, 64),
+    Object.assign(rec, { lastSeen: Date.now(), fw: String(body.fw || rec.fw || '').slice(0, 32), board: String(body.board || rec.board || '').slice(0, 64), chip: String(body.chip || rec.chip || '').slice(0, 16),
       gaugesOnline: Number(body.gauges_online) || 0, ip: String(body.ip || '').slice(0, 40), uptime_s: Number(body.uptime_s) || 0, heap_free: Number(body.heap_free) || 0 });
     await env.HG.put('hub:' + user.hub, JSON.stringify(rec));
     return json({ ok: true });
@@ -326,7 +327,7 @@ async function hubsApi(request, env, path, user) {
     const hubs = [];
     for (const id of idx.hubs || []) {
       const rec = await env.HG.get('hub:' + id, 'json');
-      if (rec) hubs.push({ hubId: id, name: rec.name, fw: rec.fw, board: rec.board, lastSeen: rec.lastSeen, gaugesOnline: rec.gaugesOnline || 0, ip: rec.ip || '', uptime_s: rec.uptime_s || 0 });
+      if (rec) hubs.push({ hubId: id, name: rec.name, fw: rec.fw, board: rec.board, chip: rec.chip || '', latest: await latestVersion(env, rec.chip), lastSeen: rec.lastSeen, gaugesOnline: rec.gaugesOnline || 0, ip: rec.ip || '', uptime_s: rec.uptime_s || 0 });
     }
     return json(hubs);
   }
@@ -339,6 +340,46 @@ async function hubsApi(request, env, path, user) {
     idx.hubs = (idx.hubs || []).filter(h => h !== sub);
     await writeIndex(env, user, idx);
     return json({ ok: true });
+  }
+  return json({ ok: false, error: 'not found' }, 404);
+}
+
+// ---------------------------------------------------------------- firmware
+// The hub builds the hubs update themselves from (docs/firmware-updates.md):
+// scripts/release_fw.ps1 puts each chip's firmware.bin and manifest.json into
+// KV with wrangler; this serves them. Public: the repository is too.
+
+const CHIP_RE = /^[a-z0-9-]{3,24}$/;
+const FW_CHIPS = ['esp32c6', 'esp32p4', 'gauge-ws175', 'gauge-m5dial'];
+const FW_HEADERS = { 'access-control-allow-origin': '*' };
+
+// The version of the build the site holds for a chip, or ''.
+async function latestVersion(env, chip) {
+  if (!env.HG || !chip || !CHIP_RE.test(chip)) return '';
+  const m = await env.HG.get('fw:' + chip + ':manifest', 'json');
+  return m && typeof m.version === 'string' ? m.version : '';
+}
+
+async function firmwareApi(request, env, path) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return json({ ok: false, error: 'not found' }, 404);
+  if (!env.HG) return json({ ok: false, error: 'storage is not set up on this site' }, 503);
+  const seg = path.split('/').filter(Boolean);
+  if (seg.length === 2 && seg[1] === 'manifests.json') {
+    const out = {};
+    for (const chip of FW_CHIPS) out[chip] = await env.HG.get('fw:' + chip + ':manifest', 'json');
+    return json(out, 200, { 'cache-control': 'public, max-age=60', ...FW_HEADERS });
+  }
+  if (seg.length !== 3 || !CHIP_RE.test(seg[1])) return json({ ok: false, error: 'not found' }, 404);
+  const chip = seg[1];
+  if (seg[2] === 'manifest.json') {
+    const m = await env.HG.get('fw:' + chip + ':manifest');
+    if (!m) return json({ ok: false, error: 'the site has no build for ' + chip }, 404);
+    return new Response(m, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60', ...FW_HEADERS } });
+  }
+  if (seg[2] === 'firmware.bin') {
+    const bin = await env.HG.get('fw:' + chip + ':bin', 'arrayBuffer');
+    if (!bin) return json({ ok: false, error: 'the site has no build for ' + chip }, 404);
+    return new Response(bin, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(bin.byteLength), 'cache-control': 'public, max-age=300', ...FW_HEADERS } });
   }
   return json({ ok: false, error: 'not found' }, 404);
 }

@@ -11,6 +11,8 @@
 #include "board_pins.h"
 #include "face_model.h"
 #include "face_store.h"
+#include "ip_link.h"
+#include "wifi_fetch.h"
 #include "gauge_node.h"
 #include "image_store.h"
 #include "version.h"
@@ -35,6 +37,17 @@ std::atomic<int> displayRequest{-1};
 std::atomic<bool> reboot{false};
 std::atomic<bool> demoMode{true};
 
+// The key-on intro the hub asked for, for the UI loop.
+portMUX_TYPE introMux = portMUX_INITIALIZER_UNLOCKED;
+proto::Intro introNow;
+std::atomic<bool> introPending{false};
+
+// Images fetched over Wi-Fi, to be reported to the hub from this task.
+portMUX_TYPE reportMux = portMUX_INITIALIZER_UNLOCKED;
+uint32_t reportRing[16];
+uint8_t reportHead = 0;
+uint8_t reportTail = 0;
+
 // Written by the CAN task, read by the UI loop.
 portMUX_TYPE alertMux = portMUX_INITIALIZER_UNLOCKED;
 proto::Alert alertNow;
@@ -50,7 +63,17 @@ bool canSend(const hg::CanFrame& frame, void*) {
     out.extd = frame.extended;
     out.data_length_code = frame.len;
     memcpy(out.data, frame.data, frame.len);
-    return ESP32Can.writeFrame(out, 0);
+    bool sent = ESP32Can.writeFrame(out, 0);
+    // A hub reached over Wi-Fi gets it too (docs/ip-link.md).
+    if (ip_link::connected() && ip_link::send(frame)) sent = true;
+    return sent;
+}
+
+void onIntro(const proto::Intro& intro, void*) {
+    portENTER_CRITICAL(&introMux);
+    introNow = intro;
+    portEXIT_CRITICAL(&introMux);
+    introPending = true;
 }
 
 bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
@@ -114,7 +137,8 @@ void onStatus(proto::Status& status, void*) {
     status.activeFace = face_store::activeFace();
     status.faceCount = uint8_t(face_store::faceCount());
     status.vbusMillivolts = vbus;
-    status.flags = (face_store::trying() ? proto::kStatusFlagTrying : 0) | (demoMode ? proto::kStatusFlagDemo : 0);
+    status.flags = (face_store::trying() ? proto::kStatusFlagTrying : 0) | (demoMode ? proto::kStatusFlagDemo : 0) |
+                   (wifi_fetch::busy() ? proto::kStatusFlagWifi : 0);
 }
 
 // Images are taken in to PSRAM and handed to the image store, which writes
@@ -129,7 +153,7 @@ void freeRxBuffer() {
 
 proto::XferStatus onTransferAccept(proto::XferKind kind, uint32_t size, uint8_t** buffer, void*) {
     if (kind != proto::XferKind::Image) return face_store::accept(kind, size, buffer);
-    if (size > proto::kMaxImageBytes || !image_store::roomFor(size)) return proto::XferStatus::TooBig;
+    if (size > image_store::maxImageBytes() || !image_store::roomFor(size)) return proto::XferStatus::TooBig;
     freeRxBuffer();
     const size_t bytes = size ? size : 1;
     rxBuffer = static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -140,6 +164,11 @@ proto::XferStatus onTransferAccept(proto::XferKind kind, uint32_t size, uint8_t*
 }
 
 bool onTransferComplete(proto::XferKind kind, const uint8_t* data, uint32_t size, void*) {
+    if (kind == proto::XferKind::WifiJoin) {
+        const bool ok = wifi_fetch::start(data, size);
+        face_store::dropped();  // the buffer was the face store's
+        return ok;
+    }
     if (kind != proto::XferKind::Image) return face_store::complete(kind, data, size);
     if (!rxBuffer) return false;
     uint8_t* owned = rxBuffer;
@@ -201,8 +230,35 @@ void task(void*) {
         }
 
         const uint32_t now = millis();
+        // Frames from a hub reached over Wi-Fi take the same path as the bus's.
+        ip_link::service(now);
+        hg::CanFrame linked;
+        while (ip_link::read(linked)) {
+            frames++;
+            if (linked.extended) {
+                node.onFrame(linked, now);
+            } else {
+                store.onFrame(linked, now);
+            }
+        }
         node.poll(now);
         hub = node.hubPresent();
+
+        // Images that arrived over Wi-Fi: the hub hears of each at once.
+        for (;;) {
+            uint32_t crc = 0;
+            bool any = false;
+            portENTER_CRITICAL(&reportMux);
+            if (reportHead != reportTail) {
+                crc = reportRing[reportTail];
+                any = true;
+            }
+            portEXIT_CRITICAL(&reportMux);
+            if (!any || !node.reportAsset(crc, true)) break;  // no hub or no room: again next time
+            portENTER_CRITICAL(&reportMux);
+            reportTail = uint8_t((reportTail + 1) % 16);
+            portEXIT_CRITICAL(&reportMux);
+        }
 
         if (node.idConflict()) {
             // Another gauge has the same id: take a random one and keep it.
@@ -230,6 +286,8 @@ void begin() {
 
     if (!image_store::begin()) Serial.println("Image storage failed to mount");
     face_store::begin();
+    wifi_fetch::begin();
+    ip_link::begin();
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -240,6 +298,11 @@ void begin() {
     info.fwMajor = FW_VERSION_MAJOR;
     info.fwMinor = FW_VERSION_MINOR;
     info.fwPatch = FW_VERSION_PATCH;
+#if HG_BOARD_M5DIAL
+    info.hwRevision = proto::kBoardM5Dial;
+#else
+    info.hwRevision = proto::kBoardWaveshare175;
+#endif
 
     proto::GaugeNode::Handler handler = {};
     handler.command = onCommand;
@@ -248,6 +311,7 @@ void begin() {
     handler.themeColours = onThemeColours;
     handler.transfer = {onTransferAccept, onTransferComplete, onTransferDropped, nullptr};
     handler.hasImage = onHasImage;
+    handler.intro = onIntro;
     node.init({canSend, nullptr}, mac, id, info, cfg::kSchemaVersion, handler);
     {
         // The last theme colours the hub sent, or the defaults.
@@ -266,6 +330,33 @@ void begin() {
 ChannelStore& channels() { return store; }
 uint32_t framesReceived() { return frames; }
 bool hubPresent() { return hub; }
+
+bool localTime(uint32_t& seconds) { return node.localTime(millis(), seconds); }
+
+void benchFace(int index) { faceRequest = index < 0 ? 0 : index; }
+void benchBrightness(int level) { brightnessRequest = level; }
+void benchIntro(const proto::Intro& intro) { onIntro(intro, nullptr); }
+void benchLocalTime(uint32_t seconds) { node.setLocalTime(seconds, millis()); }
+
+void reportImage(uint32_t crc) {
+    portENTER_CRITICAL(&reportMux);
+    const uint8_t next = uint8_t((reportHead + 1) % 16);
+    if (next != reportTail) {
+        reportRing[reportHead] = crc;
+        reportHead = next;
+    }
+    portEXIT_CRITICAL(&reportMux);
+}
+
+void requestReboot() { reboot = true; }
+
+bool takeIntro(proto::Intro& out) {
+    if (!introPending.exchange(false)) return false;
+    portENTER_CRITICAL(&introMux);
+    out = introNow;
+    portEXIT_CRITICAL(&introMux);
+    return true;
+}
 uint32_t nodeId() { return currentNode; }
 void setVbusMillivolts(uint16_t millivolts) { vbus = millivolts; }
 uint32_t identifyUntilMs() { return identifyUntil; }

@@ -13,6 +13,9 @@ namespace image_store {
 
 // Mounts the filesystem (formatting it if it will not mount) and lists the images.
 bool begin();
+// The largest image file this board takes: 256 KB with PSRAM, 40 KB without,
+// where the file and its decoded pixels both have to fit in internal RAM.
+uint32_t maxImageBytes();
 
 bool has(uint32_t crc);
 // Room for an image of `size` bytes, after the ones still being written.

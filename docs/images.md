@@ -1,9 +1,9 @@
 # Images on the gauges
 
 Backgrounds, logos and picture icons for the faces. The images are JPEG or PNG files kept on
-the hub, and configs use them by name. Each gauge gets the images its config uses over the
-gauge bus (CAN), before the config itself, and only once. A later step adds Wi-Fi for large
-transfers, with the gauge given the Wi-Fi details over CAN (see "Later: over Wi-Fi" below).
+the hub, and configs use them by name. Each gauge gets the images its config uses before the
+config itself, and only once: small ones over the gauge bus (CAN), big ones over the hub's
+own Wi-Fi, with the gauge given the Wi-Fi details over CAN (see "Over Wi-Fi" below).
 
 ## Using one
 
@@ -88,6 +88,7 @@ before saving.
 - **Deleted images:** an image deleted from the hub is left out of the map, and the gauge draws
   nothing for it.
 - **Try on gauge:** the images go first here too.
+- **Big images** go over Wi-Fi where the gauge can, the bus otherwise: see "Over Wi-Fi".
 
 **What the gauge card shows:**
 
@@ -115,7 +116,10 @@ before saving.
   `/img/<CRC>.jpg` or `.png`.
 - **Writing:** an image arrives in PSRAM, and a background task writes it to flash in 4 KB
   pieces, so the CAN task, and the live data, never wait on flash.
-- **M5Stack Dial:** it has no PSRAM, so images arrive in internal RAM; keep them small there.
+- **M5Stack Dial:** it has no PSRAM, so images arrive in internal RAM. It refuses files over
+  40 KB (the hub then sends the config without them) and draws only images that decode to
+  60 KB or less, about 170 x 170 pixels for a JPEG; a full-face photo is skipped with a
+  note on its serial port.
 - **Drawing:** the renderer (`src/gauge/face_renderer.cpp`) finds each image through the
   config's `images` map and `image_store::path(crc)`, and shows it as an LVGL image object read
   from the filesystem (`L:/img/<crc>.jpg`) and decoded by TJpgDec or lodepng, with the fit,
@@ -129,34 +133,44 @@ before saving.
 - **Missing images:** an image the hub never sent, or that the gauge has dropped, is simply not
   drawn; the page's preview shows a dashed box in its place.
 
-## Later: over Wi-Fi
+## Over Wi-Fi
 
-CAN is fine for an occasional picture, but slow for big transfers. A gauge firmware image of 1 to
-2 MB would take a minute or more per gauge, competing with live data. The plan:
+CAN is fine for an occasional picture, but slow for big transfers: a 100 KB background
+takes a few seconds per gauge beside the live data, and a 1.1 MB gauge firmware image
+would take a minute or more. Transfers from 24 KB up go over the hub's own Wi-Fi when the
+gauge can, with CAN as the fallback. Gauge firmware always goes this way
+(docs/firmware-updates.md, "Gauges").
 
-1. **Hub access point:** the hub keeps its access point.
-   - When it has something large for a gauge (a firmware update, or images above a size
-     threshold), it sends that gauge the Wi-Fi details over CAN.
-   - That is a segmented transfer of a new kind, `WifiJoin`, to that gauge alone. It carries the
-     network name, the password, the hub's address and port, and a one-time token.
-   - No new message type is needed (type 15 is the last free one).
-2. **The gauge downloads it:**
-   - It turns its Wi-Fi on, joins, and downloads `GET /gauge/image/<crc>?token=…` (the same
-     CRC-named file).
-   - It checks the CRC and stores the file, then answers the hub's `Asset` question with yes,
-     and turns Wi-Fi off again.
-   - If Wi-Fi fails within about 20 s, the hub falls back to CAN.
-3. **Firmware updates:** these use the same path.
-   - The gauge downloads `/gauge/firmware.bin` into its other 4 MB app slot, checks it and
-     restarts.
-   - The hub sees the new version in the gauge's `Info`.
-4. **Security:**
-   - The gauge bus is a wire inside the car, but anything tapped into the chain could read the
-     credentials. So they go only to a gauge the hub knows, are kept in the gauge's RAM and never
-     stored, and the download endpoints refuse requests without the token.
-   - The access point allows 4 connections by default. Phones and three gauges could exceed
-     that, so either raise `max_connection`, or have the gauges join one at a time and leave when
-     done.
+**How a transfer goes:**
+
+1. The hub finds, through the usual `Asset` questions, which images a gauge lacks. If any
+   is 24 KB or more and the gauge has not been offered Wi-Fi since it last said hello, the
+   hub sends it one `WifiJoin` message (transfer kind 5): a small JSON segmented transfer
+   with the access point's name and password, the hub's address and port, a one-time
+   token, and the CRCs to fetch.
+2. The gauge turns its Wi-Fi on, joins the access point, and downloads
+   `GET /gauge/image/<CRC>?token=…` for each, into PSRAM. It checks the CRC of the bytes,
+   hands the image to its store, and tells the hub it has it with an unasked `Asset` reply,
+   so the hub carries on at once. Then it leaves the network and turns Wi-Fi off; it is
+   never on otherwise.
+3. The hub gives the job 20 s plus the bytes at 50 KB/s. Images it has not heard about by
+   then are asked about again; still missing, they go over CAN. A gauge whose firmware does
+   not understand `WifiJoin` refuses it, and the images go over CAN at once. Either way the
+   bus is tried only after Wi-Fi, once per hello.
+4. The config follows when every image is there, as before.
+
+**Security:** the gauge bus is a wire inside the car, but anything tapped into the chain
+could read the frames. So the credentials go only to a gauge the hub knows, in a transfer
+addressed to it, are kept in the gauge's RAM and never stored, and the download routes
+answer only with a live token: one per job, 32 random hex characters, good for the job's
+window plus a minute, and only for the images or firmware it was issued for. The access
+point allows eight connections.
+
+**Status:** a gauge reports a Wi-Fi job in progress with a flag in its status; the card
+shows "fetching over Wi-Fi". The hub's serial log lists each image as it is stored.
+
+**The M5Stack Dial** has no PSRAM, so images arrive in internal RAM there too; keep them
+small on that board.
 
 ## API (the hub)
 

@@ -39,6 +39,9 @@ bool accept(const char* name, std::string& error);
 bool remove(const char* name);
 
 bool lookup(const char* name, Info& out);
+// The same by the image's CRC32, which is how the gauges name it.
+bool lookupCrc(uint32_t crc, Info& out);
+bool fileByCrc(uint32_t crc, std::string& path, const char*& contentType);
 // The file's path and type, for serving it to the page. False if there is none.
 bool file(const char* name, std::string& path, const char*& contentType);
 // One {name, size, crc, width, height, type} per image.

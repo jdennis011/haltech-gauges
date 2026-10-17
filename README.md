@@ -25,6 +25,7 @@ pio run -e hub_dev_c3     # Lolin C3 Mini development hub
 pio run -e gauge          # Waveshare gauge
 pio run -e gauge_m5dial   # M5Stack Dial as a gauge
 pio test -e native        # host unit tests (scripts/test.ps1 finds a g++ on Windows)
+.\scripts\release_fw.ps1  # publish hub builds on the site for updates over Wi-Fi
 ```
 
 The hub's web page, templates and fonts are embedded into the firmware by
@@ -68,14 +69,17 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/config-schema.md` | The face config format |
 | `docs/templates.md` | The built-in templates, with a gallery |
 | `docs/alerts.md` | Alerts: rules on the hub that put a message on the gauges, or switch them to another config or face, when a channel meets a condition |
-| `docs/images.md` | Images for the faces: kept on the hub, sent to each gauge over the gauge bus once; the plan for Wi-Fi transfers |
+| `docs/images.md` | Images for the faces: kept on the hub, sent to each gauge once, over the gauge bus or, for big ones, the hub's Wi-Fi |
 | `docs/cloud-sync.md` | Linking a hub to an account on the online copy, so configs, images, theme colours and alerts stay in step both ways |
+| `docs/firmware-updates.md` | Firmware updates over Wi-Fi: a script that publishes builds on the site, the hub's check and install with rollback, a `.bin` upload from the page, and gauge builds passed on by the hub |
 | `docs/gauge-adapter-handoff.md` | Hand-off for whoever takes on the gauge adapter: rev A as built, the rev B self-terminating design, open bench items |
 | `docs/electrical-spec.md` | Hub carrier and gauge adapter: circuits, parts, connectors. Section 5 is a second hub design on a Waveshare ESP32-P4 board, with the clock and a GPS on the carrier |
 | `docs/bom.md`, `docs/bom-pcbway.md` | Shopping lists by store, and a PCBWay-ready BOM |
 | `docs/bringup-checklist.md` | Bench steps in order, each with what to expect |
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
-| `docs/startup-animation.md` | Planned key-on intro that runs across the gauges in order |
+| `docs/ip-link.md` | A gauge on Wi-Fi instead of the CAN chain: the bus's frames over UDP, for the bench and the odd remote gauge |
+| `docs/time-of-day.md` | The clock: NTP, the phone, a DS3231 on the carrier; the zone; the beacon field and the `clock` widget |
+| `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles |
 | `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all; hub side done |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA) and the PCBWay BOMs |

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "board_pins.h"
+#include "ip_bus.h"
 
 namespace {
 
@@ -94,12 +95,17 @@ bool GaugePort::read(hg::CanFrame& frame, uint32_t timeoutMs) {
 }
 
 bool GaugePort::write(const hg::CanFrame& frame) {
+    // Gauges linked over Wi-Fi get every frame too (docs/ip-link.md). With
+    // nothing on the wire acknowledging, the controller's queue fills and
+    // stays full, so it is left alone then rather than refused for ever.
+    const bool viaIp = ip_bus::send(frame);
+    if (gaugeCan.inTxQueue() + 2 >= kGaugeTxSlots) return viaIp;
     CanFrame out = {};
     out.identifier = frame.id;
     out.extd = frame.extended;
     out.data_length_code = frame.len;
     memcpy(out.data, frame.data, frame.len);
-    return gaugeCan.writeFrame(out, 0);
+    return gaugeCan.writeFrame(out, 0) || viaIp;
 }
 
 uint32_t GaugePort::txPending() { return gaugeCan.inTxQueue(); }

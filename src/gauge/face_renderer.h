@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "face_model.h"
+#include "proto.h"
 
 // Draws one face of a config with LVGL. Every widget is painted by one
 // full-screen object's draw callback with LVGL's draw primitives, in the
@@ -24,6 +25,13 @@ void destroy();
 // Polls the channel store, applies flashing, invalidates changes. Call from
 // the UI loop at about 30 Hz.
 void update(uint32_t nowMs);
+
+// The key-on intro: while set, every widget with a channel shows a made-up
+// reading driven by `phase` (0 to 1) instead of its channel: needles up to
+// full scale and back, bars fill and empty, digits count, lights on. The
+// chase style starts each widget a little after the one before it.
+void setIntro(hg::proto::IntroStyle style, float phase);
+void endIntro();
 
 // True while the sweep is shown because no live data has ever arrived.
 bool demo();

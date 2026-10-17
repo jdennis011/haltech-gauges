@@ -128,6 +128,10 @@ bool begin() {
     return true;
 }
 
+uint32_t maxImageBytes() {
+    return heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0 ? 256u * 1024u : 40u * 1024u;
+}
+
 bool has(uint32_t crc) {
     if (!mtx) return false;
     Guard guard;

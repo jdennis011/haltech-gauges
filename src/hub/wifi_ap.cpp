@@ -47,7 +47,8 @@ void begin() {
     WiFi.setSleep(false);
     WiFi.setHostname(HUB_HOSTNAME);
     WiFi.mode(staSsid.isEmpty() ? WIFI_AP : WIFI_AP_STA);
-    WiFi.softAP(HUB_AP_SSID, HUB_AP_PASSWORD, 1, 0, 4);
+    // Eight connections: phones and laptops, plus gauges fetching over Wi-Fi.
+    WiFi.softAP(HUB_AP_SSID, HUB_AP_PASSWORD, 1, 0, 8);
     WiFi.softAPConfig(kApIp, kApIp, kApMask);
     applyTxPower();
     WiFi.setAutoReconnect(true);

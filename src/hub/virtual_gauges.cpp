@@ -119,12 +119,14 @@ size_t snapshot(Entry* out, size_t cap) {
 
 void listJson(JsonArray out) {
     Guard guard;
+    size_t position = 0;
     for (const Entry& e : entries) {
         JsonObject o = out.add<JsonObject>();
         o["id"] = e.id;
         o["label"] = e.label;
         o["mac"] = e.mac;
         o["face"] = e.face;
+        o["order"] = position++;
     }
 }
 
@@ -159,6 +161,22 @@ bool setFace(uint8_t id, uint8_t face) {
     Entry* e = find(id);
     if (!e) return false;
     e->face = face;
+    save();
+    return true;
+}
+
+bool move(uint8_t id, size_t index) {
+    Guard guard;
+    size_t from = entries.size();
+    for (size_t i = 0; i < entries.size(); i++) {
+        if (entries[i].id == id) from = i;
+    }
+    if (from == entries.size()) return false;
+    if (index >= entries.size()) index = entries.size() - 1;
+    if (index == from) return true;
+    const Entry moved = entries[from];
+    entries.erase(entries.begin() + from);
+    entries.insert(entries.begin() + index, moved);
     save();
     return true;
 }

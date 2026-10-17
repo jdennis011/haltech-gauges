@@ -36,6 +36,9 @@ bool setFace(uint8_t id, uint8_t face);
 // config assignment moves with it. False if the MAC is malformed or unknown id.
 bool setMac(uint8_t id, const char* mac);
 bool remove(uint8_t id);
+// Moves a planned gauge to this position in the list: the display order, and
+// the order of the key-on intro. Past the end means last.
+bool move(uint8_t id, size_t index);
 
 // The planned gauge, if any, whose MAC (real or synthetic) is this one.
 bool findByMac(const char* mac, Entry& out);

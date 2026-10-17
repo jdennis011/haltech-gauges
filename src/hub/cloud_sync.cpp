@@ -17,6 +17,8 @@
 #include <vector>
 
 #include "alert_monitor.h"
+#include "firmware_update.h"
+#include "gauge_firmware.h"
 #include "hub_config.h"
 #include "hub_state.h"
 #include "image_store.h"
@@ -465,6 +467,7 @@ bool postStatus() {
     JsonDocument doc;
     doc["fw"] = HUB_FW_VERSION;
     doc["board"] = hub::boardName();
+    doc["chip"] = firmware_update::board();  // which of the site's builds applies
     doc["uptime_s"] = millis() / 1000;
     doc["gauges_online"] = hub::stats().gaugesOnline;
     doc["ip"] = WiFi.localIP().toString();
@@ -531,6 +534,13 @@ void cloudTask(void*) {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         const uint32_t now = millis();
+        const bool online = WiFi.status() == WL_CONNECTED;
+
+        // Firmware checks and installs run on this task too, so only one
+        // HTTPS session is open at a time; the sync waits while one writes.
+        firmware_update::service(now, online);
+        gauge_firmware::service(now, online);
+        if (firmware_update::busy() || gauge_firmware::busy()) continue;
 
         std::string code;
         bool wantUnlink = false, wantSync = false, havePending = false;
@@ -549,7 +559,6 @@ void cloudTask(void*) {
             continue;
         }
         if (token.empty() && state != "not linked" && state != "linking") setState("not linked");
-        const bool online = WiFi.status() == WL_CONNECTED;
         if (!code.empty()) {
             if (!online) {
                 setState("not linked", "join the home network first");

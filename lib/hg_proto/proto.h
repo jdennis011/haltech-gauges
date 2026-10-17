@@ -65,6 +65,7 @@ enum class Cmd : uint8_t {
     SendConfig = 5,     // gauge uploads its stored config to the hub
     EndTry = 6,         // drop a RAM-only "try" config and go back to the stored one
     SetDisplay = 7,     // arg = 0 screen off (panel asleep), 1 on
+    Intro = 8,          // the key-on intro: a whole Intro frame, not a two-byte Command
 };
 
 enum class XferKind : uint8_t {
@@ -72,6 +73,7 @@ enum class XferKind : uint8_t {
     TryConfig = 2,  // apply in RAM only: a preview from the page
     Image = 3,      // a JPEG or PNG file to keep; the CRC32 of its bytes is its name
     SwitchConfig = 4,  // apply in RAM only, as TryConfig, but shown as the face proper: an alert's switch
+    WifiJoin = 5,      // hub to gauge: its access point, a token and what to fetch over Wi-Fi, as JSON
 };
 
 enum class XferStatus : uint8_t {
@@ -91,8 +93,12 @@ struct Beacon {
     uint8_t protocolVersion = kProtocolVersion;
     uint8_t flags = 0;
     uint16_t uptimeSec = 0;
+    // The hub's time of day as seconds since 1970 in its own zone, so a gauge
+    // needs no zone (docs/time-of-day.md). Valid with kBeaconFlagTime; 0 otherwise.
+    uint32_t localTime = 0;
 };
 constexpr uint8_t kBeaconFlagSimulator = 0x01;
+constexpr uint8_t kBeaconFlagTime = 0x02;
 
 struct Hello {
     uint8_t mac[6] = {};
@@ -104,8 +110,11 @@ struct Info {
     uint8_t fwMajor = 0;
     uint8_t fwMinor = 0;
     uint8_t fwPatch = 0;
-    uint8_t hwRevision = 0;
+    uint8_t hwRevision = 0;  // which gauge board: kBoard...
 };
+// Info::hwRevision: the board, so the hub picks the right firmware build for it.
+constexpr uint8_t kBoardWaveshare175 = 1;
+constexpr uint8_t kBoardM5Dial = 2;
 
 struct Status {
     uint32_t configCrc = 0;
@@ -116,6 +125,7 @@ struct Status {
 };
 constexpr uint8_t kStatusFlagTrying = 0x01;  // showing a RAM-only "try" config
 constexpr uint8_t kStatusFlagDemo = 0x02;
+constexpr uint8_t kStatusFlagWifi = 0x04;  // fetching over the hub's Wi-Fi
 
 struct Command {
     Cmd cmd = Cmd::Identify;
@@ -133,6 +143,21 @@ struct Request {
     Cmd cmd = Cmd::SetBrightness;
     uint8_t arg = 0;
     bool all = false;
+};
+
+// The key-on intro (docs/startup-animation.md), hub to one gauge. Carried as
+// Msg::Command with Cmd::Intro, so no message type is spent: cmd, style and
+// flags, delay ms, duration ms, slot index, slot count. A gauge acknowledges
+// it like any command.
+enum class IntroStyle : uint8_t { Sweep = 0, Chase = 1, Fade = 2 };
+constexpr uint8_t kIntroFlagForce = 0x10;  // play even if played since starting (the page's Play)
+struct Intro {
+    IntroStyle style = IntroStyle::Sweep;
+    bool force = false;
+    uint16_t delayMs = 0;        // wait this long after the frame arrives
+    uint16_t durationMs = 1200;  // this gauge's own intro
+    uint8_t index = 0;           // this gauge's slot, from 0
+    uint8_t count = 1;           // gauges in the intro
 };
 
 // A message the hub asks a gauge to show over its face while an alert is in
@@ -211,6 +236,7 @@ CanFrame pack(const Info& m, uint32_t node);
 CanFrame pack(const Status& m, uint32_t node);
 CanFrame pack(const Command& m, uint32_t node);
 CanFrame pack(const CommandAck& m, uint32_t node);
+CanFrame pack(const Intro& m, uint32_t node);
 CanFrame pack(const Request& m, uint32_t node);
 // Fills `out` with the frames of one alert and returns how many. `seq` (0..15)
 // tells one message from the next.
@@ -238,6 +264,7 @@ bool unpack(const CanFrame& f, Info& m);
 bool unpack(const CanFrame& f, Status& m);
 bool unpack(const CanFrame& f, Command& m);
 bool unpack(const CanFrame& f, CommandAck& m);
+bool unpack(const CanFrame& f, Intro& m);
 bool unpack(const CanFrame& f, AssetQuery& m);
 bool unpack(const CanFrame& f, AssetReply& m);
 bool unpack(const CanFrame& f, XferBegin& m);

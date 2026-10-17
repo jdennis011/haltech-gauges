@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "crc32.h"
+#include "ip_frames.h"
 #include "proto.h"
 #include "xfer.h"
 
@@ -45,6 +46,21 @@ void test_messages_round_trip() {
     TEST_ASSERT_EQUAL_HEX32(kBroadcastNode, idNode(f.id));
     TEST_ASSERT_TRUE(unpack(f, b2));
     TEST_ASSERT_EQUAL(0x1234, b2.uptimeSec);
+    TEST_ASSERT_EQUAL(kBeaconFlagSimulator, b2.flags);
+    TEST_ASSERT_EQUAL(0, b2.localTime);  // none given: no time flag
+
+    // The time of day rides in the beacon's last four bytes.
+    b.localTime = 1760600000;
+    f = pack(b);
+    TEST_ASSERT_EQUAL(8, f.len);
+    TEST_ASSERT_TRUE(unpack(f, b2));
+    TEST_ASSERT_EQUAL_UINT32(1760600000, b2.localTime);
+    TEST_ASSERT_EQUAL(kBeaconFlagSimulator | kBeaconFlagTime, b2.flags);
+    // An older hub's four-byte beacon still reads, without a time.
+    CanFrame old = f;
+    old.len = 4;
+    TEST_ASSERT_TRUE(unpack(old, b2));
+    TEST_ASSERT_EQUAL(0, b2.localTime);
     TEST_ASSERT_EQUAL(kBeaconFlagSimulator, b2.flags);
 
     Hello h;
@@ -639,6 +655,78 @@ void test_xfer_image_speed_on_a_clean_link() {
     TEST_ASSERT_LESS_THAN(10000, ms);
 }
 
+void test_intro_round_trip() {
+    Intro m;
+    m.style = IntroStyle::Chase;
+    m.force = true;
+    m.delayMs = 250;
+    m.durationMs = 1200;
+    m.index = 1;
+    m.count = 3;
+    const CanFrame f = pack(m, 0x112233);
+    TEST_ASSERT_EQUAL(8, f.len);
+    TEST_ASSERT_EQUAL(int(Msg::Command), int(idMsg(f.id)));
+    TEST_ASSERT_EQUAL_HEX32(0x112233, idNode(f.id));
+    // It reads as a command too, so a gauge without the intro handler still acknowledges it.
+    Command c;
+    TEST_ASSERT_TRUE(unpack(f, c));
+    TEST_ASSERT_EQUAL(int(Cmd::Intro), int(c.cmd));
+
+    Intro back;
+    TEST_ASSERT_TRUE(unpack(f, back));
+    TEST_ASSERT_EQUAL(int(IntroStyle::Chase), int(back.style));
+    TEST_ASSERT_TRUE(back.force);
+    TEST_ASSERT_EQUAL(250, back.delayMs);
+    TEST_ASSERT_EQUAL(1200, back.durationMs);
+    TEST_ASSERT_EQUAL(1, back.index);
+    TEST_ASSERT_EQUAL(3, back.count);
+
+    // A plain command is not an intro, and an unknown style is refused.
+    Command plain;
+    plain.cmd = Cmd::Identify;
+    plain.arg = 5;
+    TEST_ASSERT_FALSE(unpack(pack(plain, 1), back));
+    CanFrame bad = f;
+    bad.data[1] = 0x07;
+    TEST_ASSERT_FALSE(unpack(bad, back));
+}
+
+void test_ip_frames_round_trip() {
+    CanFrame in[3] = {};
+    in[0].id = makeId(Msg::Beacon, Dir::HubToGauge, kBroadcastNode);
+    in[0].extended = true;
+    in[0].len = 8;
+    for (int i = 0; i < 8; i++) in[0].data[i] = uint8_t(i + 1);
+    in[1].id = 0x360;  // a Haltech frame, standard id
+    in[1].extended = false;
+    in[1].len = 3;
+    in[1].data[0] = 0xAA;
+    in[2].id = 0x1FFFFFFF;
+    in[2].extended = true;
+    in[2].len = 0;
+
+    uint8_t packet[kIpMaxPacket];
+    const size_t len = packIpFrames(in, 3, packet, sizeof(packet));
+    TEST_ASSERT_EQUAL(kIpHeaderBytes + 3 * kIpFrameBytes, len);
+    CanFrame out[kIpMaxFrames];
+    TEST_ASSERT_EQUAL(3, unpackIpFrames(packet, len, out, kIpMaxFrames));
+    for (int i = 0; i < 3; i++) {
+        TEST_ASSERT_EQUAL_HEX32(in[i].id, out[i].id);
+        TEST_ASSERT_EQUAL(in[i].extended, out[i].extended);
+        TEST_ASSERT_EQUAL(in[i].len, out[i].len);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(in[i].data, out[i].data, 8);
+    }
+
+    // An empty datagram is a keepalive; anything else is refused.
+    TEST_ASSERT_EQUAL(kIpHeaderBytes, packIpFrames(nullptr, 0, packet, sizeof(packet)));
+    TEST_ASSERT_EQUAL(0, unpackIpFrames(packet, kIpHeaderBytes, out, kIpMaxFrames));
+    const uint8_t junk[] = {'X', 'Y', 1, 0};
+    TEST_ASSERT_EQUAL(-1, unpackIpFrames(junk, sizeof(junk), out, kIpMaxFrames));
+    packet[3] = 9;  // claims more frames than it holds
+    TEST_ASSERT_EQUAL(-1, unpackIpFrames(packet, kIpHeaderBytes, out, kIpMaxFrames));
+    TEST_ASSERT_EQUAL(0, packIpFrames(in, 3, packet, 10));  // no room
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_crc32_known_vector);
@@ -663,6 +751,8 @@ int main(int, char**) {
     RUN_TEST(test_xfer_new_session_replaces_stale_one);
     RUN_TEST(test_xfer_no_receiver_times_out);
     RUN_TEST(test_asset_query_and_reply_round_trip);
+    RUN_TEST(test_intro_round_trip);
+    RUN_TEST(test_ip_frames_round_trip);
     RUN_TEST(test_xfer_streams_from_storage);
     RUN_TEST(test_xfer_streams_with_loss);
     RUN_TEST(test_xfer_read_failure_stops_the_transfer);

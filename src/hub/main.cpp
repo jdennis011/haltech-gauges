@@ -7,6 +7,10 @@
 #include "alert_monitor.h"
 #include "can_ports.h"
 #include "cloud_sync.h"
+#include "firmware_update.h"
+#include "gauge_firmware.h"
+#include "intro.h"
+#include "ip_bus.h"
 #include "crc32.h"
 #include "channel_store.h"
 #include "display_control.h"
@@ -20,8 +24,10 @@
 #include "recorder.h"
 #include "simulator.h"
 #include "theme_colours.h"
+#include "time_service.h"
 #include "virtual_gauges.h"
 #include "web_server.h"
+#include "wifi_xfer.h"
 #include "wifi_ap.h"
 
 using namespace hg;
@@ -54,7 +60,8 @@ std::atomic<uint32_t> rosterChanges{0};
 // The CAN library also defines a global CanFrame, so the shared type is always
 // written out in full in this file.
 bool managementSend(const hg::CanFrame& frame, void*) {
-    if (gaugePort.txPending() >= kManagementTxLimit) return false;
+    // A full transmit queue means a quiet wire; gauges over Wi-Fi are still served.
+    if (gaugePort.txPending() >= kManagementTxLimit && !ip_bus::peers()) return false;
     return gaugePort.write(frame);
 }
 
@@ -107,7 +114,10 @@ void gaugeBusTask(void*) {
             hubManager.onFrame(frame, now);
             while (gaugePort.read(frame, 0)) hubManager.onFrame(frame, now);
         }
+        // Gauges linked over Wi-Fi: their frames join the bus's.
+        while (ip_bus::read(frame)) hubManager.onFrame(frame, now);
         hubManager.poll(now);
+        ip_bus::flush(now);
 
         uint32_t online = 0;
         for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
@@ -306,6 +316,8 @@ void setup() {
     if (!gaugePort.begin()) Serial.println("Gauge CAN start failed");
     if (!library_store::begin()) Serial.println("Config storage failed to mount");
     image_store::begin();
+    gauge_firmware::begin();
+    wifi_xfer::begin();
     virtual_gauges::begin();
     display_control::begin();
     recorder::begin();
@@ -320,9 +332,14 @@ void setup() {
     handler.request = display_control::onRequest;
     handler.openImage = image_store::openForSend;
     handler.closeImage = image_store::closeSend;
+    handler.wifiJoin = wifi_xfer::offerImages;
     hubManager.init({managementSend, nullptr}, handler, millis());
+    intro::begin();
 
     wifi_ap::begin();
+    ip_bus::begin();
+    time_service::begin();
+    firmware_update::begin();  // before the cloud task, which runs its checks
     cloud_sync::begin();
     web_server::begin();
 
@@ -344,6 +361,9 @@ void loop() {
     handleConsole();
     wifi_ap::loop();
     web_server::loop();
+    firmware_update::poll(millis());
+    intro::poll(millis());
+    time_service::poll(millis());
     recorder::poll(millis(), liveStore);
     playback::poll(millis());
     {

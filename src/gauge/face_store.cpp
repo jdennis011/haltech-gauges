@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <esp_heap_caps.h>
+#include <esp_ota_ops.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <string.h>
@@ -272,6 +273,9 @@ void markHealthy() {
     if (done) return;
     done = true;
     if (readBoots() != 0) writeBoots(0);
+    // A build installed over Wi-Fi is kept once it has run this long; before
+    // that a restart goes back to the previous one.
+    esp_ota_mark_app_valid_cancel_rollback();
 }
 
 bool fallback() { return inFallback; }

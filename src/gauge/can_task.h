@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "channel_store.h"
+#include "proto.h"
 
 // Owns the CAN controller. A dedicated task receives frames, decodes Haltech
 // broadcast data into the channel store, and runs the gauge's side of the
@@ -27,6 +28,24 @@ int takeBrightnessRequest();
 // A face index the hub asked for, or -1; a display request (0 off, 1 on), or -1.
 int takeFaceRequest();
 int takeDisplayRequest();
+// The key-on intro the hub asked for, or a replay from the page; false if none is waiting.
+bool takeIntro(hg::proto::Intro& out);
+
+// The hub's time of day as seconds since 1970 in its zone, kept running from
+// its last beacon; false if no hub has ever said (docs/time-of-day.md).
+bool localTime(uint32_t& seconds);
+
+// --- from the serial console, for a gauge on the bench with no hub
+void benchFace(int index);
+void benchBrightness(int level);
+void benchIntro(const hg::proto::Intro& intro);
+void benchLocalTime(uint32_t seconds);
+
+// --- from the Wi-Fi task
+// An image fetched over Wi-Fi is now stored: the hub is told from the CAN task.
+void reportImage(uint32_t crc);
+// Restart once the bus has settled (after a firmware install).
+void requestReboot();
 bool rebootRequested();
 // Whether the faces are showing the demo sweep, for the status message.
 void setDemo(bool demo);

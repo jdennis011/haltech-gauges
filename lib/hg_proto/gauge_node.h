@@ -28,6 +28,9 @@ public:
         void (*alert)(const Alert& alert, void* ctx);
         // The hub's theme colours changed. May be null.
         void (*themeColours)(const uint32_t colours[kThemeColourCount], void* ctx);
+        // The key-on intro, or a replay from the page. May be null: the
+        // command is then answered "not done" and the face shows as usual.
+        void (*intro)(const Intro& intro, void* ctx);
         void* ctx;
     };
 
@@ -44,6 +47,14 @@ public:
     // gauge plugged straight into a Haltech bus never sends a frame.
     bool hubPresent() const { return hubPresent_; }
 
+    // The hub's time of day, seconds since 1970 in its zone, kept running on
+    // this clock from the last beacon that carried it. False if none has.
+    bool localTime(uint32_t nowMs, uint32_t& seconds) const {
+        if (!haveTime_) return false;
+        seconds = timeSeconds_ + uint32_t(nowMs - timeAtMs_) / 1000;
+        return true;
+    }
+
     // The theme colours to start from, e.g. the last ones the hub sent, kept in flash.
     void setThemeColours(const uint32_t colours[kThemeColourCount]);
     const uint32_t* themeColours() const { return themeColours_; }
@@ -53,11 +64,28 @@ public:
     // application picks a new random id, stores it, and calls setNode().
     bool idConflict() const { return conflict_; }
     void setNode(uint32_t node);
+    // A time of day given on the bench, as a beacon would carry it.
+    void setLocalTime(uint32_t seconds, uint32_t nowMs) {
+        haveTime_ = true;
+        timeSeconds_ = seconds;
+        timeAtMs_ = nowMs;
+    }
 
     // Sends a stored config to the hub (in answer to Cmd::SendConfig). `data`
     // must stay valid until uploading() is false.
     bool upload(const uint8_t* data, uint32_t size, uint32_t nowMs);
     bool uploading() const { return sender_.busy(); }
+
+    // Tells the hub, unasked, that this gauge now has (or lacks) an image:
+    // after a fetch over Wi-Fi. False if there is no hub or no room on the bus.
+    bool reportAsset(uint32_t crc, bool have) {
+        if (!hubPresent_) return false;
+        AssetReply r;
+        r.kind = XferKind::Image;
+        r.crc = crc;
+        r.have = have;
+        return send(pack(r, node_));
+    }
 
     // Asks the hub to apply a setting to this gauge (recorded) or to all gauges.
     bool request(Cmd cmd, uint8_t arg, bool all) {
@@ -83,6 +111,9 @@ private:
     bool hubPresent_ = false;
     uint32_t lastBeaconMs_ = 0;
     uint16_t lastUptime_ = 0;
+    bool haveTime_ = false;
+    uint32_t timeSeconds_ = 0;
+    uint32_t timeAtMs_ = 0;
     uint32_t lastStatusMs_ = 0;
     bool statusDue_ = false;
     bool helloPending_ = false;

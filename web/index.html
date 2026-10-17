@@ -141,12 +141,14 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
   <div class="card row">
     <span class="muted">Each card shows what that gauge displays. Planned gauges exist only on the hub, for laying out and assigning configs before the hardware arrives; link them to the real gauge later.</span>
     <span class="spacer"></span>
+    <button class="btn" id="btn-guess-order" title="Puts the gauges in order of their supply voltage: the chain loses a little per hop, so the highest is nearest the hub. Check with Identify and fix with the arrows on the cards.">Guess the order</button>
     <button class="btn" id="btn-add-gauge">Add a planned gauge</button>
     <div class="row" style="width:100%;margin-top:6px">
       <strong>All gauges</strong>
       <label class="inline">Brightness <input type="range" id="all-brightness" min="10" max="255" value="200"></label>
       <button class="btn small" id="all-screens-off">Screens off</button>
       <button class="btn small" id="all-screens-on">Screens on</button>
+      <button class="btn small" id="btn-show-startup" title="Plays the start-up intro now on every gauge that is online, in order">Show start-up</button>
       <span class="muted" id="all-note"></span>
     </div>
   </div>
@@ -273,6 +275,43 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
 
 <section id="tab-settings">
   <div class="card"><h3>Hub</h3><table><tbody id="hub-info"></tbody></table></div>
+  <div class="card" id="time-card">
+    <h3>Time</h3>
+    <p class="muted">The hub keeps the clock for the gauges: from the internet when it is on your home network, otherwise from this device, and from the clock chip on the carrier when one is fitted. Pick the zone the gauges should show.</p>
+    <table><tbody id="time-info"></tbody></table>
+    <div class="row" style="margin-top:8px">
+      <label>Zone <select id="time-zone"></select></label>
+      <input type="text" id="time-zone-custom" placeholder="POSIX TZ, e.g. AEST-10" style="display:none;width:220px" class="mono">
+      <span class="spacer"></span>
+      <button class="btn small" id="btn-time-set">Set from this device</button>
+    </div>
+    <div class="msg" id="time-msg"></div>
+  </div>
+  <div class="card" id="update-card">
+    <h3>Firmware</h3>
+    <p class="muted">When it is on your home network the hub looks at <a href="https://oagauge.online" target="_blank" rel="noopener" style="color:#6cb2ff">oagauge.online</a> once a day for a newer build and says so here; it installs one only when you press Install. Do that with the engine off: the hub restarts, and comes back to this build by itself if the new one fails to start. A <span class="mono">firmware.bin</span> built on a PC can be uploaded straight in.</p>
+    <table><tbody id="update-info"></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn small" id="btn-update-check">Check now</button><button class="btn primary small" id="btn-update-install" style="display:none">Install</button><span class="spacer"></span><label class="btn small" for="update-file">Upload a .bin</label><input type="file" id="update-file" accept=".bin" style="display:none"></div>
+    <div class="msg" id="update-msg"></div>
+    <h4 style="margin:14px 0 4px">Gauge firmware</h4>
+    <p class="muted">Builds for the gauges are fetched from the site onto the hub. A gauge whose board has a newer build on the hub gets an <b>Update firmware</b> button on its card; the hub sends it over its own Wi-Fi.</p>
+    <table><tbody id="gauge-fw-info"></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn small" id="btn-gauge-fw-check">Check the site</button><span class="muted" id="gauge-fw-note"></span></div>
+    <div class="msg" id="gauge-fw-msg"></div>
+  </div>
+  <div class="card" id="intro-card">
+    <h3>Start-up intro</h3>
+    <p class="muted">At key-on the gauges stay dark until each has announced itself, then play an intro one after another, left to right, in the order of the cards on the Gauges tab (the arrows on each card move it). A gauge that hears no hub plays its own after three seconds.</p>
+    <div class="row">
+      <label><input type="checkbox" id="intro-on"> On at key-on</label>
+      <label>Style <select id="intro-style"><option value="sweep">sweep: everything together</option><option value="chase">chase: one widget after another</option><option value="fade">fade: just fade in</option></select></label>
+      <label>Stagger <input type="number" id="intro-stagger" min="0" max="5000" step="50" style="width:80px"> ms</label>
+      <label>Each <input type="number" id="intro-duration" min="200" max="10000" step="100" style="width:80px"> ms</label>
+      <span class="spacer"></span>
+      <button class="btn primary small" id="btn-intro-play">Play now</button>
+    </div>
+    <div class="msg" id="intro-msg"></div>
+  </div>
   <div class="card"><h3>Access point</h3><p class="muted">Always on. Join it to reach this page at <span class="mono">http://192.168.4.1/</span>.</p><table><tbody id="ap-info"></tbody></table></div>
   <div class="card"><h3>Home Wi-Fi (optional)</h3>
     <p class="muted">The hub can also join your network, so a PC can open it without switching Wi-Fi.</p>
@@ -406,7 +445,7 @@ function showTab(name) {
   if (name === 'configs') { loadConfigs(); loadImages(); }
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
-  if (name === 'settings') loadHubs();
+  if (name === 'settings') { loadHubs(); loadIntro(); }
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -611,7 +650,10 @@ function renderGauges() {
         g.virtual ? el('span', { class: 'chip plan' }, 'planned')
                   : el('span', { class: 'chip ' + (g.online ? 'on' : 'bad') }, g.online ? 'online' : 'offline ' + g.last_seen_s + ' s'),
         g.duplicate ? el('span', { class: 'chip bad' }, 'duplicate id') : null,
-        g.trying ? el('span', { class: 'chip' }, 'trial config') : null),
+        g.trying ? el('span', { class: 'chip' }, 'trial config') : null,
+        g.order != null ? el('span', { class: 'chip', title: 'Its place in the start-up intro' }, 'intro ' + (g.order + 1)) : null,
+        g.wifi ? el('span', { class: 'chip' }, 'fetching over Wi-Fi') : null,
+        g.link === 'wifi' ? el('span', { class: 'chip', title: 'Reaches the hub over Wi-Fi instead of the CAN chain' }, 'over Wi-Fi') : null),
       el('div', { class: 'muted', style: 'font-size:13px' }, details),
       el('div', { class: 'gpreview' }, preview),
       // Labels down the left, controls filling the rest of the width.
@@ -625,6 +667,12 @@ function renderGauges() {
         pushChip(g),
         el('span', { class: 'spacer' }),
         g.assigned ? btn('Edit config', () => { showTab('configs'); openStored(g.assigned); }, false, 'small') : null),
+      g.id != null && g.position != null
+        ? el('div', { class: 'row' },
+            el('span', { class: 'muted' }, 'Order'),
+            btn('\u25C0', () => planned('PUT', '/api/virtual/' + g.id, { order: g.position - 1 }), g.position === 0, 'small', 'Earlier: further left in the start-up intro'),
+            btn('\u25B6', () => planned('PUT', '/api/virtual/' + g.id, { order: g.position + 1 }), false, 'small', 'Later: further right'))
+        : null,
       g.virtual
         ? el('div', { class: 'row' },
             btn('Link to hardware…', () => linkHardware(g), false, 'small'),
@@ -635,6 +683,9 @@ function renderGauges() {
             btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
             btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),
             btn('Reboot', () => { if (confirm('Reboot ' + gaugeTitle(g) + '?')) act(g, 'reboot'); }, off, 'small'),
+            g.fw_update ? btn('Update firmware', () => {
+              if (confirm('Send the hub\'s newer firmware to ' + gaugeTitle(g) + ' over Wi-Fi?\nIt restarts when done, and comes back to its current build if the new one fails to start.')) act(g, 'update', {});
+            }, off, 'small primary', 'The hub holds a newer build for this gauge\'s board') : null,
             g.id ? btn('Unlink', () => { if (confirm('Forget the name and planned entry for this gauge? Its config assignment stays.')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small') : null));
     root.append(card);
   }
@@ -1019,7 +1070,7 @@ $('#btn-endtry').addEventListener('click', async () => {
 // A table of the widgets on the selected face with their font and size, the
 // first piece of the builder. Edits rewrite the JSON in the editor.
 
-const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
+const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], clock: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
 const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22, path: 48 };
 const FONT_SAMPLE = '0123456789 RPM 14.7 \u00b0C km/h';
 
@@ -1112,6 +1163,9 @@ const PANEL_FIELDS = {
            ['opacity', 'int', 'Opacity', [0, 100, 100]], ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
   path:   [['d', 'icon', 'Icon'], ['d', 'longtext', 'Path', null, 'SVG path data: the d attribute of an icon\'s <path>'],
            ['size', 'int', 'Size', [4, 466, 48]], ['color', 'color', 'Colour', 'fg'], ['rotate', 'int', 'Rotate', [-180, 180, 0]]],
+  clock:  [['style', 'select', 'Style', ['digital', 'analogue'], 'The hub\'s time of day: digits, or hands'], ['seconds', 'bool', 'Seconds', false],
+           ['format', 'select', 'Hours', ['24h', '12h'], 'Digital only'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS],
+           ['rotate', 'int', 'Rotate', [-180, 180, 0]], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
 };
 const XY = [['x', 'int', 'X', [0, 466, 233], 'Centre, pixels from the left'], ['y', 'int', 'Y', [0, 466, 233], 'Centre, pixels from the top']];
 const CONDITION = [['channel', 'channelOpt', 'Channel', null, 'Optional. ' + COND_HINT], ['on', 'cond', 'Lit when', null, COND_HINT],
@@ -1139,6 +1193,8 @@ const MORE_FIELDS = {
   path:   [...XY, ['box', 'int', 'Box', [1, 2000, 24], 'The size of the path\'s own coordinate square; 24 for most icon sets'],
            ['filled', 'bool', 'Filled', true], ['strokeColor', 'color', 'Outline', '=color', 'Follows the fill colour unless set'], ['strokeWidth', 'int', 'Outline w', [0, 40, 0]],
            ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
+  clock:  [...XY, ['r', 'int', 'Radius', [20, 233, 120], 'Analogue'], ['thickness', 'int', 'Hand w', [1, 20, 6], 'Analogue: the hour hand; the others are thinner'],
+           ['ticks', 'bool', 'Marks', true], ['tickColor', 'color', 'Marks', 'dim'], ['secondColor', 'color', 'Second hand', 'accent']],
 };
 
 const ROLES = ['fg', 'accent', 'dim', 'warn', 'alert', 'bg'];
@@ -1332,6 +1388,7 @@ const WIDGET_DEFAULTS = {
   shape: { type: 'shape', shape: 'rect', w: 140, h: 70, cornerRadius: 10, filled: false, strokeWidth: 3 },
   path: { type: 'path', d: ICONS.engine, size: 72, y: 380, color: 'warn', channel: 'check_engine_light', offColor: 'dim' },
   image: { type: 'image', w: 160, h: 160 },
+  clock: { type: 'clock', y: 233, size: 56 },
 };
 const MAX_WIDGETS = 16;  // the parser's limit per face
 $('#add-type').append(...Object.keys(WIDGET_DEFAULTS).map(k => el('option', { value: k }, k)));
@@ -2106,6 +2163,8 @@ function renderSettings() {
   const ssid = $('#sta-ssid');
   if (!ssid.dataset.touched && !ssid.value) ssid.value = s.sta.ssid || '';
   if (ONLINE) $('#cloud-card').style.display = 'none'; else renderCloud(s.cloud);
+  if (ONLINE) $('#update-card').style.display = 'none'; else { renderUpdate(s.update); renderGaugeFirmware(s.gauge_firmware); }
+  if (ONLINE) $('#time-card').style.display = 'none'; else renderTime(s.time);
 }
 $('#sta-ssid').addEventListener('input', ev => { ev.target.dataset.touched = '1'; });
 $('#btn-sta-save').addEventListener('click', async () => {
@@ -2117,6 +2176,174 @@ $('#btn-sta-forget').addEventListener('click', async () => {
   catch (e) { $('#sta-msg').textContent = e.message; }
 });
 
+
+// ---------------------------------------------------------- start-up intro
+// The hub's settings for the key-on intro, and playing it now (docs/startup-animation.md).
+
+function renderIntro(s) {
+  $('#intro-on').checked = s.enabled !== false;
+  $('#intro-style').value = s.style || 'sweep';
+  $('#intro-stagger').value = s.stagger != null ? s.stagger : 250;
+  $('#intro-duration').value = s.duration != null ? s.duration : 1200;
+}
+async function loadIntro() {
+  if (ONLINE) { $('#intro-card').style.display = 'none'; return; }
+  try { renderIntro(await api.get('/api/intro')); } catch (e) { $('#intro-msg').textContent = e.message; }
+}
+async function saveIntro() {
+  const body = { enabled: $('#intro-on').checked, style: $('#intro-style').value, stagger: +$('#intro-stagger').value, duration: +$('#intro-duration').value };
+  try { renderIntro(await api.put('/api/intro', body)); $('#intro-msg').textContent = 'Saved.'; } catch (e) { $('#intro-msg').textContent = e.message; }
+}
+for (const id of ['intro-on', 'intro-style', 'intro-stagger', 'intro-duration']) $('#' + id).addEventListener('change', saveIntro);
+$('#btn-intro-play').addEventListener('click', async () => {
+  try { const r = await api.post('/api/intro/play', {}); $('#intro-msg').textContent = r.gauges ? 'Playing on ' + r.gauges + ' gauge(s).' : 'No gauge is online.'; }
+  catch (e) { $('#intro-msg').textContent = e.message; }
+});
+$('#btn-show-startup').addEventListener('click', async () => {
+  try {
+    const r = await api.post('/api/intro/play', {});
+    $('#all-note').textContent = r.gauges ? 'start-up intro playing on ' + r.gauges + ' gauge(s)' : 'no gauge is online to play it';
+  } catch (e) { $('#all-note').textContent = e.message; }
+});
+// The chain loses a little voltage per hop, so the highest reading is nearest the hub.
+$('#btn-guess-order').addEventListener('click', async () => {
+  const linked = state.gauges.filter(g => !g.virtual && g.id != null && g.vbus_mv).sort((a, b) => b.vbus_mv - a.vbus_mv);
+  if (linked.length < 2) { alert('Link at least two gauges to planned ones first: the guess orders the linked ones by their supply voltage.'); return; }
+  for (let i = 0; i < linked.length; i++) {
+    try { await api.put('/api/virtual/' + linked[i].id, { order: i }); } catch (e) { alert(e.message); return; }
+  }
+  alert('Ordered by voltage: ' + linked.map(g => gaugeTitle(g) + ' (' + (g.vbus_mv / 1000).toFixed(2) + ' V)').join(', ') + '. Check with Identify and fix with the arrows.');
+});
+
+// ---------------------------------------------------------------- time
+// The hub's clock and zone (docs/time-of-day.md). A hub with no time gets this
+// device's clock once, as soon as the page sees it.
+
+const ZONES = [
+  ['Australia/Brisbane', 'AEST-10'], ['Australia/Sydney', 'AEST-10AEDT,M10.1.0,M4.1.0/3'], ['Australia/Melbourne', 'AEST-10AEDT,M10.1.0,M4.1.0/3'],
+  ['Australia/Hobart', 'AEST-10AEDT,M10.1.0,M4.1.0/3'], ['Australia/Adelaide', 'ACST-9:30ACDT,M10.1.0,M4.1.0/3'], ['Australia/Darwin', 'ACST-9:30'],
+  ['Australia/Perth', 'AWST-8'], ['Pacific/Auckland', 'NZST-12NZDT,M9.5.0,M4.1.0/3'], ['Asia/Tokyo', 'JST-9'], ['Asia/Singapore', '<+08>-8'],
+  ['Europe/London', 'GMT0BST,M3.5.0/1,M10.5.0'], ['Europe/Berlin', 'CET-1CEST,M3.5.0,M10.5.0/3'], ['America/New_York', 'EST5EDT,M3.2.0,M11.1.0'],
+  ['America/Chicago', 'CST6CDT,M3.2.0,M11.1.0'], ['America/Denver', 'MST7MDT,M3.2.0,M11.1.0'], ['America/Los_Angeles', 'PST8PDT,M3.2.0,M11.1.0'], ['UTC', 'UTC0'],
+];
+$('#time-zone').append(...ZONES.map(([name]) => el('option', { value: name }, name)), el('option', { value: 'custom' }, 'Custom POSIX string\u2026'));
+let timeSent = false;
+function renderTime(t) {
+  if (!t) return;
+  rows($('#time-info'), [
+    ['Hub time', t.set ? t.local + ' (' + t.tz_name + ')' : 'not set'],
+    ['Source', t.source + (t.synced_s >= 0 ? ', set ' + ago(t.synced_s) : '')],
+    ['Clock chip', t.rtc ? (t.rtc_ok ? 'fitted and keeping time' : 'fitted, not set') : 'none fitted'],
+  ]);
+  const sel = $('#time-zone');
+  if (document.activeElement !== sel) {
+    const known = ZONES.find(([name, tz]) => name === t.tz_name && tz === t.tz);
+    sel.value = known ? known[0] : 'custom';
+    $('#time-zone-custom').style.display = known ? 'none' : '';
+    if (!known && document.activeElement !== $('#time-zone-custom')) $('#time-zone-custom').value = t.tz || '';
+  }
+  if (!t.set && !timeSent) {
+    timeSent = true;
+    api.put('/api/time', { unix: Math.floor(Date.now() / 1000) }).catch(() => { /* a later status says if it took */ });
+  }
+}
+$('#time-zone').addEventListener('change', async ev => {
+  const name = ev.target.value;
+  if (name === 'custom') { $('#time-zone-custom').style.display = ''; $('#time-zone-custom').focus(); return; }
+  const z = ZONES.find(([n]) => n === name);
+  try { await api.put('/api/time', { tz: z[1], tz_name: z[0] }); $('#time-msg').textContent = 'Zone saved.'; } catch (e) { $('#time-msg').textContent = e.message; }
+});
+$('#time-zone-custom').addEventListener('change', async ev => {
+  const tz = ev.target.value.trim();
+  if (!tz) return;
+  try { await api.put('/api/time', { tz, tz_name: tz }); $('#time-msg').textContent = 'Zone saved.'; } catch (e) { $('#time-msg').textContent = e.message; }
+});
+$('#btn-time-set').addEventListener('click', async () => {
+  try { await api.put('/api/time', { unix: Math.floor(Date.now() / 1000) }); $('#time-msg').textContent = 'Set.'; } catch (e) { $('#time-msg').textContent = e.message; }
+});
+
+// --------------------------------------------------------- gauge firmware
+// Builds for the gauge boards kept on the hub (docs/firmware-updates.md, "Gauges").
+
+function renderGaugeFirmware(gf) {
+  if (!gf) return;
+  const tbody = $('#gauge-fw-info');
+  tbody.innerHTML = '';
+  for (const b of gf.boards || []) {
+    const onHub = b.stored ? b.stored.version + ' (' + kb(b.stored.size) + ')' : 'none';
+    const onSite = b.latest ? b.latest.version + (b.latest.date ? ', ' + b.latest.date : '') : (gf.checked_s < 0 ? 'not checked' : 'none');
+    const newer = b.latest && (!b.stored || b.latest.version !== b.stored.version);
+    const busy = gf.state === 'checking' || gf.state === 'fetching';
+    tbody.append(el('tr', {},
+      el('th', {}, b.name),
+      el('td', {}, 'on the hub ' + onHub + ' \u00b7 on the site ' + onSite + ' ',
+        newer ? btn('Fetch ' + b.latest.version, async () => {
+          try { await api.post('/api/gauge-firmware/fetch', { board: b.id }); $('#gauge-fw-msg').textContent = 'Fetching\u2026'; } catch (e) { $('#gauge-fw-msg').textContent = e.message; }
+        }, busy, 'small primary') : null,
+        b.stored ? btn('Remove', async () => {
+          if (!confirm('Remove the ' + b.name + ' build from the hub?')) return;
+          try { await api.post('/api/gauge-firmware/remove', { board: b.id }); } catch (e) { $('#gauge-fw-msg').textContent = e.message; }
+        }, busy, 'small') : null)));
+  }
+  let note = gf.state === 'fetching' ? 'fetching ' + (gf.progress || 0) + '%' : gf.state === 'checking' ? 'checking' : '';
+  if (gf.error) note += (note ? ', ' : '') + gf.error;
+  else if (gf.checked_s >= 0 && !note) note = 'checked ' + ago(gf.checked_s);
+  $('#gauge-fw-note').textContent = note;
+  $('#btn-gauge-fw-check').disabled = gf.state === 'checking' || gf.state === 'fetching';
+}
+$('#btn-gauge-fw-check').addEventListener('click', async () => {
+  try { await api.post('/api/gauge-firmware/check', {}); $('#gauge-fw-msg').textContent = 'Checking\u2026'; } catch (e) { $('#gauge-fw-msg').textContent = e.message; }
+});
+
+// ------------------------------------------------------- firmware updates
+// The hub's own build against the latest on the site, and installing it
+// (docs/firmware-updates.md). The status push keeps the card current.
+
+const UPDATE_BUSY = ['checking', 'downloading', 'installing', 'restarting'];
+function renderUpdate(u) {
+  if (!u) return;
+  const a = u.available, busy = UPDATE_BUSY.includes(u.state);
+  let stateText = u.state;
+  if (u.state === 'downloading' || u.state === 'installing') stateText += ' ' + (u.progress || 0) + '%';
+  if (u.state === 'restarting') stateText = 'restarting into the new build; this page reconnects in a moment';
+  if (u.error) stateText += (u.state === 'error' ? ': ' : '; ') + u.error;
+  if (u.checked_s >= 0 && !busy) stateText += ' (checked ' + ago(u.checked_s) + ')';
+  rows($('#update-info'), [
+    ['This hub', u.current + ' for ' + u.board + (u.slot ? '' : '; no spare app slot, so this board takes firmware over USB only')],
+    ['On the site', a ? a.version + (a.date ? ', ' + a.date : '') + (a.size ? ', ' + kb(a.size) : '') + (a.notes ? ': ' + a.notes : '')
+      : u.state === 'up to date' ? 'nothing newer than this' : u.checked_s < 0 ? 'not checked yet' : '—'],
+    ['State', stateText],
+    u.last ? ['Last update', u.last + (u.confirmed === false ? ' (running for the first time; kept once it has run 10 s)' : '')] : null,
+  ].filter(Boolean));
+  $('#btn-update-check').disabled = busy;
+  $('#btn-update-install').style.display = a && u.slot && !busy ? '' : 'none';
+  $('#btn-update-install').textContent = a ? 'Install ' + a.version : 'Install';
+  $('#update-file').disabled = busy || !u.slot;
+}
+$('#btn-update-check').addEventListener('click', async () => {
+  try { await api.post('/api/update/check', {}); $('#update-msg').textContent = 'Checking…'; } catch (e) { $('#update-msg').textContent = e.message; }
+});
+$('#btn-update-install').addEventListener('click', async () => {
+  const u = state.status && state.status.update, v = u && u.available ? u.available.version : '';
+  if (!confirm('Install firmware ' + v + ' on the hub?\nDo this with the engine off. The hub restarts when it is done, and comes back to this build by itself if the new one fails to start.')) return;
+  try { await api.post('/api/update/install', {}); $('#update-msg').textContent = 'Downloading…'; } catch (e) { $('#update-msg').textContent = e.message; }
+});
+$('#update-file').addEventListener('change', ev => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  if (!confirm('Flash ' + file.name + ' (' + kb(file.size) + ') onto the hub?\nIt must be a hub app image (firmware.bin) built for this board. The hub restarts when it is done.')) return;
+  const xhr = new XMLHttpRequest();
+  xhr.open('PUT', '/api/update');
+  xhr.upload.onprogress = e => { if (e.lengthComputable) $('#update-msg').textContent = 'Uploading… ' + Math.round(e.loaded * 100 / e.total) + '%'; };
+  xhr.onload = () => {
+    let r = {};
+    try { r = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+    $('#update-msg').textContent = xhr.status < 300 && r.ok ? 'Installed. The hub is restarting.' : (r.error || 'the upload failed (HTTP ' + xhr.status + ')');
+  };
+  xhr.onerror = () => { $('#update-msg').textContent = 'the upload failed'; };
+  xhr.send(file);
+});
 
 // ----------------------------------------------------------- cloud sync
 // On the hub: the link to the account and its state (in the status message).
@@ -2162,7 +2389,7 @@ async function loadHubs() {
       const seen = h.lastSeen ? Math.round((Date.now() - h.lastSeen) / 1000) : -1;
       root.append(el('div', { class: 'row', style: 'padding:6px 0;border-bottom:1px solid var(--line)' },
         el('span', {}, el('strong', {}, h.name || 'hub'), ' ', el('span', { class: 'mono muted' }, h.hubId)),
-        el('span', { class: 'muted' }, (h.board || '') + (h.fw ? ', firmware ' + h.fw : '')),
+        el('span', { class: 'muted' }, (h.board || '') + (h.fw ? ', firmware ' + h.fw : '') + (h.latest && h.fw && h.latest !== h.fw ? ' (' + h.latest + ' on the site)' : '')),
         el('span', { class: 'chip' + (seen >= 0 && seen < 900 ? ' on' : '') }, seen < 0 ? 'never seen' : 'seen ' + ago(seen) + (h.gaugesOnline ? ', ' + h.gaugesOnline + ' gauge(s) online' : '')),
         el('span', { class: 'spacer' }),
         btn('Unlink', async () => { if (!confirm('Unlink ' + (h.name || h.hubId) + '?')) return; try { await api.del('/api/hubs/' + h.hubId); loadHubs(); } catch (e) { alert(e.message); } }, false, 'small danger')));
@@ -2790,6 +3017,45 @@ function drawLabel(ctx, w, th) {
   else ctx.fillText(w.text || '', cx, cy);
 }
 
+// The time of day, from this browser's clock in the preview; the gauge gets the hub's.
+function clockText(w, d) {
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0'), s = String(d.getSeconds()).padStart(2, '0');
+  if (w.format === '12h') { const half = h < 12 ? 'am' : 'pm'; h = h % 12 || 12; return h + ':' + m + (w.seconds ? ':' + s : '') + ' ' + half; }
+  return String(h).padStart(2, '0') + ':' + m + (w.seconds ? ':' + s : '');
+}
+function drawClock(ctx, w, th) {
+  let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
+  const d = new Date();
+  if ((w.style || 'digital') !== 'analogue') {
+    ctx.font = (w.size || 56) + 'px ' + fontStack(w.font); ctx.textAlign = w.align || 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color(w.color, th, th.fg);
+    if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); cx = 0; cy = 0; }
+    ctx.fillText(clockText(w, d), cx, cy);
+    return;
+  }
+  const r = w.r == null ? 120 : w.r, hw = w.thickness == null ? 6 : w.thickness;
+  if (w.ticks == null || w.ticks) {
+    ctx.strokeStyle = color(w.tickColor, th, th.dim); ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) {
+      const a = rad(i * 30 - 90), len = (i % 3 === 0 ? 0.14 : 0.07) * r;
+      ctx.lineWidth = (i % 3 === 0 ? 2 : 1) * hw / 2;
+      ctx.beginPath(); ctx.moveTo(cx + (r - len) * Math.cos(a), cy + (r - len) * Math.sin(a)); ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); ctx.stroke();
+    }
+  }
+  const hc = color(w.color, th, th.fg);
+  const hand = (deg, len, width, col) => {
+    const a = rad(deg - 90);
+    ctx.strokeStyle = col; ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - 0.12 * len * Math.cos(a), cy - 0.12 * len * Math.sin(a)); ctx.lineTo(cx + len * Math.cos(a), cy + len * Math.sin(a)); ctx.stroke();
+  };
+  const h = d.getHours() % 12, m = d.getMinutes(), s = d.getSeconds();
+  hand(h * 30 + m * 0.5, r * 0.55, hw, hc);
+  hand(m * 6 + s * 0.1, r * 0.82, hw * 0.7, hc);
+  if (w.seconds) hand(s * 6, r * 0.9, hw > 4 ? 2 : hw / 2, color(w.secondColor, th, th.accent));
+  ctx.fillStyle = hc; ctx.beginPath(); ctx.arc(cx, cy, hw * 0.9, 0, Math.PI * 2); ctx.fill();
+}
+
 function drawLight(ctx, w, th, t) {
   let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
   const r = w.r == null ? 14 : w.r;
@@ -2904,7 +3170,7 @@ function drawImageWidget(ctx, w, th, t) {
   ctx.drawImage(img, -d.dw / 2, -d.dh / 2, d.dw, d.dh);
 }
 
-const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath, image: drawImageWidget };
+const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath, image: drawImageWidget, clock: drawClock };
 
 function drawFace(canvas, cfg, faceIdx, t) {
   loadFonts();
@@ -2990,9 +3256,10 @@ function widgetBounds(ctx, w, t) {
   }
   if (w.type === 'path') { const s = w.size || 48; return rotated({ kind: 'rect', cx, cy, w: s, h: s }, w.rotate || 0, cx, cy); }
   if (w.type === 'image') return rotated({ kind: 'rect', cx, cy, w: w.w == null ? 160 : w.w, h: w.h == null ? 160 : w.h }, w.rotate || 0, cx, cy);
-  // Text: number, label, light caption.
-  const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : (w.size || 24);
-  const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : (w.text || '');
+  if (w.type === 'clock' && w.style === 'analogue') { const r = w.r == null ? 120 : w.r; return { kind: 'ring', cx, cy, r, inner: 0 }; }
+  // Text: number, label, light caption, digital clock.
+  const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : w.type === 'clock' ? (w.size || 56) : (w.size || 24);
+  const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : w.type === 'clock' ? clockText(w, new Date()) : (w.text || '');
   ctx.font = size + 'px ' + fontStack(w.font);
   const width = Math.max(ctx.measureText(text).width, size * 0.6), height = size * 1.1;
   if (w.type === 'label' && w.arc > 0) {
@@ -3015,7 +3282,7 @@ function rotated(b, angle, px, py) {
 }
 
 // What dragging a corner handle turns: the widget's rotation, or an arc's start.
-const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', shape: 'rotate', path: 'rotate', image: 'rotate', dial: 'start', ring: 'start' };
+const ROTATE_KEY = { label: 'rotate', number: 'rotate', light: 'rotate', bar: 'rotate', shape: 'rotate', path: 'rotate', image: 'rotate', clock: 'rotate', dial: 'start', ring: 'start' };
 
 // The four corner handles of a selection box, in canvas coordinates.
 function handleCorners(b) {
@@ -3047,14 +3314,17 @@ function startResize(w, b, p) {
   const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
   const d0 = Math.max(4, Math.hypot(p.x - px, p.y - py));
   drag = { resize: true, px, py, d0, moved: false, keys: [],
-    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : w.type === 'path' ? 48 : 24), r0: w.r == null ? 14 : w.r, rotate: 0,
+    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : w.type === 'path' ? 48 : w.type === 'clock' ? 56 : 24), r0: w.r == null ? (w.type === 'clock' ? 120 : 14) : w.r, rotate: 0,
     points0: Array.isArray(w.points) ? w.points.slice() : null };
 }
 
 function applyResize(w, p) {
   const d = Math.hypot(p.x - drag.px, p.y - drag.py);
   const lim = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
-  if (w.type === 'dial' || w.type === 'ring' || w.type === 'rim') {
+  if (w.type === 'clock' && w.style === 'analogue') {
+    w.r = lim(d, 20, 233);
+    drag.keys = ['r'];
+  } else if (w.type === 'dial' || w.type === 'ring' || w.type === 'rim') {
     w.r = lim(d, 40, 233);
     if ((w.type === 'ring' || w.type === 'rim') && w.thickness != null && w.thickness >= w.r) w.thickness = w.r - 2;
     drag.keys = ['r', 'thickness'];
@@ -3420,7 +3690,10 @@ const mock = {
       recording: { active: false }, playback: this.playbackStatus(), gauges_online: 1,
       ecu: { present: false, frames: 0, missed: 0, state: 1 }, bus: { forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub',
-      cloud: { url: 'https://oagauge.online', hub_id: '000000000000', name: 'haltech-hub', linked: false, email: '', state: 'not linked', error: '', last_sync_s: -1, rev: 0, pending: 0 } };
+      cloud: { url: 'https://oagauge.online', hub_id: '000000000000', name: 'haltech-hub', linked: false, email: '', state: 'not linked', error: '', last_sync_s: -1, rev: 0, pending: 0 },
+      update: { current: '0.2.0', board: 'esp32c6', slot: true, state: 'idle', progress: 0, error: '', last: '', checked_s: -1, available: null },
+      gauge_firmware: { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 },
+      time: { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 } };
   },
   playbackStatus() {
     const p = this.playback;
@@ -3564,6 +3837,14 @@ const mock = {
     const parse = () => raw ? JSON.parse(body) : body;
     if (path === '/api/channels/meta') return this.meta;
     if (path === '/api/fonts') return DEFAULT_FONTS;
+    if (path === '/api/intro') {
+      this.intro = this.intro || { enabled: true, style: 'sweep', stagger: 250, duration: 1200, done: true, expected: 1 };
+      if (method === 'PUT') Object.assign(this.intro, parse());
+      return this.intro;
+    }
+    if (path === '/api/intro/play') return { ok: true, gauges: 1 };
+    if (path === '/api/time') return { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 };
+    if (path === '/api/gauge-firmware' || path.startsWith('/api/gauge-firmware/')) return { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 };
     if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length, images: configImages(c) }));
     if (seg[1] === 'configs') {
       if (method === 'GET') { if (!this.configs[seg[2]]) throw new Error('no such config'); return this.configs[seg[2]]; }

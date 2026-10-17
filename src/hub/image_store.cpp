@@ -257,6 +257,30 @@ bool file(const char* name, std::string& path, const char*& contentType) {
     return true;
 }
 
+bool lookupCrc(uint32_t crc, Info& out) {
+    if (!mtx) return false;
+    Guard guard;
+    for (const Entry& e : entries) {
+        if (e.info.crc == crc) {
+            out = e.info;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool fileByCrc(uint32_t crc, std::string& path, const char*& contentType) {
+    if (!mtx) return false;
+    Guard guard;
+    for (const Entry& e : entries) {
+        if (e.info.crc != crc) continue;
+        path = pathFor(e.name, e.info.png);
+        contentType = e.info.png ? "image/png" : "image/jpeg";
+        return true;
+    }
+    return false;
+}
+
 void listJson(JsonArray out) {
     Guard guard;
     for (const Entry& e : entries) {

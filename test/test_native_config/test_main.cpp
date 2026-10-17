@@ -5,6 +5,7 @@
 
 #include "face_model.h"
 #include "haltech.h"
+#include "clock_text.h"
 #include "image_format.h"
 
 using namespace hg;
@@ -581,6 +582,56 @@ void test_hub_adds_the_image_map() {
     TEST_ASSERT_EQUAL(16, c.images.size());
 }
 
+void test_clock_widget() {
+    Config c;
+    ParseResult r = parse(withWidget(R"({"type":"clock","y":233,"size":56,"seconds":true,"format":"12h"})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    const Widget& w = c.faces[0].widgets[0];
+    TEST_ASSERT_EQUAL(int(WidgetType::Clock), int(w.type));
+    TEST_ASSERT_EQUAL(int(ClockStyle::Digital), int(w.clockStyle));
+    TEST_ASSERT_TRUE(w.clockSeconds);
+    TEST_ASSERT_TRUE(w.hour12);
+    TEST_ASSERT_EQUAL(-1, w.channel);  // no channel needed
+    TEST_ASSERT_EQUAL(56, w.size);
+
+    r = parse(withWidget(R"({"type":"clock","style":"analogue","r":140})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL(int(ClockStyle::Analogue), int(c.faces[0].widgets[0].clockStyle));
+    TEST_ASSERT_EQUAL(140, c.faces[0].widgets[0].r);
+    TEST_ASSERT_FALSE(c.faces[0].widgets[0].hour12);
+    TEST_ASSERT_EQUAL(6, c.faces[0].widgets[0].thickness);
+
+    assertRejected(withWidget(R"({"type":"clock","style":"sundial"})"), "style");
+}
+
+void test_clock_text() {
+    char buf[16];
+    // 13:05:09 on some day.
+    const uint32_t t = 1760600000u / 86400u * 86400u + 13 * 3600 + 5 * 60 + 9;
+    const ClockParts p = clockParts(t);
+    TEST_ASSERT_EQUAL(13, p.hour);
+    TEST_ASSERT_EQUAL(5, p.minute);
+    TEST_ASSERT_EQUAL(9, p.second);
+    clockText(true, t, false, false, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("13:05", buf);
+    clockText(true, t, true, false, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("13:05:09", buf);
+    clockText(true, t, false, true, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("1:05 pm", buf);
+    clockText(true, t, true, true, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("1:05:09 pm", buf);
+    clockText(true, 0, false, true, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("12:00 am", buf);
+    clockText(false, t, false, false, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("--:--", buf);
+    clockText(false, t, true, false, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("--:--:--", buf);
+    // Hands: at 3:30 the hour hand is between 3 and 4.
+    const ClockParts q = clockParts(3 * 3600 + 30 * 60);
+    TEST_ASSERT_EQUAL_FLOAT(105.0f, hourHandDegrees(q));
+    TEST_ASSERT_EQUAL_FLOAT(180.0f, minuteHandDegrees(q));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_full_config_parses);
@@ -601,5 +652,7 @@ int main(int, char**) {
     RUN_TEST(test_image_limit_per_config);
     RUN_TEST(test_image_headers);
     RUN_TEST(test_hub_adds_the_image_map);
+    RUN_TEST(test_clock_widget);
+    RUN_TEST(test_clock_text);
     return UNITY_END();
 }

@@ -100,7 +100,10 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     panel = lv_obj_create(screen);
     lv_obj_remove_style_all(panel);
     lv_obj_set_size(panel, w, hgt);
-    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, scaled(36));
+    // The screen is round: a panel this wide only fits whole in the middle
+    // band (its corners were off the glass when it hung from the top), so
+    // it sits a little above centre.
+    lv_obj_align(panel, LV_ALIGN_CENTER, 0, -scaled(20));
     lv_obj_set_style_bg_color(panel, lv_color_hex(0x1C1C1E), 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_90, 0);
     lv_obj_set_style_radius(panel, scaled(20), 0);
@@ -109,6 +112,7 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     lv_obj_set_style_pad_all(panel, pad, 0);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(panel, LV_OBJ_FLAG_CLICKABLE);  // a tap on it is not a tap outside
+    lv_obj_remove_flag(panel, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(panel, onPanelTouched, LV_EVENT_PRESSED, nullptr);
 
     lv_obj_t* title = lv_label_create(panel);
@@ -118,14 +122,18 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
     slider = lv_slider_create(panel);
-    lv_obj_set_size(slider, w - 2 * pad, scaled(18));
-    lv_obj_align(slider, LV_ALIGN_TOP_LEFT, 0, scaled(36));
+    lv_obj_set_size(slider, w - 2 * pad, scaled(30));
+    lv_obj_align(slider, LV_ALIGN_TOP_LEFT, 0, scaled(46));
+    // A drag on the slider is the slider's alone: it must not reach the
+    // screen as a swipe and change the face underneath.
+    lv_obj_remove_flag(slider, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(slider, LV_OBJ_FLAG_PRESS_LOCK);
     lv_slider_set_range(slider, kMinBrightness, 255);
     lv_slider_set_value(slider, brightness < kMinBrightness ? kMinBrightness : brightness, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x3A3A3C), LV_PART_MAIN);
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x0A84FF), LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
-    lv_obj_set_style_pad_all(slider, scaled(6), LV_PART_KNOB);
+    lv_obj_set_style_pad_all(slider, scaled(16), LV_PART_KNOB);  // a 62 px knob
     lv_obj_add_event_cb(slider, onSlider, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_add_event_cb(slider, onSlider, LV_EVENT_RELEASED, nullptr);
 
@@ -148,12 +156,12 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
 
 bool onGesture(lv_dir_t dir) {
     if (!panel) return false;
+    if (openNow) {
+        if (dir == LV_DIR_TOP) close();
+        return true;  // no face change under an open menu
+    }
     if (dir == LV_DIR_BOTTOM) {
         open();
-        return true;
-    }
-    if (dir == LV_DIR_TOP && openNow) {
-        close();
         return true;
     }
     return false;

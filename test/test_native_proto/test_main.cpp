@@ -655,6 +655,56 @@ void test_xfer_image_speed_on_a_clean_link() {
     TEST_ASSERT_LESS_THAN(10000, ms);
 }
 
+void test_input_round_trip() {
+    Input in;
+    in.seq = 77;
+    in.mask = kInputHorn | kInputCruiseSet | kInputVolDown;
+    in.flags = kInputFlagHeartbeat | kInputFlagRaw;
+    in.lines = 3;
+    const CanFrame f = pack(in, 0x0A0B0C);
+    TEST_ASSERT_EQUAL(int(Msg::Input), int(idMsg(f.id)));
+    TEST_ASSERT_EQUAL(int(Dir::GaugeToHub), int(idDir(f.id)));
+    TEST_ASSERT_EQUAL_HEX32(0x0A0B0C, idNode(f.id));
+    TEST_ASSERT_EQUAL(8, f.len);
+    Input in2;
+    TEST_ASSERT_TRUE(unpack(f, in2));
+    TEST_ASSERT_EQUAL(77, in2.seq);
+    TEST_ASSERT_EQUAL_HEX16(kInputHorn | kInputCruiseSet | kInputVolDown, in2.mask);
+    TEST_ASSERT_EQUAL_HEX8(kInputFlagHeartbeat | kInputFlagRaw, in2.flags);
+    TEST_ASSERT_EQUAL(3, in2.lines);
+
+    InputRaw raw;
+    raw.seq = 78;
+    raw.first = 3;
+    raw.mv[0] = 1234;
+    raw.mv[1] = 0;
+    raw.mv[2] = 3300;
+    const CanFrame r = pack(raw, 0x0A0B0C);
+    TEST_ASSERT_EQUAL(int(Msg::Input), int(idMsg(r.id)));
+    InputRaw raw2;
+    TEST_ASSERT_TRUE(unpack(r, raw2));
+    TEST_ASSERT_EQUAL(78, raw2.seq);
+    TEST_ASSERT_EQUAL(3, raw2.first);
+    TEST_ASSERT_EQUAL(1234, raw2.mv[0]);
+    TEST_ASSERT_EQUAL(3300, raw2.mv[2]);
+    raw.first = 0;
+    TEST_ASSERT_TRUE(unpack(pack(raw, 1), raw2));
+    TEST_ASSERT_EQUAL(0, raw2.first);
+
+    // A raw frame is not a state frame and the other way round; short
+    // frames and another layout version are refused.
+    TEST_ASSERT_FALSE(unpack(r, in2));
+    TEST_ASSERT_FALSE(unpack(f, raw2));
+    CanFrame s = f;
+    s.len = 5;
+    TEST_ASSERT_FALSE(unpack(s, in2));
+    s = f;
+    s.data[0] = uint8_t((uint8_t(InputOp::State) << 4) | 2);
+    TEST_ASSERT_FALSE(unpack(s, in2));
+    TEST_ASSERT_EQUAL_HEX16(0x007E, kInputCruiseMask);
+    TEST_ASSERT_EQUAL_HEX16(0x3F80, kInputMediaMask);
+}
+
 void test_intro_round_trip() {
     Intro m;
     m.style = IntroStyle::Chase;
@@ -751,6 +801,7 @@ int main(int, char**) {
     RUN_TEST(test_xfer_new_session_replaces_stale_one);
     RUN_TEST(test_xfer_no_receiver_times_out);
     RUN_TEST(test_asset_query_and_reply_round_trip);
+    RUN_TEST(test_input_round_trip);
     RUN_TEST(test_intro_round_trip);
     RUN_TEST(test_ip_frames_round_trip);
     RUN_TEST(test_xfer_streams_from_storage);

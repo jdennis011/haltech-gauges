@@ -115,6 +115,10 @@ public:
         // `waitMs` with how long to give it. Return false for the bus. May be null.
         bool (*wifiJoin)(const Gauge& gauge, const uint32_t* crcs, size_t count, const uint8_t** data,
                          uint32_t* size, uint32_t* waitMs, void* ctx);
+        // A steering wheel module's buttons (docs/steering-wheel.md). May be null.
+        void (*input)(const Gauge& gauge, const Input& input, void* ctx);
+        // Its raw ladder readings, while it streams them for calibration. May be null.
+        void (*inputRaw)(const Gauge& gauge, const InputRaw& raw, void* ctx);
         void* ctx;
     };
 
@@ -128,8 +132,13 @@ public:
 
     const Gauge& gauge(size_t index) const { return gauges_[index]; }
     const Gauge* find(uint32_t node) const;
-    // Live data is only worth forwarding while a gauge is listening.
+    // Any node is online: something is listening on the bus.
     bool anyOnline() const;
+    // A gauge proper is online: what live data, intros, alerts, display
+    // commands and theme colours are for. A steering wheel module
+    // (Info.hwRevision == kBoardWheel) is a node on the bus but none of that.
+    bool anyGaugeOnline() const;
+    static bool isWheel(const Gauge& gauge) { return gauge.haveInfo && gauge.info.hwRevision == kBoardWheel; }
     static ImageState imageState(const Gauge& gauge, uint32_t crc);
 
     // Sends a command. The gauge's answer appears in its roster entry.
@@ -151,10 +160,13 @@ public:
     bool tryConfig(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs,
                    const uint32_t* images = nullptr, size_t imageCount = 0,
                    XferKind kind = XferKind::TryConfig);
-    // Sends a gauge a WifiJoin message on its own (a firmware fetch). `data`
-    // must stay valid until pushBusy() is false. False if the gauge is
-    // offline or a transfer is running.
-    bool wifiJoin(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs);
+    // Sends a node a payload of `kind` on its own: a WifiJoin for a firmware
+    // fetch, a wheel's calibration. `data` must stay valid until pushBusy()
+    // is false. False if the node is offline or a transfer is running.
+    bool sendPayload(uint32_t node, XferKind kind, const uint8_t* data, uint32_t size, uint32_t nowMs);
+    bool wifiJoin(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs) {
+        return sendPayload(node, XferKind::WifiJoin, data, size, nowMs);
+    }
     // Asks a gauge to upload its stored config; it arrives through Handler::upload.
     bool requestUpload(uint32_t node, uint32_t nowMs);
 

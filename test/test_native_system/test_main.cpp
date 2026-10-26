@@ -14,6 +14,7 @@
 
 #include "alert_dispatch.h"
 #include "intro_sequencer.h"
+#include "wheel_controller.h"
 #include "alert_rules.h"
 #include "channel_store.h"
 #include "crc32.h"
@@ -263,6 +264,31 @@ struct SimHub {
     bool wifiOffered = false;
     int wifiJoins = 0;
     Bytes wifiPayload;
+    // The steering wheel module's buttons and what they drive.
+    hg::wheel::Controller wheel;
+    std::vector<std::pair<uint32_t, bool>> hornLog;  // (ms, on)
+    uint16_t cruiseMask = 0;
+    uint16_t mediaMask = 0;
+    int inputFrames = 0;
+    int rawFrames = 0;
+    bool hornOn() const { return wheel.state().hornOn; }
+
+    static void onHorn(bool on, void* ctx) {
+        SimHub* h = static_cast<SimHub*>(ctx);
+        h->hornLog.push_back({*h->now, on});
+    }
+    static void onCruise(uint16_t mask, void* ctx) { static_cast<SimHub*>(ctx)->cruiseMask = mask; }
+    static void onMedia(uint16_t mask, void* ctx) { static_cast<SimHub*>(ctx)->mediaMask = mask; }
+    static void onInput(const HubManager::Gauge& g, const Input& in, void* ctx) {
+        SimHub* h = static_cast<SimHub*>(ctx);
+        h->inputFrames++;
+        h->wheel.onInput(g.node, in, *h->now);
+    }
+    static void onInputRaw(const HubManager::Gauge& g, const InputRaw& raw, void* ctx) {
+        SimHub* h = static_cast<SimHub*>(ctx);
+        h->rawFrames++;
+        h->wheel.onRaw(g.node, raw, *h->now);
+    }
 
     static bool onDesired(const HubManager::Gauge& g, HubManager::Desired& out, void* ctx) {
         SimHub* h = static_cast<SimHub*>(ctx);
@@ -348,9 +374,14 @@ struct SimHub {
         h.openImage = onOpenImage;
         h.closeImage = onCloseImage;
         h.wifiJoin = onWifiJoin;
+        h.input = onInput;
+        h.inputRaw = onInputRaw;
         h.ctx = this;
         openImages = 0;
         mgr.init(port.link(), h, *now);
+        hg::wheel::Settings ws;
+        ws.hornEnabled = ws.cruiseEnabled = ws.mediaEnabled = true;
+        wheel.init({onHorn, onCruise, onMedia, this}, ws);
     }
     void step() {
         while (!port.rx.empty()) {
@@ -358,6 +389,7 @@ struct SimHub {
             port.rx.pop_front();
         }
         mgr.poll(*now);
+        wheel.poll(*now);
     }
 
     int onlineCount() const {
@@ -388,11 +420,117 @@ void simWifiFetch(SimGauge& g, const uint8_t* data, uint32_t size) {
     }
 }
 
+// A steering wheel module: a GaugeNode that says it is a wheel, with a
+// button mask the test sets, sending as the real module does (docs/steering-wheel.md).
+struct SimWheel {
+    Port port;
+    GaugeNode node;
+    Mac mac;
+    uint32_t* now = nullptr;
+    uint16_t mask = 0;   // what the buttons read right now
+    uint8_t flags = 0;
+    uint16_t mv[3] = {2500, 2500, 2500};
+    uint8_t seq = 0;
+    uint16_t sentMask = 0;
+    uint32_t lastSendMs = 0;
+    bool everSent = false;
+    uint32_t rawUntilMs = 0;
+    uint32_t lastRawMs = 0;
+    Bytes rxBuffer;
+    uint32_t calCrc = 0;  // the calibration it holds
+    int identifyCount = 0;
+    int alertFrames = 0;  // alerts addressed to it: there should be none
+
+    static bool onCommand(Cmd cmd, uint8_t arg, void* ctx) {
+        SimWheel* w = static_cast<SimWheel*>(ctx);
+        switch (cmd) {
+            case Cmd::Identify: w->identifyCount++; return true;
+            case Cmd::InputRaw: w->rawUntilMs = *w->now + uint32_t(arg) * 1000u; return true;
+            default: return false;
+        }
+    }
+    static void onStatus(Status& s, void* ctx) {
+        SimWheel* w = static_cast<SimWheel*>(ctx);
+        s.configCrc = w->calCrc;
+        s.activeFace = 0;
+        s.faceCount = 0;
+        s.vbusMillivolts = 4800;
+        s.flags = 0;
+    }
+    static XferStatus onAccept(XferKind kind, uint32_t size, uint8_t** buffer, void* ctx) {
+        SimWheel* w = static_cast<SimWheel*>(ctx);
+        if (kind != XferKind::WheelCalibration && kind != XferKind::WifiJoin) return XferStatus::BadKind;
+        if (size > 2048) return XferStatus::TooBig;
+        w->rxBuffer.assign(size ? size : 1, 0);
+        *buffer = w->rxBuffer.data();
+        return XferStatus::Ok;
+    }
+    static bool onComplete(XferKind kind, const uint8_t* data, uint32_t size, void* ctx) {
+        SimWheel* w = static_cast<SimWheel*>(ctx);
+        if (kind == XferKind::WheelCalibration) w->calCrc = crc32(data, size);
+        return true;
+    }
+
+    void boot() {
+        port.rx.clear();
+        GaugeNode::Handler h = {};
+        h.command = onCommand;
+        h.status = onStatus;
+        h.transfer = {onAccept, onComplete, nullptr, this};
+        h.ctx = this;
+        Info info;
+        info.fwMajor = 0;
+        info.fwMinor = 1;
+        info.hwRevision = kBoardWheel;
+        node = GaugeNode();
+        node.init(port.link(), mac.data(), GaugeNode::nodeFromMac(mac.data()), info, 0, h);
+        everSent = false;
+        sentMask = 0;
+    }
+
+    void step() {
+        while (!port.rx.empty()) {
+            const CanFrame& f = port.rx.front();
+            if (f.extended && idDir(f.id) == Dir::HubToGauge && idNode(f.id) == node.node() && idMsg(f.id) == Msg::Alert) {
+                alertFrames++;
+            }
+            node.onFrame(f, *now);
+            port.rx.pop_front();
+        }
+        node.poll(*now);
+        if (!node.hubPresent()) return;
+        const uint32_t t = *now;
+        const bool changed = mask != sentMask;
+        const uint32_t period = mask ? kInputHoldPeriodMs : kInputHeartbeatMs;
+        if (changed || !everSent || uint32_t(t - lastSendMs) >= period) {
+            Input in;
+            in.seq = seq++;
+            in.mask = mask;
+            in.flags = uint8_t(flags | ((!changed && everSent) ? kInputFlagHeartbeat : 0));
+            in.lines = 3;
+            if (node.sendInput(in)) {
+                sentMask = mask;
+                lastSendMs = t;
+                everSent = true;
+            }
+        }
+        if (int32_t(rawUntilMs - t) > 0 && uint32_t(t - lastRawMs) >= 100) {
+            InputRaw r;
+            r.seq = seq++;
+            r.first = 0;
+            memcpy(r.mv, mv, sizeof(mv));
+            if (node.sendInputRaw(r)) lastRawMs = t;
+        }
+    }
+};
+
 struct World {
     uint32_t now = 5000;
     Bus bus;
     SimHub hub;
     SimGauge g1, g2;
+    SimWheel wh;
+    bool wheelOn = false;
     bool hubRunning = true;
 
     World() {
@@ -407,12 +545,21 @@ struct World {
         g1.boot();
         g2.boot();
     }
+    // Puts a steering wheel module on the bus next to the gauges.
+    void addWheel() {
+        wh.mac = {0x24, 0x6F, 0x28, 0x77, 0x88, 0x99};
+        wh.now = &now;
+        bus.attach(wh.port);
+        wh.boot();
+        wheelOn = true;
+    }
     void run(uint32_t ms) {
         for (uint32_t i = 0; i < ms; i++) {
             now++;
             if (hubRunning) hub.step();
             g1.step();
             g2.step();
+            if (wheelOn) wh.step();
         }
     }
 };
@@ -672,6 +819,7 @@ struct AlertRig {
             w.hub.step();
             w.g1.step();
             w.g2.step();
+            if (w.wheelOn) w.wh.step();
         }
     }
 };
@@ -1314,6 +1462,141 @@ void test_images_converge_on_a_lossy_bus() {
     TEST_ASSERT_TRUE(w.g2.stored == w.hub.assignments[w.g2.mac]);
 }
 
+// ------------------------------------------------------------ steering wheel
+
+void test_wheel_joins_the_roster_without_being_a_gauge() {
+    World w;
+    w.addWheel();
+    w.run(2000);
+    const HubManager::Gauge* g = w.hub.byMac(w.wh.mac);
+    TEST_ASSERT_NOT_NULL(g);
+    TEST_ASSERT_TRUE(g->haveInfo);
+    TEST_ASSERT_TRUE(HubManager::isWheel(*g));
+    TEST_ASSERT_EQUAL(3, w.hub.onlineCount());
+    TEST_ASSERT_TRUE(w.hub.mgr.anyGaugeOnline());
+    TEST_ASSERT_TRUE(w.hub.inputFrames > 5);  // heartbeats
+    TEST_ASSERT_EQUAL(0, w.hub.wheel.state().mask);
+
+    // With the gauges gone, nothing is listening for live data or theme colours.
+    w.g1.port.connected = false;
+    w.g2.port.connected = false;
+    w.run(4000);
+    TEST_ASSERT_TRUE(w.hub.mgr.anyOnline());
+    TEST_ASSERT_FALSE(w.hub.mgr.anyGaugeOnline());
+    uint32_t colours[kThemeColourCount] = {};
+    TEST_ASSERT_FALSE(w.hub.mgr.themeColours(kBroadcastNode, colours));
+
+    // The intro does not count it: expecting two gauges with one back, the
+    // sequencer waits its settle time instead of firing at once.
+    w.g1.port.connected = true;
+    w.run(2000);
+    hg::intro::Sequencer seq;
+    seq.begin(w.now, 2);
+    w.run(100);
+    seq.poll(w.hub.mgr, w.now);
+    TEST_ASSERT_FALSE(seq.done());
+    uint32_t waited = 0;
+    while (!seq.done() && waited < 5000) {
+        w.run(100);
+        seq.poll(w.hub.mgr, w.now);
+        waited += 100;
+    }
+    TEST_ASSERT_TRUE(seq.done());
+    w.run(50);
+    TEST_ASSERT_EQUAL(1, w.g1.intros.size());
+    TEST_ASSERT_EQUAL(1, w.g1.intros[0].count);
+
+    // An alert for every gauge reaches the gauge and never the wheel.
+    AlertRig rig(w, R"([{"channel":"coolant_temp","when":"above","value":105,"hold":1,"message":"COOLANT HOT"}])");
+    rig.run(CH_coolant_temp, 120, 3000);
+    TEST_ASSERT_TRUE(w.g1.alertShown);
+    TEST_ASSERT_EQUAL(0, w.wh.alertFrames);
+}
+
+void test_wheel_buttons_drive_the_outputs() {
+    World w;
+    w.addWheel();
+    w.run(1500);
+    w.wh.mask = kInputHorn;
+    w.run(5);
+    TEST_ASSERT_TRUE(w.hub.hornOn());
+    TEST_ASSERT_EQUAL(1, w.hub.hornLog.size());
+    TEST_ASSERT_TRUE(w.now - w.hub.hornLog[0].first <= 5);
+    w.wh.mask = kInputCruiseSet | kInputVolUp;
+    w.run(5);
+    TEST_ASSERT_FALSE(w.hub.hornOn());
+    TEST_ASSERT_EQUAL_HEX16(kInputCruiseSet, w.hub.cruiseMask);
+    TEST_ASSERT_EQUAL_HEX16(kInputVolUp, w.hub.mediaMask);
+    w.run(500);  // held: the repeats keep it up
+    TEST_ASSERT_EQUAL_HEX16(kInputCruiseSet, w.hub.cruiseMask);
+    TEST_ASSERT_EQUAL(0, w.hub.wheel.state().failSafeReleases);
+    w.wh.mask = 0;
+    w.run(5);
+    TEST_ASSERT_EQUAL_HEX16(0, w.hub.cruiseMask);
+    TEST_ASSERT_EQUAL_HEX16(0, w.hub.mediaMask);
+}
+
+void test_horn_releases_when_the_wheel_goes_quiet() {
+    World w;
+    w.addWheel();
+    w.run(1500);
+    w.wh.mask = kInputHorn;
+    w.run(50);
+    TEST_ASSERT_TRUE(w.hub.hornOn());
+    w.wh.port.connected = false;  // the plug pulled while the button is held
+    w.run(100);
+    TEST_ASSERT_FALSE(w.hub.hornOn());
+    TEST_ASSERT_EQUAL(1, w.hub.wheel.state().failSafeReleases);
+    w.wh.port.connected = true;
+    w.run(100);
+    TEST_ASSERT_TRUE(w.hub.hornOn());  // still held: on again as soon as it is heard
+    w.wh.mask = 0;
+    w.run(50);
+    TEST_ASSERT_FALSE(w.hub.hornOn());
+}
+
+void test_raw_stream_on_command() {
+    World w;
+    w.addWheel();
+    w.run(1500);
+    TEST_ASSERT_EQUAL(0, w.hub.rawFrames);
+    TEST_ASSERT_TRUE(w.hub.mgr.command(w.wh.node.node(), Cmd::InputRaw, 1));
+    w.run(1100);
+    TEST_ASSERT_TRUE(w.hub.rawFrames >= 9 && w.hub.rawFrames <= 11);
+    TEST_ASSERT_EQUAL(2500, w.hub.wheel.state().rawMv[1]);
+    const int after = w.hub.rawFrames;
+    w.run(1000);
+    TEST_ASSERT_EQUAL(after, w.hub.rawFrames);
+}
+
+void test_calibration_reaches_the_wheel() {
+    World w;
+    w.addWheel();
+    w.run(1500);
+    const std::string cal = R"({"lines":[{"pullup_ohms":2200,"buttons":[{"name":"vol_up","bit":7,"mv":1200,"tol":80}]}]})";
+    const Bytes data(cal.begin(), cal.end());
+    TEST_ASSERT_TRUE(w.hub.mgr.sendPayload(w.wh.node.node(), XferKind::WheelCalibration, data.data(),
+                                           uint32_t(data.size()), w.now));
+    w.run(3000);
+    TEST_ASSERT_EQUAL_HEX32(crc32(data.data(), data.size()), w.wh.calCrc);
+    const HubManager::Gauge* g = w.hub.byMac(w.wh.mac);
+    TEST_ASSERT_NOT_NULL(g);
+    TEST_ASSERT_EQUAL_HEX32(w.wh.calCrc, g->status.configCrc);
+    TEST_ASSERT_FALSE(w.hub.mgr.pushBusy());
+}
+
+void test_lossy_bus_keeps_the_horn_up() {
+    World w;
+    w.addWheel();
+    w.run(1500);
+    w.bus.dropPermille = 20;
+    w.wh.mask = kInputHorn;
+    w.run(2000);
+    TEST_ASSERT_TRUE(w.hub.hornOn());
+    TEST_ASSERT_EQUAL(0, w.hub.wheel.state().failSafeReleases);
+    TEST_ASSERT_TRUE(w.hub.wheel.state().seqGaps > 0);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_gauges_are_silent_without_a_hub);
@@ -1336,6 +1619,12 @@ int main(int, char**) {
     RUN_TEST(test_intro_goes_after_a_wait_when_a_gauge_is_missing);
     RUN_TEST(test_higher_alert_takes_over_the_message);
     RUN_TEST(test_theme_colours_reach_every_gauge);
+    RUN_TEST(test_wheel_joins_the_roster_without_being_a_gauge);
+    RUN_TEST(test_wheel_buttons_drive_the_outputs);
+    RUN_TEST(test_horn_releases_when_the_wheel_goes_quiet);
+    RUN_TEST(test_raw_stream_on_command);
+    RUN_TEST(test_calibration_reaches_the_wheel);
+    RUN_TEST(test_lossy_bus_keeps_the_horn_up);
     RUN_TEST(test_try_config_is_shown_but_not_stored);
     RUN_TEST(test_refused_config_is_not_retried_until_the_gauge_changes);
     RUN_TEST(test_config_newer_than_gauge_firmware_is_not_sent);

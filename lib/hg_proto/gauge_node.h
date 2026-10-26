@@ -97,6 +97,18 @@ public:
         return send(pack(rq, node_));
     }
 
+    // A steering wheel module's buttons, and its raw ladder readings while
+    // the hub asks for them (docs/steering-wheel.md). False with no hub or
+    // no room on the bus.
+    bool sendInput(const Input& in) {
+        if (!hubPresent_) return false;
+        return send(pack(in, node_));
+    }
+    bool sendInputRaw(const InputRaw& raw) {
+        if (!hubPresent_) return false;
+        return send(pack(raw, node_));
+    }
+
 private:
     bool send(const CanFrame& frame) { return link_.send(frame, link_.ctx); }
     void notifyThemeColours();

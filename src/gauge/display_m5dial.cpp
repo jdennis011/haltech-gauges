@@ -68,5 +68,7 @@ void loop() {
 }
 
 uint32_t framesPerSecond() { return lastFps; }
+uint32_t flushMsPerSecond() { return 0; }
+uint32_t lvglMsPerSecond() { return 0; }
 
 }  // namespace display

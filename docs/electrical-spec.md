@@ -659,3 +659,59 @@ list by manufacturer part number.
   positions; the GPS's reception from the chosen antenna spot.
 - **Footprints.** The Waveshare board's pins and outline and the GPS's pins and holes are from
   the makers' files. The cell holder's and the Pololu's are placeholders.
+
+## 6. Steering wheel module and the hub's outputs for it
+
+The module and wiring for `docs/steering-wheel.md` (2026-10-26, designed, not yet built).
+
+### 6.1 Wheel module board
+
+Perfboard first, a PCB once the wheel's ladders are measured.
+
+| Ref | Part | Notes |
+|---|---|---|
+| MCU | Lolin C3 Mini (ESP32-C3) | CAN TX GPIO4, RX GPIO5; ladder lines GPIO0, 1, 3 (and 2); LED GPIO7; BOOT GPIO9. Its own LDO makes 3.3 V from the 5 V pin and needs more than about 3.5 V; the chain delivers at least 4.4 V at the last node (2.4) |
+| U1 | SN65HVD230 (SOIC-8) | From the board's 3V3; RS to GND; 10 k pull-up on D; 100 nF |
+| R_T | 120 R 1 % across CAN H and L | Fitted: this node is always the chain's end |
+| D2 | PESD2CAN | On the pair, next to the pigtail |
+| D1 | SS14 | Chain 5 V to the board's 5 V pin, so USB on the bench cannot feed the chain |
+| JP1 | 2-pin jumper in series with D1 | Pull it to run the module from USB while still plugged into the chain, as on the gauge adapter |
+| C1, C2 | 100 µF electrolytic, 10 µF ceramic | At the 5 V pin: a Wi-Fi fetch draws up to 300 mA for a few seconds |
+| R_L1-3 | 2.2 k | Pull-up from each ladder line to 3V3; change the value if two buttons land within 100 mV of each other |
+| R_S1-3, C_S1-3 | 1 k series into the ADC pin, 100 nF to GND | Filtering; the line runs to buttons under hands |
+| D3-5 | PESD5V0 | One per ladder line |
+| J1 | 4-way pigtail (JST-XH or soldered) | To the clock spring's wheel-side connector: 1 = 5 V, 2 = GND, 3 = CAN H, 4 = CAN L |
+
+### 6.2 Clock spring
+
+The four conductors carry the chain's pin order, 1 = 5 V, 2 = GND, 3 = CAN H, 4 = CAN L.
+Put H and L on adjacent conductors and 5 V and GND on the other two. The ribbon is not a
+twisted pair: after fitting, watch the gauge bus error counters on the Settings tab for ten
+minutes with the wheel plugged in and the wheel turned lock to lock. The old horn wire at
+the column connector becomes the relay's switched line (6.3). With rev A adapters the
+module replaces the terminator plug on the last adapter's J2; with rev B adapters the plug
+into the last adapter carries the pin 5-6 loop so that adapter's 120 R switches out.
+
+### 6.3 Hub carrier rev B additions (P4)
+
+| Ref | Part | Notes |
+|---|---|---|
+| U6 | TJA1051T/3 | Vehicle CAN transceiver on GPIO26 (TX) and GPIO27 (RX); S on GPIO52 with a 10 k pull-down (high = listen only) |
+| JP3 | 120 R | Fitted: a two-node bus with the Rebel |
+| D7 | PESD2CAN | On the vehicle CAN pair |
+| J14 | "VEHICLE CAN" Micro-Fit 3.0 2x2 | 1 = NC, 2 = GND, 3 = CAN H, 4 = CAN L: no supply pin, so a chain plug put here by mistake does nothing |
+| J15 | 1x3 header: 5 V, GND, IN | For an opto-isolated relay module set to low-level trigger; Q2 2N7002 pulls IN low, gate from GPIO49 through 1 k, R 100 k from GPIO49 to GND so reset and brown-out leave it off |
+| Pulsed drive (recommended) | GPIO49 -> 100 nF -> BAT54 charge pump -> 10 µF with 47 k bleed -> Q2 gate | Only a 1 kHz square wave holds the relay; a stuck level drops it in about 50 ms. Firmware flag `HG_HORN_PULSED`; not yet in the firmware, which drives the pin as a level |
+| Relay contact | NO, between the column horn wire and GND | The JZA80 horn button grounds the horn relay's coil (about 150 mA); the car's own horn fuse stays |
+| J13 | 1x6 header: GND, REM, R1-R4 | Wired remote for the head unit |
+| Q3-Q6 | 2N7002 | From GPIO2, 3, 4, 5, each switching R30-R33 (through-hole, unfitted until the head unit is known) to REM |
+| U7 | MCP4531 (DNP) | A digital pot on the board's I2C as the alternative; wiper to REM |
+
+### 6.4 Horn safety
+
+- Off until **Horn** is enabled on the page; off at reset and brown-out by the pull-down.
+- Released within 100 ms of the wheel's reports stopping, whatever the cause.
+- The pulsed drive and the task watchdog cover a hung hub.
+- A page test is a pulse of at most two seconds.
+- The contact is in series with the car's own horn relay, so a stuck contact means
+  "horn on", not an electrical hazard.

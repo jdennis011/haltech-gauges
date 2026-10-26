@@ -53,13 +53,16 @@ size_t sendAll(Cmd cmd, uint8_t arg) {
     size_t sent = 0;
     for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
         const HubManager::Gauge& g = m.gauge(i);
-        if (g.used && g.online && m.command(g.node, cmd, arg)) sent++;
+        if (g.used && g.online && !HubManager::isWheel(g) && m.command(g.node, cmd, arg)) sent++;
     }
     return sent;
 }
 
 // A gauge that has just appeared gets the state everyone else is in.
 void onOnline(const HubManager::Gauge& gauge, void*) {
+    // This fires before the node's Info arrives, so a steering wheel module
+    // gets these once; it answers "not done" and nothing is lost.
+    if (HubManager::isWheel(gauge)) return;
     HubManager& m = hub::manager();
     if (brightnessAll >= 0) m.command(gauge.node, Cmd::SetBrightness, uint8_t(brightnessAll));
     if (screensOff) m.command(gauge.node, Cmd::SetDisplay, 0);

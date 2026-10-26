@@ -5,6 +5,11 @@ with no transceiver (the M5Stack Dial on a USB lead), or one mounted too far awa
 chain. The hub treats it exactly like a gauge on the bus: it shows up in the roster,
 gets its config, images, alerts, the intro and the time, and the page works on it.
 
+> A gauge that is linked but hears nothing from the hub for 15 s drops the link and joins
+> again on its own (seen once on the bench after a reset: joined, addressed, sending, unheard).
+> While linked it prints a line every 10 s with packets sent, send failures, its address and
+> the signal strength.
+
 ## How it works
 
 - The hub listens on UDP port 4510 on both its networks, the access point and the home

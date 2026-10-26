@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ESP32-TWAI-CAN.hpp>
+#include <sdkconfig.h>
 
 #include "can_frame.h"
 
@@ -47,3 +48,26 @@ public:
     CanPortStats stats();
     void service();
 };
+
+// The vehicle CAN bus to the Nexus's second CAN, carrying the steering
+// wheel's cruise buttons as FG Falcon frames (docs/steering-wheel.md). Only
+// the P4 has a third controller for it.
+#if CONFIG_IDF_TARGET_ESP32P4 && defined(TWAI_CAN_NEW_DRIVER)
+#define HG_HAS_FG_PORT 1
+#else
+#define HG_HAS_FG_PORT 0
+#endif
+
+#if HG_HAS_FG_PORT
+class FgPort {
+public:
+    // Begun after the other two ports: the driver hands out controllers in order.
+    bool begin(TwaiSpeed speed);
+    bool read(hg::CanFrame& frame, uint32_t timeoutMs);
+    bool write(const hg::CanFrame& frame);
+    // The transceiver's silent pin: the port listens, never transmits or acknowledges.
+    void setListenOnly(bool on);
+    CanPortStats stats();
+    void service();
+};
+#endif

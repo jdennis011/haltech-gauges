@@ -108,7 +108,7 @@ void poll(uint32_t nowMs) {
             HubManager& m = hub::manager();
             for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
                 const HubManager::Gauge& g = m.gauge(i);
-                if (g.used && g.online && g.haveHello) online++;
+                if (g.used && g.online && g.haveHello && !HubManager::isWheel(g)) online++;
             }
             noteRoster = online != lastGauges;
         }

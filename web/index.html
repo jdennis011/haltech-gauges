@@ -41,6 +41,9 @@ th{color:var(--dim);font-weight:500}
 .bad{color:var(--bad)}
 .editor{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .wrow.sel2{outline:1px dashed #0a84ff}
+#sw-buttons .chip{opacity:.45}#sw-buttons .chip.on{opacity:1;background:var(--blue);color:#fff}
+.swbar{display:inline-block;width:120px;height:10px;background:var(--line);border-radius:5px;overflow:hidden;vertical-align:middle}
+.swbar i{display:block;height:100%;background:var(--blue)}
 #help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
 #help-overlay .card{max-width:520px;margin:16px}
 #help-overlay table td{padding:3px 10px 3px 0;vertical-align:top}
@@ -72,7 +75,10 @@ input[type=range]{width:110px}
 .wrow .wtitle .grip{color:var(--dim);font-size:16px;margin-right:2px}
 .wrow.dragging{opacity:.45}
 .wrow.dropTarget{border-top:2px solid var(--blue)}
-#preview{touch-action:none}
+/* The editor's preview is a square: the face draws itself round, and the
+   selection handles of a widget at the rim land in the corners, where they
+   must stay visible and clickable (a round clip hid them and ate the clicks). */
+#preview{touch-action:none;border-radius:0;background:var(--panel)}
 .wrow .wtitle{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .wrow label{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--dim)}
@@ -169,6 +175,49 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       </div>
     </div>
   </details>
+  <div class="card" id="steering-card" style="display:none">
+    <div class="row"><strong>Steering wheel</strong><span class="muted" id="sw-note"></span><span class="spacer"></span>
+      <button class="btn small" id="sw-update" style="display:none" title="The hub holds a newer build for the wheel module: sends it over Wi-Fi">Update firmware</button></div>
+    <div class="row" id="sw-chips" style="margin-top:6px"></div>
+    <div class="row" id="sw-buttons" style="margin-top:6px"></div>
+    <div class="msg" id="sw-fault"></div>
+    <div class="row" style="margin-top:8px">
+      <strong>Outputs</strong>
+      <label><input type="checkbox" id="sw-out-horn"> Horn relay</label>
+      <label><input type="checkbox" id="sw-out-cruise"> Cruise over CAN</label>
+      <label><input type="checkbox" id="sw-out-media"> Volume (wired remote)</label>
+      <span class="muted" id="sw-outputs-now"></span>
+    </div>
+    <div class="row" style="margin-top:8px"><strong>Test</strong><span class="muted">a pulse of 200 ms</span><span id="sw-tests" class="row"></span><span class="muted" id="sw-test-msg"></span></div>
+    <details class="sub" style="margin-top:8px"><summary>Calibration <span class="muted" id="sw-cal-note"></span></summary>
+      <div class="muted" style="font-size:13px;margin:6px 0">Each line's reading, live while the wheel streams them. Hold a button on the wheel, pick its name for that line and Capture; Save keeps the table on the hub and sends it to the wheel.</div>
+      <div class="row"><button class="btn small" id="sw-raw">Stream readings for 60 s</button><span class="muted" id="sw-raw-note"></span></div>
+      <div id="sw-cal-lines" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:6px"><label class="inline">Tolerance <input type="number" id="sw-cal-tol" value="80" min="10" max="1000" style="width:70px"> mV</label>
+        <button class="btn small primary" id="sw-cal-save">Save and send to the wheel</button><span class="muted" id="sw-cal-msg"></span></div>
+    </details>
+    <details class="sub" style="margin-top:8px"><summary>FG bus to the Nexus <span class="muted" id="sw-fg-note"></span></summary>
+      <div class="muted" style="font-size:13px;margin:6px 0">The cruise buttons as a Ford FG Falcon frame on the hub's vehicle CAN port, for the Rebel's CAN 2 in FG mode. Nothing is sent until the frame has an id (docs/steering-wheel.md says how to find it).</div>
+      <div class="row"><label><input type="checkbox" id="sw-fg-enabled"> Enabled</label>
+        <label class="inline">Speed <select id="sw-fg-kbps"><option>125</option><option>250</option><option>500</option><option>1000</option></select> kbit/s</label>
+        <label><input type="checkbox" id="sw-fg-idle"> Repeat the idle frame</label>
+        <label><input type="checkbox" id="sw-fg-listen"> Listen only</label></div>
+      <div class="row" style="margin-top:6px"><label class="inline">Id <input type="text" id="sw-fg-id" size="8" class="mono" placeholder="0x437"></label>
+        <label><input type="checkbox" id="sw-fg-ext"> 29-bit</label>
+        <label class="inline">Length <input type="number" id="sw-fg-len" min="1" max="8" style="width:50px"></label>
+        <label class="inline">Rate <input type="number" id="sw-fg-rate" min="1" max="100" style="width:60px"> /s</label>
+        <label class="inline">Idle bytes <input type="text" id="sw-fg-idle-bytes" size="26" class="mono"></label></div>
+      <div class="row" id="sw-fg-buttons" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:6px"><label class="inline">Counter byte <input type="number" id="sw-fg-cbyte" min="-1" max="7" style="width:50px" title="-1 for none"></label>
+        <label class="inline">mask <input type="text" id="sw-fg-cmask" size="5" class="mono"></label>
+        <button class="btn small primary" id="sw-fg-save">Save</button><span class="muted" id="sw-fg-msg"></span></div>
+      <div class="row" style="margin-top:8px"><strong>Probe</strong><label class="inline">id <input type="text" id="sw-fg-probe" size="8" class="mono" placeholder="0x437"></label>
+        <button class="btn small" id="sw-fg-probe-go">Start</button><button class="btn small" id="sw-fg-probe-stop">Stop</button><span class="muted" id="sw-fg-probe-note"></span></div>
+      <div id="sw-fg-hits" class="muted" style="font-size:13px"></div>
+      <div style="margin-top:8px"><strong>Heard on the bus</strong> <span class="muted" id="sw-fg-stats"></span></div>
+      <table class="list" id="sw-fg-capture"></table>
+    </details>
+  </div>
   <div id="gauges" class="grid"></div>
 </section>
 
@@ -193,6 +242,15 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
     <div id="sim-overrides" style="margin-top:8px"></div>
     <div class="row" style="margin-top:8px"><select id="sim-add-channel" class="chan"></select><button class="btn small" id="sim-add">Add override</button>
       <span class="muted">Hold a channel at a value, or sweep it between your own limits. Values are in the channel's stored unit.</span></div>
+    <div class="row" style="margin-top:8px"><strong>Presets</strong><select id="sim-preset"></select>
+      <button class="btn small" id="sim-preset-load" title="Apply the preset's speed and overrides">Load</button>
+      <button class="btn small" id="sim-preset-save" title="Keep the speed and overrides in force under a name, on the hub">Save as…</button>
+      <button class="btn small" id="sim-preset-delete">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn small" id="sim-preset-download" title="The selected preset, or the settings in force, as a file">Download</button>
+      <button class="btn small" id="sim-preset-import" title="A preset file made here or on another hub">Import file</button>
+      <input type="file" id="sim-preset-file" accept=".json,application/json" hidden>
+      <span class="muted" id="sim-preset-msg"></span></div>
   </div>
   <div class="card row"><input type="text" id="live-filter" placeholder="Filter channels…"><span class="muted" id="live-note"></span></div>
   <div class="card"><table id="live-table"><thead><tr><th>Channel</th><th>Name</th><th class="live-val">Value</th><th>Unit</th></tr></thead><tbody></tbody></table></div>
@@ -323,7 +381,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       <label><input type="checkbox" id="intro-on"> On at key-on</label>
       <label>Style <select id="intro-style"><option value="sweep">sweep: everything together</option><option value="chase">chase: one widget after another</option><option value="fade">fade: just fade in</option></select></label>
       <label>Stagger <input type="number" id="intro-stagger" min="0" max="5000" step="50" style="width:80px"> ms</label>
-      <label>Each <input type="number" id="intro-duration" min="200" max="10000" step="100" style="width:80px"> ms</label>
+      <label>Duration per gauge <input type="number" id="intro-duration" min="200" max="10000" step="100" style="width:80px"> ms</label>
       <span class="spacer"></span>
       <button class="btn primary small" id="btn-intro-play">Play now</button>
     </div>
@@ -482,6 +540,7 @@ function showTab(name) {
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
   if (name === 'settings') { loadHubs(); loadIntro(); loadSd(); }
+  if (name === 'gauges') loadSteering();
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -534,6 +593,7 @@ function onMessage(m) {
   else if (m.t === 'gauges') { state.gauges = m.gauges || []; renderGaugesIfIdle(); renderTryGauges(); }
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
   else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
+  else if (m.t === 'wheel') renderSteering(m);
   else if (m.t === 'themeColours' && themeListOk(m.colours)) {
     if (Date.now() < wheel.busyUntil) return;  // the wheel is ahead of what the hub last saved
     state.themeColours = m.colours;
@@ -1082,9 +1142,12 @@ async function buildBackup() {
   let imageList = [];
   try { imageList = (await api.get('/api/images')).images || []; } catch (e) { /* a hub from before images */ }
   for (const im of imageList) images[im.name] = { type: im.type, data: await blobToB64(await imageBlob(im.name)) };
+  let simulator = null, simPresets = [];
+  try { simulator = await api.get('/api/simulator'); simPresets = await api.get('/api/simulator/presets'); } catch (e) { /* a hub from before presets */ }
   return { kind: 'haltech-gauges-backup', schema: 1, exported: new Date().toISOString(),
     hub: state.status ? { fw: state.status.fw, board: state.status.board } : null, configs, gauges, assignments, alerts: alerts.rules || [],
-    themeColours: (await api.get('/api/theme-colours')).colours, images };
+    themeColours: (await api.get('/api/theme-colours')).colours, images,
+    simulator: simulator ? { speed: simulator.speed, paused: simulator.paused, overrides: simulator.overrides } : null, simPresets };
 }
 
 async function exportAll() {
@@ -1153,9 +1216,24 @@ async function importAll(file) {
     try { await api.put('/api/alerts', rules); state.alerts = rules; renderAlerts(); }
     catch (e) { errors.push('alerts: ' + e.message); }
   }
+  // The simulator's settings and presets, when the export has them.
+  let simNote = '';
+  if (bundle.simulator && typeof bundle.simulator === 'object') {
+    const map = {};
+    for (const o of bundle.simulator.overrides || []) map[o.channel] = o.hold != null ? { hold: o.hold } : { min: o.min, max: o.max };
+    try { await simPost({ speed: bundle.simulator.speed || 1, paused: !!bundle.simulator.paused, clear: true, overrides: map }, false); simNote = ', the simulator settings'; }
+    catch (e) { errors.push('simulator: ' + e.message); }
+  }
+  const presets = Array.isArray(bundle.simPresets) ? bundle.simPresets : [];
+  let presetsDone = 0;
+  for (const p of presets) {
+    try { await api.put('/api/simulator/presets/' + encodeURIComponent(p.name), presetBody(p)); presetsDone++; }
+    catch (e) { errors.push('preset ' + p.name + ': ' + e.message); }
+  }
+  if (presets.length) { await loadSimPresets(); simNote += ' and ' + presetsDone + ' simulator preset(s)'; }
   await loadConfigs();
   await loadImages();
-  alert('Imported ' + done.configs + ' config(s), ' + done.images + ' image(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s)' + (alerts ? ', and the alerts' : '') + '.' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
+  alert('Imported ' + done.configs + ' config(s), ' + done.images + ' image(s), ' + done.gauges + ' planned gauge(s) and ' + done.assignments + ' assignment(s)' + (alerts ? ', and the alerts' : '') + simNote + '.' + (errors.length ? '\nProblems:\n' + errors.join('\n') : ''));
 }
 
 $('#btn-export-all').addEventListener('click', exportAll);
@@ -2085,9 +2163,67 @@ function drawAlertBanner(canvas, text, col) {
 async function loadSim() {
   try { state.sim = await api.get('/api/simulator'); } catch (e) { state.sim = null; }
   renderSim();
+  await loadSimPresets();
   await pullCloudSim();
   await loadLibrary();
 }
+
+// Presets: named sets of speed, paused and overrides kept on the hub, and as files.
+async function loadSimPresets() {
+  try { state.simPresets = await api.get('/api/simulator/presets'); } catch (e) { state.simPresets = []; }
+  renderSimPresets();
+}
+function renderSimPresets() {
+  const sel = $('#sim-preset'), current = sel.value, list = state.simPresets || [];
+  sel.innerHTML = '';
+  sel.append(el('option', { value: '' }, list.length ? 'Pick a preset…' : 'No presets yet'));
+  for (const p of list) {
+    const n = (p.overrides || []).length;
+    sel.append(el('option', { value: p.name }, p.name + ' (' + p.speed + 'x, ' + n + ' override' + (n === 1 ? '' : 's') + ')'));
+  }
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+const presetBody = p => ({ speed: p.speed, paused: !!p.paused, overrides: p.overrides || [] });
+$('#sim-preset-load').addEventListener('click', async () => {
+  const n = $('#sim-preset').value;
+  if (!n) { $('#sim-preset-msg').textContent = 'Pick a preset first.'; return; }
+  try { state.sim = await api.post('/api/simulator/presets/' + encodeURIComponent(n) + '/apply', {}); renderSim(); $('#sim-preset-msg').textContent = 'Loaded ' + n + '.'; }
+  catch (e) { $('#sim-preset-msg').textContent = e.message; }
+});
+$('#sim-preset-save').addEventListener('click', async () => {
+  const n = (prompt('A name for the speed and overrides in force:', $('#sim-preset').value || '') || '').trim();
+  if (!n) return;
+  try { await api.put('/api/simulator/presets/' + encodeURIComponent(n), {}); await loadSimPresets(); $('#sim-preset').value = n; $('#sim-preset-msg').textContent = 'Saved ' + n + '.'; }
+  catch (e) { $('#sim-preset-msg').textContent = e.message; }
+});
+$('#sim-preset-delete').addEventListener('click', async () => {
+  const n = $('#sim-preset').value;
+  if (!n || !confirm('Delete the preset "' + n + '"?')) return;
+  try { await api.del('/api/simulator/presets/' + encodeURIComponent(n)); await loadSimPresets(); $('#sim-preset-msg').textContent = 'Deleted ' + n + '.'; }
+  catch (e) { $('#sim-preset-msg').textContent = e.message; }
+});
+$('#sim-preset-download').addEventListener('click', () => {
+  const n = $('#sim-preset').value, p = (state.simPresets || []).find(x => x.name === n);
+  const data = p ? p : state.sim ? { name: 'current', speed: state.sim.speed, paused: state.sim.paused, overrides: state.sim.overrides } : null;
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(Object.assign({ kind: 'haltech-gauges-sim-preset' }, data), null, 2)], { type: 'application/json' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: 'sim-' + String(data.name || 'current').replace(/[^A-Za-z0-9_-]+/g, '-') + '.json' });
+  document.body.append(a);
+  a.click();
+  a.remove();
+});
+$('#sim-preset-import').addEventListener('click', () => $('#sim-preset-file').click());
+$('#sim-preset-file').addEventListener('change', async ev => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  let p;
+  try { p = JSON.parse(await file.text()); } catch (e) { alert('Not a JSON file: ' + e.message); return; }
+  if (!p || p.kind !== 'haltech-gauges-sim-preset') { alert('That is not a simulator preset file (made by Download here).'); return; }
+  const n = String(p.name || file.name.replace(/\.json$/i, '')).slice(0, 24);
+  try { await api.put('/api/simulator/presets/' + encodeURIComponent(n), presetBody(p)); await loadSimPresets(); $('#sim-preset').value = n; $('#sim-preset-msg').textContent = 'Imported ' + n + '; Load applies it.'; }
+  catch (e) { alert(e.message); }
+});
 
 async function simPost(changes, pushToAccount = true) {
   try { state.sim = await api.post('/api/simulator', changes); } catch (e) { alert(e.message); }
@@ -2309,6 +2445,222 @@ $('#btn-sta-forget').addEventListener('click', async () => {
   catch (e) { $('#sta-msg').textContent = e.message; }
 });
 
+
+// ---------------------------------------------------------- steering wheel
+// The steering wheel module (docs/steering-wheel.md): the hub pushes its view
+// as {"t":"wheel",...}; the card edits the outputs, the calibration and the
+// FG frame table, and tests the outputs.
+
+const SW_BUTTONS = ['horn', 'cruise_on_off', 'cruise_set', 'cruise_resume', 'cruise_accel', 'cruise_decel', 'cruise_cancel',
+  'vol_up', 'vol_down', 'mode', 'mute', 'seek_up', 'seek_down', 'phone'];
+const SW_FG_BUTTONS = ['on_off', 'set', 'resume', 'accel', 'decel', 'cancel'];
+const swLabel = n => n.replace(/_/g, ' ');
+let swCal = null;        // the calibration being edited: {lines:[{pullup_ohms, buttons:[{name, bit, mv, tol}]}]}
+let swCalDirty = false;  // edited here, so pushes do not overwrite it
+let swFgDirty = false;
+const swHex = (v, w) => '0x' + (+v || 0).toString(16).toUpperCase().padStart(w || 2, '0');
+
+async function loadSteering() {
+  if (ONLINE) return;
+  try { renderSteering(await api.get('/api/wheel')); } catch (e) { /* the push will come */ }
+}
+
+function swTable(w) {
+  if (swCal && swCalDirty) return swCal;
+  let t = null;
+  try { if (w.calibration && w.calibration.json) t = JSON.parse(w.calibration.json); } catch (e) { t = null; }
+  if (!t || !Array.isArray(t.lines)) t = { lines: [] };
+  swCal = t;
+  return t;
+}
+
+function renderSteering(w) {
+  state.wheel = w;
+  const card = $('#steering-card');
+  if (!w || !w.present) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  $('#sw-note').textContent = w.online ? 'on the chain' : 'not heard from';
+  const chips = $('#sw-chips');
+  chips.innerHTML = '';
+  const chip = (text, cls) => chips.append(el('span', { class: 'chip' + (cls ? ' ' + cls : '') }, text));
+  chip(w.online ? 'online' : 'offline' + (w.last_seen_s != null ? ', ' + w.last_seen_s + ' s ago' : ''), w.online ? 'on' : '');
+  if (w.node) chip(w.node + (w.mac ? ' \u00b7 ' + w.mac : ''));
+  if (w.fw) chip('firmware ' + w.fw);
+  if (w.online && w.link_lost) chip('link lost: nothing heard for a second', 'on');
+  if (w.fail_safe_releases) chip(w.fail_safe_releases + ' fail-safe release' + (w.fail_safe_releases === 1 ? '' : 's'));
+  if (w.seq_gaps) chip(w.seq_gaps + ' lost frame' + (w.seq_gaps === 1 ? '' : 's'));
+  if (w.uncalibrated) chip('not calibrated: every button reads as none');
+  // Update firmware: the hub's stored build for board 3 against what the wheel runs.
+  const boards = state.status && state.status.gauge_firmware && state.status.gauge_firmware.boards || [];
+  const board = boards.find(b => b.id === 3);
+  const newer = board && board.stored && w.fw && board.stored.version !== w.fw;
+  $('#sw-update').style.display = newer && w.online ? '' : 'none';
+  $('#sw-update').textContent = newer ? 'Update firmware to ' + board.stored.version : 'Update firmware';
+
+  const bs = $('#sw-buttons');
+  bs.innerHTML = '';
+  for (const b of w.buttons || []) {
+    bs.append(el('span', { class: 'chip' + (b.down ? ' on' : ''), title: b.changed_s != null ? 'last changed ' + b.changed_s + ' s ago' : 'never seen' }, swLabel(b.name)));
+  }
+  $('#sw-fault').textContent = w.fault ? 'A ladder line reads out of range: a short or a broken wire. The horn stays off until it clears.' : '';
+  $('#sw-fault').className = 'msg' + (w.fault ? ' bad' : '');
+
+  const s = w.settings || {}, o = w.outputs || {};
+  $('#sw-out-horn').checked = !!s.horn;
+  $('#sw-out-cruise').checked = !!s.cruise;
+  $('#sw-out-media').checked = !!s.media;
+  $('#sw-outputs-now').textContent = 'now: horn ' + (o.horn ? 'ON' : 'off') + ', cruise ' + (o.cruise ? swHex(o.cruise, 4) : 'none') + ', volume ' + (o.media ? swHex(o.media, 4) : 'none');
+  const tests = $('#sw-tests');
+  tests.innerHTML = '';
+  for (const n of SW_BUTTONS) {
+    const enabled = n === 'horn' ? s.horn : n.startsWith('cruise') ? s.cruise : s.media;
+    tests.append(btn(swLabel(n), () => swTest(n), !enabled, 'small', enabled ? 'Pulse this output for 200 ms' : 'That output is off'));
+  }
+
+  const cal = w.calibration || {};
+  $('#sw-cal-note').textContent = !cal.stored ? 'none stored' : cal.in_sync ? 'stored, on the wheel' : cal.pending ? 'stored, sending to the wheel' : w.online ? 'stored, the wheel holds a different one' : 'stored';
+  renderSwCal(w);
+  renderSwFg(w.fg || {});
+}
+
+function renderSwCal(w) {
+  const t = swTable(w);
+  const root = $('#sw-cal-lines');
+  root.innerHTML = '';
+  const lines = Math.max(w.lines || 3, t.lines.length, 1);
+  const raw = w.raw || [];
+  $('#sw-raw-note').textContent = w.raw_age_s != null && w.raw_age_s >= 0 ? (w.raw_age_s < 2 ? 'live' : 'last reading ' + w.raw_age_s + ' s ago') : 'no readings yet';
+  for (let i = 0; i < lines; i++) {
+    const line = t.lines[i] || (t.lines[i] = { pullup_ohms: 2200, buttons: [] });
+    const mv = raw[i] || 0;
+    const pick = el('select', {}, ...SW_BUTTONS.map(n => el('option', { value: n }, swLabel(n))));
+    const rowEl = el('div', { class: 'row', style: 'margin-bottom:4px' },
+      el('span', { style: 'min-width:60px' }, 'Line ' + i),
+      el('span', { class: 'swbar' }, el('i', { style: 'width:' + Math.min(100, mv / 25) + '%' })),
+      el('span', { class: 'mono', style: 'min-width:70px' }, mv + ' mV'),
+      pick,
+      btn('Capture', () => {
+        if (!mv) { $('#sw-cal-msg').textContent = 'No reading on that line yet: start the stream and hold the button.'; return; }
+        const name = pick.value;
+        let b = line.buttons.find(x => x.name === name);
+        if (!b) { b = { name, bit: SW_BUTTONS.indexOf(name) }; line.buttons.push(b); }
+        b.mv = mv;
+        b.tol = +$('#sw-cal-tol').value || 80;
+        swCalDirty = true;
+        renderSwCal(state.wheel);
+      }, false, 'small'));
+    for (const b of line.buttons) {
+      rowEl.append(el('span', { class: 'chip', title: '\u00b1 ' + (b.tol || 80) + ' mV' }, swLabel(b.name) + ' ' + b.mv + ' mV',
+        btn('\u00d7', () => { line.buttons = line.buttons.filter(x => x !== b); swCalDirty = true; renderSwCal(state.wheel); }, false, 'small', 'Remove')));
+    }
+    root.append(rowEl);
+  }
+}
+
+function renderSwFg(fg) {
+  $('#sw-fg-note').textContent = !fg.available ? 'no vehicle CAN port on this hub' : !fg.enabled ? 'off' : fg.listen ? 'listening only' : fg.table_valid ? 'sending' : 'enabled, no frame id yet';
+  $('#sw-fg-listen').checked = !!fg.listen;
+  $('#sw-fg-stats').textContent = fg.up ? 'port up at ' + fg.kbps + ' kbit/s: ' + (fg.rx || 0) + ' received, ' + (fg.tx || 0) + ' sent' + (fg.tx_failed ? ', ' + fg.tx_failed + ' refused' : '') + (fg.error ? '; ' + fg.error : '') : (fg.error || 'port not started');
+  const t = fg.table || {};
+  if (!swFgDirty) {
+    $('#sw-fg-enabled').checked = !!fg.enabled;
+    $('#sw-fg-kbps').value = String(fg.kbps || 500);
+    $('#sw-fg-idle').checked = fg.send_idle !== false;
+    $('#sw-fg-id').value = t.id && t.id !== '0x0' ? t.id : '';
+    $('#sw-fg-ext').checked = !!t.ext;
+    $('#sw-fg-len').value = t.len || 8;
+    $('#sw-fg-rate').value = t.rate || 20;
+    $('#sw-fg-idle-bytes').value = t.idle || '00 00 00 00 00 00 00 00';
+    const bRoot = $('#sw-fg-buttons');
+    bRoot.innerHTML = '';
+    for (const n of SW_FG_BUTTONS) {
+      const b = (t.buttons || {})[n] || {};
+      bRoot.append(el('label', { class: 'inline' }, swLabel(n) + ' byte ', el('input', { type: 'number', min: 0, max: 7, style: 'width:60px', id: 'sw-fg-b-' + n, value: b.byte != null ? b.byte : 0 }),
+        ' mask ', el('input', { type: 'text', size: 4, class: 'mono', id: 'sw-fg-m-' + n, value: b.mask || '0x00' })));
+    }
+    const c = t.counter || {};
+    $('#sw-fg-cbyte').value = c.byte != null ? c.byte : -1;
+    $('#sw-fg-cmask').value = c.mask || '0x0F';
+  }
+  const pr = fg.probe || {};
+  $('#sw-fg-probe-note').textContent = pr.running ? 'probing ' + pr.id + ', bit ' + pr.bit + ' of 63' : pr.id ? 'last probe ' + pr.id + (pr.hits && pr.hits.length ? '' : ': nothing moved') : '';
+  const hits = $('#sw-fg-hits');
+  hits.innerHTML = '';
+  for (const h of pr.hits || []) hits.append(el('div', {}, 'bit ' + h.bit + ' (byte ' + h.byte + ' mask ' + swHex(h.mask) + ') moved ' + h.channel + ' from ' + h.from + ' to ' + h.to));
+  const table = $('#sw-fg-capture');
+  table.innerHTML = '';
+  const rows = (fg.capture || []).slice().sort((a, b) => (a.id > b.id ? 1 : -1));
+  if (rows.length) {
+    table.append(el('tr', {}, el('th', {}, 'Id'), el('th', {}, 'Count'), el('th', {}, 'Period'), el('th', {}, 'Last data'), el('th', {}, '')));
+    for (const r of rows) {
+      table.append(el('tr', {}, el('td', { class: 'mono' }, r.id), el('td', {}, String(r.count)), el('td', {}, r.period_ms ? r.period_ms + ' ms' : ''), el('td', { class: 'mono' }, r.data),
+        el('td', {}, btn('Use', () => { swFgDirty = true; $('#sw-fg-id').value = r.id; $('#sw-fg-idle-bytes').value = r.data; $('#sw-fg-len').value = r.data.split(' ').length; $('#sw-fg-probe').value = r.id; }, false, 'small', 'Fill the table and the probe from this frame'))));
+    }
+  }
+}
+
+async function swSettings(body, msgSel) {
+  try { await api.put('/api/wheel/settings', body); if (msgSel) $(msgSel).textContent = 'Saved.'; swFgDirty = false; loadSteering(); }
+  catch (e) { if (msgSel) $(msgSel).textContent = e.message; else alert(e.message); }
+}
+for (const [id, key] of [['sw-out-horn', 'horn'], ['sw-out-cruise', 'cruise'], ['sw-out-media', 'media']]) {
+  $('#' + id).addEventListener('change', ev => {
+    if (key === 'horn' && ev.target.checked && !confirm('Enable the horn relay? The wheel\'s horn button will sound the car\'s horn.')) { ev.target.checked = false; return; }
+    swSettings({ [key]: ev.target.checked });
+  });
+}
+async function swTest(name) {
+  if (name === 'horn' && !confirm('Sound the horn for 200 ms?')) return;
+  try { await api.post('/api/wheel/test', { output: name, ms: 200 }); $('#sw-test-msg').textContent = swLabel(name) + ' pulsed.'; }
+  catch (e) { $('#sw-test-msg').textContent = e.message; }
+}
+$('#sw-update').addEventListener('click', async () => {
+  const w = state.wheel;
+  if (!w || !w.node) return;
+  try { await api.post('/api/gauges/' + w.node + '/update', {}); $('#sw-note').textContent = 'sending the firmware'; } catch (e) { alert(e.message); }
+});
+$('#sw-raw').addEventListener('click', async () => {
+  try { await api.post('/api/wheel/raw', { seconds: 60 }); $('#sw-raw-note').textContent = 'streaming'; } catch (e) { $('#sw-raw-note').textContent = e.message; }
+});
+$('#sw-cal-save').addEventListener('click', async () => {
+  if (!swCal) return;
+  const tol = +$('#sw-cal-tol').value || 80;
+  for (const l of swCal.lines) for (const b of l.buttons) b.tol = tol;
+  const lines = swCal.lines.filter(l => l.buttons.length);
+  try {
+    await api.put('/api/wheel/calibration', JSON.stringify({ lines }), true);
+    swCalDirty = false;
+    $('#sw-cal-msg').textContent = 'Saved; the wheel gets it next.';
+    loadSteering();
+  } catch (e) { $('#sw-cal-msg').textContent = e.message; }
+});
+for (const id of ['sw-fg-enabled', 'sw-fg-kbps', 'sw-fg-idle', 'sw-fg-id', 'sw-fg-ext', 'sw-fg-len', 'sw-fg-rate', 'sw-fg-idle-bytes', 'sw-fg-cbyte', 'sw-fg-cmask']) {
+  $('#' + id).addEventListener('input', () => { swFgDirty = true; });
+}
+$('#sw-fg-buttons').addEventListener('input', () => { swFgDirty = true; });
+$('#sw-fg-save').addEventListener('click', () => {
+  const buttons = {};
+  for (const n of SW_FG_BUTTONS) {
+    const b = $('#sw-fg-b-' + n), m = $('#sw-fg-m-' + n);
+    if (b && m) buttons[n] = { byte: +b.value || 0, mask: m.value.trim() || '0x00' };
+  }
+  const cbyte = +$('#sw-fg-cbyte').value;
+  const table = { id: $('#sw-fg-id').value.trim() || '0x0', ext: $('#sw-fg-ext').checked, len: +$('#sw-fg-len').value || 8, rate: +$('#sw-fg-rate').value || 20,
+    idle: $('#sw-fg-idle-bytes').value.trim(), buttons, counter: cbyte >= 0 ? { byte: cbyte, mask: $('#sw-fg-cmask').value.trim() || '0x0F' } : {} };
+  swSettings({ fg: { enabled: $('#sw-fg-enabled').checked, kbps: +$('#sw-fg-kbps').value, send_idle: $('#sw-fg-idle').checked, table } }, '#sw-fg-msg');
+});
+$('#sw-fg-listen').addEventListener('change', async ev => {
+  try { await api.post('/api/wheel/fg', { listen: ev.target.checked }); } catch (e) { $('#sw-fg-msg').textContent = e.message; ev.target.checked = !ev.target.checked; }
+});
+$('#sw-fg-probe-go').addEventListener('click', async () => {
+  const id = $('#sw-fg-probe').value.trim();
+  if (!id) { $('#sw-fg-probe-note').textContent = 'Give an id to probe.'; return; }
+  try { await api.post('/api/wheel/fg', { probe: id, ext: $('#sw-fg-ext').checked }); $('#sw-fg-probe-note').textContent = 'probing ' + id; }
+  catch (e) { $('#sw-fg-probe-note').textContent = e.message; }
+});
+$('#sw-fg-probe-stop').addEventListener('click', async () => {
+  try { await api.post('/api/wheel/fg', { probe: 0 }); $('#sw-fg-probe-note').textContent = 'stopped'; } catch (e) { $('#sw-fg-probe-note').textContent = e.message; }
+});
 
 // ---------------------------------------------------------- start-up intro
 // The hub's settings for the key-on intro, and playing it now (docs/startup-animation.md).
@@ -4143,13 +4495,13 @@ const mock = {
   },
   // Demo state survives a reload in this browser.
   save() {
-    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, recordings: this.recordings, alerts: this.alerts, themeColours: this.themeColours, images: this.images })); return true; }
+    try { localStorage.setItem('hg-demo', JSON.stringify({ configs: this.configs, assignments: this.assignments, virtual: this.virtual, sim: this.sim, simState: this.simState, simPresets: this.simPresets || [], recordings: this.recordings, alerts: this.alerts, themeColours: this.themeColours, images: this.images })); return true; }
     catch (e) { return false; /* no storage, or full */ }
   },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem('hg-demo'));
-      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (themeListOk(s.themeColours)) this.themeColours = s.themeColours; if (s.images && typeof s.images === 'object') this.images = s.images; }
+      if (s) { this.configs = s.configs || {}; this.assignments = s.assignments || {}; this.virtual = s.virtual || this.virtual; this.sim = s.sim !== false; if (s.simState) this.simState = Object.assign(this.simState, s.simState); if (Array.isArray(s.simPresets)) this.simPresets = s.simPresets; if (s.recordings) this.recordings = s.recordings; if (Array.isArray(s.alerts)) this.alerts = s.alerts; if (themeListOk(s.themeColours)) this.themeColours = s.themeColours; if (s.images && typeof s.images === 'object') this.images = s.images; }
     } catch (e) { /* ignore */ }
   },
   async handle(method, path, body, raw) {
@@ -4163,6 +4515,7 @@ const mock = {
       return this.intro;
     }
     if (path === '/api/intro/play') return { ok: true, gauges: 1 };
+    if (path === '/api/wheel' || path.startsWith('/api/wheel/')) return { present: false };
     if (path === '/api/sd' || path.startsWith('/api/sd/')) return { card: { slot: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, file: '', rows: 0, bytes: 0, seconds: 0 }, logs: [] };
     if (path === '/api/time') return { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 };
     if (path === '/api/gauge-firmware' || path.startsWith('/api/gauge-firmware/')) return { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 };
@@ -4181,6 +4534,24 @@ const mock = {
     if (seg[1] === 'assignments') { if (body.name) this.assignments[seg[2]] = body.name; else delete this.assignments[seg[2]]; return { ok: true }; }
     if (path === '/api/templates') return Object.entries(this.templates).map(([name, t]) => ({ name, title: t.name }));
     if (seg[1] === 'templates') return this.templates[seg[2]];
+    if (path === '/api/simulator/presets') return this.simPresets || [];
+    if (seg[1] === 'simulator' && seg[2] === 'presets') {
+      const name = decodeURIComponent(seg[3] || '');
+      this.simPresets = this.simPresets || [];
+      if (method === 'DELETE') { this.simPresets = this.simPresets.filter(p => p.name !== name); return { ok: true }; }
+      if (method === 'PUT') {
+        const ov = body.overrides ? (Array.isArray(body.overrides) ? body.overrides : Object.entries(body.overrides).map(([channel, o]) => Object.assign({ channel }, o))) : this.simState.overrides;
+        const p = { name, speed: body.speed != null ? +body.speed : this.simState.speed, paused: body.paused != null ? !!body.paused : this.simState.paused, overrides: ov.slice() };
+        this.simPresets = this.simPresets.filter(x => x.name !== name).concat([p]);
+        return { ok: true };
+      }
+      const p = this.simPresets.find(x => x.name === name);
+      if (!p) throw new Error('no such preset');
+      this.simState.speed = p.speed;
+      this.simState.paused = !!p.paused;
+      this.simState.overrides = (p.overrides || []).slice();
+      return { enabled: this.sim, paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides };
+    }
     if (path === '/api/simulator') {
       if (method === 'POST') {
         if (body.enabled != null) this.sim = !!body.enabled;

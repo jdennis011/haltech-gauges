@@ -36,6 +36,10 @@
 #include "units.h"
 #include "virtual_gauges.h"
 #include "web_assets.h"
+#include "fg_can.h"
+#include "sim_presets.h"
+#include "swc_output.h"
+#include "wheel.h"
 #include "wifi_ap.h"
 #include "wifi_xfer.h"
 
@@ -68,6 +72,8 @@ uint32_t lastLiveMs = 0;
 uint32_t sentRosterVersion = 0;
 uint32_t lastAlertsMs = 0;
 uint32_t sentAlertVersion = 0;
+uint32_t lastWheelMs = 0;
+uint32_t sentWheelVersion = 0;
 uint32_t sentThemeVersion = 0;
 uint32_t skippedPushes = 0;
 
@@ -322,7 +328,7 @@ void buildGauges(JsonArray arr) {
         size_t count = 0;
         for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
             const HubManager::Gauge& g = m.gauge(i);
-            if (!g.used) continue;
+            if (!g.used || HubManager::isWheel(g)) continue;  // the wheel has its own card
             slots[i] = g.haveHello ? intro::slotOf(g.mac) : -1;
             keys[i] = slots[i] >= 0 ? slots[i] : 100 + int(i);
             size_t at = count;
@@ -466,6 +472,17 @@ void alertsMessage(String& out) {
     JsonDocument doc;
     doc["t"] = "alerts";
     alert_monitor::statesJson(doc["states"].to<JsonArray>());
+    serializeJson(doc, out);
+}
+
+// The steering wheel module, as {"t":"wheel", ...wheel::statusJson}.
+void wheelMessage(String& out) {
+    JsonDocument doc;
+    doc["t"] = "wheel";
+    {
+        hub::Lock lock;
+        wheel::statusJson(doc.as<JsonObject>());
+    }
     serializeJson(doc, out);
 }
 
@@ -1038,30 +1055,97 @@ void handleSimulator(AsyncWebServerRequest* r) {
         JsonDocument body;
         if (!parseBody(r, body)) return;
         if (body["enabled"].is<bool>()) hub::setSimulator(body["enabled"].as<bool>());
+        std::string error;
         hub::Lock lock;
-        if (body["paused"].is<bool>()) simulator::setPaused(body["paused"].as<bool>());
-        if (body["speed"].is<float>()) simulator::setSpeed(body["speed"].as<float>());
-        if (body["clear"] | false) simulator::clearOverrides();
-        for (JsonPairConst kv : body["overrides"].as<JsonObjectConst>()) {
-            const int id = findChannel(kv.key().c_str());
-            if (id < 0) return sendError(r, 400, "unknown channel in overrides");
-            JsonVariantConst v = kv.value();
-            bool ok = true;
-            if (v.isNull()) {
-                simulator::clearOverride(ChannelId(id));
-            } else if (v["hold"].is<float>()) {
-                ok = simulator::setOverride(ChannelId(id), true, v["hold"].as<float>(), 0, 0);
-            } else if (v["min"].is<float>() && v["max"].is<float>()) {
-                ok = simulator::setOverride(ChannelId(id), false, 0, v["min"].as<float>(), v["max"].as<float>());
-            } else {
-                return sendError(r, 400, "an override is {hold: value} or {min, max}, or null to remove it");
-            }
-            if (!ok) return sendError(r, 409, "at most 16 overrides");
-        }
+        if (!simulator::applyJson(body.as<JsonVariantConst>(), error)) return sendError(r, 400, error.c_str());
     }
     JsonDocument doc;
     simulatorJson(doc);
     sendJson(r, doc);
+}
+
+// Simulator presets (docs/web-ui.md): GET the list; PUT /api/simulator/presets/<name>
+// with {speed, paused, overrides}, or an empty body for the settings in force;
+// POST .../<name>/apply; DELETE .../<name>.
+void handleSimPresets(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_GET) {
+        JsonDocument doc;
+        sim_presets::listJson(doc.to<JsonArray>());
+        return sendJson(r, doc);
+    }
+    const String name = segment(r->url(), 3);
+    std::string error;
+    if (r->method() == HTTP_DELETE) {
+        if (!sim_presets::remove(name.c_str())) return sendError(r, 404, "no such preset");
+        return sendOk(r);
+    }
+    if (r->method() == HTTP_PUT) {
+        JsonDocument body;
+        const Body* b = bodyOf(r);
+        if (b && b->len && deserializeJson(body, b->data, b->len) != DeserializationError::Ok) {
+            return sendError(r, 400, "the body is not JSON");
+        }
+        if (!sim_presets::save(name.c_str(), body.as<JsonVariantConst>(), error)) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    if (segment(r->url(), 4) != "apply") return sendError(r, 404, "unknown action");
+    if (!sim_presets::apply(name.c_str(), error)) return sendError(r, 400, error.c_str());
+    JsonDocument doc;
+    simulatorJson(doc);
+    sendJson(r, doc);
+}
+
+// The steering wheel module (docs/steering-wheel.md): GET its state; PUT
+// settings or calibration; POST test, raw or fg.
+void handleWheel(AsyncWebServerRequest* r) {
+    const String action = segment(r->url(), 2);
+    std::string error;
+    if (r->method() == HTTP_GET) {
+        JsonDocument doc;
+        {
+            hub::Lock lock;
+            wheel::statusJson(doc.to<JsonObject>());
+        }
+        return sendJson(r, doc);
+    }
+    if (r->method() == HTTP_PUT && action == "calibration") {
+        const Body* b = bodyOf(r);
+        if (!b || b->len == 0) return sendError(r, 400, "send the calibration JSON as the request body");
+        hub::Lock lock;
+        if (!wheel::setCalibration(b->data, b->len, error)) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    JsonDocument body;
+    if (!parseBody(r, body)) return;
+    hub::Lock lock;
+    bool ok = false;
+    if (r->method() == HTTP_PUT && action == "settings") {
+        ok = wheel::setSettings(body.as<JsonVariantConst>(), error);
+        if (ok && !body["fg"].isNull()) ok = fg_can::setSettings(body["fg"], error);
+        if (ok && !body["swc"].isNull()) ok = swc_output::setSettings(body["swc"], error);
+        if (!ok) return sendError(r, 400, error.c_str());
+        return sendOk(r);
+    }
+    if (r->method() != HTTP_POST) return sendError(r, 404, "unknown action");
+    if (action == "test") {
+        ok = wheel::test(body["output"] | "", uint32_t(body["ms"] | 200), error);
+    } else if (action == "raw") {
+        ok = wheel::requestRaw(uint8_t(body["seconds"] | 30), error);
+    } else if (action == "fg") {
+        if (!body["listen"].isNull()) {
+            ok = fg_can::setListen(body["listen"].as<bool>(), error);
+        } else if (!body["probe"].isNull()) {
+            JsonVariantConst v = body["probe"];
+            const uint32_t id = v.is<const char*>() ? uint32_t(strtoul(v.as<const char*>(), nullptr, 0)) : v.as<uint32_t>();
+            ok = fg_can::probe(id, body["ext"] | false, error);
+        } else {
+            error = "send {\"listen\": true|false} or {\"probe\": \"0x437\"} (0 stops)";
+        }
+    } else {
+        return sendError(r, 404, "unknown action");
+    }
+    if (!ok) return sendError(r, 409, error.c_str());
+    sendOk(r);
 }
 
 // GET gives the alert rules and their states. PUT replaces the rules with the
@@ -1359,6 +1443,9 @@ void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType type,
     s = String();
     themeColoursMessage(s);
     client->text(s);
+    s = String();
+    wheelMessage(s);
+    client->text(s);
 }
 
 // Pushes to every client unless a client is backed up or memory is short;
@@ -1407,10 +1494,14 @@ void begin() {
     server.on("/api/recordings", HTTP_GET, handleRecordings);
     server.on("/api/record", HTTP_POST, handleRecord, nullptr, collectBody);
     server.on("/api/playback", HTTP_POST, handlePlayback, nullptr, collectBody);
+    server.on("/api/simulator/presets/*", HTTP_PUT | HTTP_POST | HTTP_DELETE, handleSimPresets, nullptr, collectBody);
+    server.on("/api/simulator/presets", HTTP_GET, handleSimPresets);
     server.on("/api/simulator", HTTP_GET | HTTP_POST, handleSimulator, nullptr, collectBody);
     server.on("/api/alerts/test", HTTP_POST, handleAlertTest, nullptr, collectBody);
     server.on("/api/theme-colours", HTTP_GET | HTTP_PUT, handleThemeColours, nullptr, collectBody);
     server.on("/api/alerts", HTTP_GET | HTTP_PUT, handleAlerts, nullptr, collectBody);
+    server.on("/api/wheel/*", HTTP_PUT | HTTP_POST, handleWheel, nullptr, collectBody);
+    server.on("/api/wheel", HTTP_GET, handleWheel);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.on("/api/cloud/*", HTTP_POST, handleCloud, nullptr, collectBody);
     server.on("/api/cloud", HTTP_GET, handleCloud);
@@ -1460,6 +1551,14 @@ void loop() {
         String s;
         statusMessage(s);
         pushAll(s);
+    }
+    // The wheel: promptly on a button, otherwise every two seconds.
+    const uint32_t wheelVersion = wheel::version();
+    if ((wheelVersion != sentWheelVersion && now - lastWheelMs >= 100) || now - lastWheelMs >= 2000) {
+        lastWheelMs = now;
+        String s;
+        wheelMessage(s);
+        if (pushAll(s)) sentWheelVersion = wheelVersion;
     }
     const uint32_t version = hub::rosterVersion();
     if ((version != sentRosterVersion && now - lastGaugesMs >= 250) || now - lastGaugesMs >= 3000) {

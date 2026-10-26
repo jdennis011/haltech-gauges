@@ -27,6 +27,7 @@ const size_t kMaxManifest = 8 * 1024;
 const Board kBoards[] = {
     {1, "gauge-ws175", "Waveshare 1.75\" AMOLED gauge"},
     {2, "gauge-m5dial", "M5Stack Dial (development gauge)"},
+    {3, "wheel-c3", "Steering wheel module (ESP32-C3)"},
 };
 const size_t kBoardCount = sizeof(kBoards) / sizeof(kBoards[0]);
 

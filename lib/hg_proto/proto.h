@@ -45,7 +45,8 @@ enum class Msg : uint8_t {
     XferAck = 11,
     XferAbort = 12,
     XferDataLast = 13,  // a data frame that also asks the receiver to acknowledge
-    Asset = 14,  // does the gauge have this image? The hub asks, the gauge answers (15 is the last free type)
+    Asset = 14,  // does the gauge have this image? The hub asks, the gauge answers
+    Input = 15,  // a steering wheel module's buttons, node to hub (docs/steering-wheel.md); the last type
 };
 
 enum class Dir : uint8_t { HubToGauge = 0, GaugeToHub = 1 };
@@ -66,6 +67,7 @@ enum class Cmd : uint8_t {
     EndTry = 6,         // drop a RAM-only "try" config and go back to the stored one
     SetDisplay = 7,     // arg = 0 screen off (panel asleep), 1 on
     Intro = 8,          // the key-on intro: a whole Intro frame, not a two-byte Command
+    InputRaw = 9,       // steering wheel: stream raw ladder readings for arg seconds (0 stops)
 };
 
 enum class XferKind : uint8_t {
@@ -74,6 +76,7 @@ enum class XferKind : uint8_t {
     Image = 3,      // a JPEG or PNG file to keep; the CRC32 of its bytes is its name
     SwitchConfig = 4,  // apply in RAM only, as TryConfig, but shown as the face proper: an alert's switch
     WifiJoin = 5,      // hub to gauge: its access point, a token and what to fetch over Wi-Fi, as JSON
+    WheelCalibration = 6,  // hub to steering wheel module: its button calibration, as JSON
 };
 
 enum class XferStatus : uint8_t {
@@ -115,6 +118,7 @@ struct Info {
 // Info::hwRevision: the board, so the hub picks the right firmware build for it.
 constexpr uint8_t kBoardWaveshare175 = 1;
 constexpr uint8_t kBoardM5Dial = 2;
+constexpr uint8_t kBoardWheel = 3;  // the steering wheel module: a node on the bus, not a gauge
 
 struct Status {
     uint32_t configCrc = 0;
@@ -204,6 +208,52 @@ struct AssetReply {
     bool have = false;
 };
 
+// A steering wheel module's buttons (docs/steering-wheel.md), node to hub, as
+// Msg::Input. Byte 0 carries the op in its high nibble and the layout version
+// in the low one. `mask` is a level: a bit is set while that button is down
+// (after the module's own debounce). Sent at once on a change, every
+// kInputHoldPeriodMs while any button is down, and every kInputHeartbeatMs
+// as a heartbeat when none is, so the hub can tell silence from idleness.
+constexpr uint8_t kInputLayout = 1;
+enum class InputOp : uint8_t { State = 0, Raw = 1, Raw2 = 2 };
+constexpr uint16_t kInputHorn = 1u << 0;
+constexpr uint16_t kInputCruiseOnOff = 1u << 1;
+constexpr uint16_t kInputCruiseSet = 1u << 2;
+constexpr uint16_t kInputCruiseResume = 1u << 3;
+constexpr uint16_t kInputCruiseAccel = 1u << 4;
+constexpr uint16_t kInputCruiseDecel = 1u << 5;
+constexpr uint16_t kInputCruiseCancel = 1u << 6;
+constexpr uint16_t kInputVolUp = 1u << 7;
+constexpr uint16_t kInputVolDown = 1u << 8;
+constexpr uint16_t kInputMode = 1u << 9;
+constexpr uint16_t kInputMute = 1u << 10;
+constexpr uint16_t kInputSeekUp = 1u << 11;
+constexpr uint16_t kInputSeekDown = 1u << 12;
+constexpr uint16_t kInputPhone = 1u << 13;
+constexpr uint16_t kInputCruiseMask = kInputCruiseOnOff | kInputCruiseSet | kInputCruiseResume | kInputCruiseAccel |
+                                      kInputCruiseDecel | kInputCruiseCancel;
+constexpr uint16_t kInputMediaMask = kInputVolUp | kInputVolDown | kInputMode | kInputMute | kInputSeekUp |
+                                     kInputSeekDown | kInputPhone;
+constexpr uint8_t kInputFlagHeartbeat = 0x01;     // nothing changed since the last report
+constexpr uint8_t kInputFlagFault = 0x02;         // a ladder line reads out of range (shorted or open)
+constexpr uint8_t kInputFlagUncalibrated = 0x04;  // no calibration stored: the mask is always 0
+constexpr uint8_t kInputFlagRaw = 0x08;           // raw readings are being streamed too
+constexpr uint32_t kInputHoldPeriodMs = 20;
+constexpr uint32_t kInputHeartbeatMs = 200;
+struct Input {
+    uint8_t seq = 0;    // +1 per frame sent, wraps
+    uint16_t mask = 0;  // kInput... bits
+    uint8_t flags = 0;  // kInputFlag... bits
+    uint8_t lines = 0;  // ladder lines the module reads
+};
+// Raw ladder readings for calibration (Cmd::InputRaw asks for them): three
+// lines' millivolts per frame, lines 0-2 or 3-5.
+struct InputRaw {
+    uint8_t seq = 0;
+    uint8_t first = 0;  // 0 or 3: the first line carried
+    uint16_t mv[3] = {};
+};
+
 struct XferBegin {
     uint8_t session = 0;
     XferKind kind = XferKind::Config;
@@ -247,6 +297,8 @@ size_t packThemeColours(const uint32_t colours[kThemeColourCount], uint32_t node
 bool unpackThemeColours(const CanFrame& f, uint32_t colours[kThemeColourCount]);
 CanFrame pack(const AssetQuery& m, uint32_t node);
 CanFrame pack(const AssetReply& m, uint32_t node);
+CanFrame pack(const Input& m, uint32_t node);
+CanFrame pack(const InputRaw& m, uint32_t node);
 CanFrame pack(const XferBegin& m, Dir dir, uint32_t node);
 CanFrame pack(const XferEnd& m, Dir dir, uint32_t node);
 CanFrame pack(const XferAck& m, Dir dir, uint32_t node);
@@ -267,6 +319,8 @@ bool unpack(const CanFrame& f, CommandAck& m);
 bool unpack(const CanFrame& f, Intro& m);
 bool unpack(const CanFrame& f, AssetQuery& m);
 bool unpack(const CanFrame& f, AssetReply& m);
+bool unpack(const CanFrame& f, Input& m);
+bool unpack(const CanFrame& f, InputRaw& m);
 bool unpack(const CanFrame& f, XferBegin& m);
 bool unpack(const CanFrame& f, XferEnd& m);
 bool unpack(const CanFrame& f, XferAck& m);

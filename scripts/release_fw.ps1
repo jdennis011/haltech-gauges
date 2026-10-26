@@ -8,7 +8,8 @@
 #   .\scripts\release_fw.ps1 -NoUpload            # build and write firmware/ only
 #
 # Hub versions come from HUB_FW_VERSION in src/hub/hub_config.h, gauge versions
-# from src/gauge/version.h. Each build goes to firmware/<board>/firmware.bin
+# from src/gauge/version.h, the wheel module's from src/wheel/version.h. Each
+# build goes to firmware/<board>/firmware.bin
 # with a manifest.json beside it, then both are put into the site's KV store
 # with wrangler (logged in with `npx wrangler login`).
 
@@ -20,7 +21,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$chips = @{ hub = 'esp32c6'; hub_p4 = 'esp32p4'; gauge = 'gauge-ws175'; gauge_m5dial = 'gauge-m5dial' }
+$chips = @{ hub = 'esp32c6'; hub_p4 = 'esp32p4'; gauge = 'gauge-ws175'; gauge_m5dial = 'gauge-m5dial'; wheel = 'wheel-c3' }
 
 $header = Get-Content (Join-Path $root 'src\hub\hub_config.h') -Raw
 if ($header -notmatch '#define HUB_FW_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"') { throw 'HUB_FW_VERSION not found in src/hub/hub_config.h' }
@@ -32,7 +33,15 @@ if ($gaugeHeader -notmatch 'FW_VERSION_MINOR (\d+)') { throw 'FW_VERSION_MINOR n
 $gaugeVersion += '.' + $Matches[1]
 if ($gaugeHeader -notmatch 'FW_VERSION_PATCH (\d+)') { throw 'FW_VERSION_PATCH not found' }
 $gaugeVersion += '.' + $Matches[1]
-$versions = @{ hub = $hubVersion; hub_p4 = $hubVersion; gauge = $gaugeVersion; gauge_m5dial = $gaugeVersion }
+# The steering wheel module has a version header of its own.
+$wheelHeader = Get-Content (Join-Path $root 'src\wheel\version.h') -Raw
+if ($wheelHeader -notmatch 'FW_VERSION_MAJOR (\d+)') { throw 'FW_VERSION_MAJOR not found in src/wheel/version.h' }
+$wheelVersion = $Matches[1]
+if ($wheelHeader -notmatch 'FW_VERSION_MINOR (\d+)') { throw 'FW_VERSION_MINOR not found' }
+$wheelVersion += '.' + $Matches[1]
+if ($wheelHeader -notmatch 'FW_VERSION_PATCH (\d+)') { throw 'FW_VERSION_PATCH not found' }
+$wheelVersion += '.' + $Matches[1]
+$versions = @{ hub = $hubVersion; hub_p4 = $hubVersion; gauge = $gaugeVersion; gauge_m5dial = $gaugeVersion; wheel = $wheelVersion }
 $date = Get-Date -Format 'yyyy-MM-dd'
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { $env:Path = 'C:\Program Files\nodejs;' + $env:Path }

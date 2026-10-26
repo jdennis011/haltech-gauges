@@ -91,6 +91,13 @@ bool HubManager::anyOnline() const {
     return false;
 }
 
+bool HubManager::anyGaugeOnline() const {
+    for (const Gauge& g : gauges_) {
+        if (g.used && g.online && !isWheel(g)) return true;
+    }
+    return false;
+}
+
 HubManager::Gauge::Image* HubManager::findImage(Gauge& g, uint32_t crc) {
     for (size_t i = 0; i < g.imageCount; i++) {
         if (g.images[i].crc == crc) return &g.images[i];
@@ -152,7 +159,7 @@ bool HubManager::alert(uint32_t node, const Alert& alert, uint8_t seq) {
 
 bool HubManager::themeColours(uint32_t node, const uint32_t colours[kThemeColourCount]) {
     if (node == kBroadcastNode) {
-        if (!anyOnline()) return false;
+        if (!anyGaugeOnline()) return false;
     } else {
         const Gauge* g = find(node);
         if (!g || !g->online) return false;
@@ -181,15 +188,15 @@ bool HubManager::tryConfig(uint32_t node, const uint8_t* data, uint32_t size, ui
     return true;
 }
 
-bool HubManager::wifiJoin(uint32_t node, const uint8_t* data, uint32_t size, uint32_t nowMs) {
+bool HubManager::sendPayload(uint32_t node, XferKind kind, const uint8_t* data, uint32_t size, uint32_t nowMs) {
     const Gauge* g = find(node);
     if (!g || !g->online || pushBusy()) return false;
     pushActive_ = true;
-    pushKind_ = XferKind::WifiJoin;
+    pushKind_ = kind;
     pushCrc_ = 0;
     pushImageCount_ = 0;
     wifiWaitMs_ = 0;
-    sender_.start(link_, node, Dir::HubToGauge, ++session_, XferKind::WifiJoin, data, size, nowMs);
+    sender_.start(link_, node, Dir::HubToGauge, ++session_, kind, data, size, nowMs);
     notify();
     return true;
 }
@@ -275,6 +282,21 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
             }
             break;
 
+        case Msg::Input: {
+            // A steering wheel module (docs/steering-wheel.md): its buttons
+            // go straight to the handler. Nothing in the roster changes, so
+            // no notify(): these come fifty times a second while a button is down.
+            if (frame.len < 1) break;
+            if ((frame.data[0] >> 4) == uint8_t(InputOp::State)) {
+                Input in;
+                if (unpack(frame, in) && handler_.input) handler_.input(*g, in, handler_.ctx);
+            } else {
+                InputRaw raw;
+                if (unpack(frame, raw) && handler_.inputRaw) handler_.inputRaw(*g, raw, handler_.ctx);
+            }
+            break;
+        }
+
         case Msg::Asset: {
             AssetReply r;
             if (!unpack(frame, r) || r.kind != XferKind::Image) return;
@@ -333,8 +355,10 @@ void HubManager::finishPush(uint32_t nowMs) {
         return;
     }
 
-    if (pushKind_ == XferKind::WifiJoin) {
-        if (result == XferStatus::Done) {
+    if (pushKind_ == XferKind::WifiJoin || pushKind_ == XferKind::WheelCalibration) {
+        // Neither is a config: the gauge's config state is untouched. A
+        // wheel's next status says whether the calibration landed.
+        if (pushKind_ == XferKind::WifiJoin && result == XferStatus::Done) {
             // The gauge is fetching: its reports, or the wait running out, say what it got.
             for (size_t i = 0; i < pushImageCount_; i++) setImageState(*g, pushImages_[i], ImageState::Wifi);
             g->wifiUntilMs = nowMs + wifiWaitMs_;

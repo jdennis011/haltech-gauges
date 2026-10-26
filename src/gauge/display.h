@@ -27,4 +27,9 @@ void loop();
 // Screen refreshes completed during the last whole second.
 uint32_t framesPerSecond();
 
+// Where the time went during that second, in milliseconds: pushing pixels to
+// the panel, and everything LVGL did (rendering included) in loop().
+uint32_t flushMsPerSecond();
+uint32_t lvglMsPerSecond();
+
 }  // namespace display

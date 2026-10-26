@@ -26,8 +26,9 @@ void Dispatcher::run(const Engine& engine, HubManager& manager, uint32_t nowMs) 
     for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
         const HubManager::Gauge& g = manager.gauge(i);
         Slot& s = slots_[i];
-        // A gauge that went away and came back has forgotten what it was told.
-        if (!g.used || !g.online || !g.haveHello) {
+        // A gauge that went away and came back has forgotten what it was
+        // told. A steering wheel module shows nothing and gets no alerts.
+        if (!g.used || !g.online || !g.haveHello || HubManager::isWheel(g)) {
             s = Slot();
             continue;
         }

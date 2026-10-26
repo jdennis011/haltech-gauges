@@ -29,6 +29,7 @@
 #include "time_service.h"
 #include "virtual_gauges.h"
 #include "web_server.h"
+#include "wheel.h"
 #include "wifi_xfer.h"
 #include "wifi_ap.h"
 
@@ -121,16 +122,18 @@ void gaugeBusTask(void*) {
         hubManager.poll(now);
         ip_bus::flush(now);
 
+        // Gauges proper: a steering wheel module alone does not want live data.
         uint32_t online = 0;
         for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
             const HubManager::Gauge& g = hubManager.gauge(i);
-            if (g.used && g.online) online++;
+            if (g.used && g.online && !HubManager::isWheel(g)) online++;
         }
         onlineCount = online;
         gaugesOnline = online > 0;
         simulator::poll(now, liveStore, gaugesOnline ? &gaugePort : nullptr);
         alert_monitor::poll(now, liveStore);
         theme_colours::poll(now);
+        wheel::poll(now);  // the horn's fail-safe wants this every millisecond
     }
 }
 
@@ -308,6 +311,7 @@ void setup() {
 #if ARDUINO_USB_CDC_ON_BOOT
     Serial.setTxTimeoutMs(0);  // never block when no USB host is attached
 #endif
+    wheel::begin();  // first: the horn output is driven off before anything else runs
     hubLock = xSemaphoreCreateMutex();
 
 #if HG_HAS_ECU_PORT
@@ -336,7 +340,12 @@ void setup() {
     handler.openImage = image_store::openForSend;
     handler.closeImage = image_store::closeSend;
     handler.wifiJoin = wifi_xfer::offerImages;
+    handler.input = wheel::onInput;
+    handler.inputRaw = wheel::onInputRaw;
     hubManager.init({managementSend, nullptr}, handler, millis());
+    // The simulator as it was left: on, paused, speed and overrides.
+    simulator::load();
+    if (simulator::enabled()) hubManager.setBeaconFlags(proto::kBeaconFlagSimulator);
     intro::begin();
 
     wifi_ap::begin();

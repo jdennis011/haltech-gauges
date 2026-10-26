@@ -24,7 +24,9 @@ pio run -e hub            # ESP32-C6 hub
 pio run -e hub_dev_c3     # Lolin C3 Mini development hub
 pio run -e gauge          # Waveshare gauge
 pio run -e gauge_m5dial   # M5Stack Dial as a gauge
+pio run -e wheel          # steering wheel module (Lolin C3 Mini)
 pio test -e native        # host unit tests (scripts/test.ps1 finds a g++ on Windows)
+node scripts/check_page.js # the hub page's script: syntax, and no function declared twice
 .\scripts\release_fw.ps1  # publish hub builds on the site for updates over Wi-Fi
 ```
 
@@ -79,6 +81,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/designer-plan.md` | Plan for the online gauge designer and the `.gauge` file |
 | `docs/ip-link.md` | A gauge on Wi-Fi instead of the CAN chain: the bus's frames over UDP, for the bench and the odd remote gauge |
 | `docs/sd-card.md` | The P4 hub's microSD card and the datalog on it: every channel, ten times a second, a CSV per drive |
+| `docs/steering-wheel.md` | A steering wheel module on the gauge chain through the clock spring: its buttons by ADC, the horn relay with a fail-safe, the cruise buttons to the Nexus as FG Falcon frames on a third CAN bus, a wired-remote provision for the head unit |
 | `docs/time-of-day.md` | The clock: NTP, the phone, a DS3231 on the carrier; the zone; the beacon field and the `clock` widget |
 | `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles |
 | `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all |

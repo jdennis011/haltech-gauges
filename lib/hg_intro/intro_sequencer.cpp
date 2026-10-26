@@ -26,7 +26,7 @@ size_t Sequencer::ranked(const HubManager& manager, Ranked* out) const {
     size_t n = 0;
     for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
         const HubManager::Gauge& g = manager.gauge(i);
-        if (!g.used || !g.online || !g.haveHello) continue;
+        if (!g.used || !g.online || !g.haveHello || HubManager::isWheel(g)) continue;
         uint32_t rank = 0x100000u + (uint32_t(g.helloMs - startMs_) & 0xFFFFFu);
         for (size_t k = 0; k < orderCount_; k++) {
             if (memcmp(order_[k].mac, g.mac, 6) == 0) {
@@ -69,7 +69,7 @@ bool Sequencer::poll(HubManager& manager, uint32_t nowMs) {
     size_t heard = 0;
     for (size_t i = 0; i < HubManager::kMaxGauges; i++) {
         const HubManager::Gauge& g = manager.gauge(i);
-        if (g.used && g.online && g.haveHello) heard++;
+        if (g.used && g.online && g.haveHello && !HubManager::isWheel(g)) heard++;
     }
     if (heard > 0 && !anyHello_) {
         anyHello_ = true;

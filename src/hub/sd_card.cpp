@@ -287,9 +287,21 @@ void refreshSpace() {
 #endif
 }
 
-uint64_t totalBytes() { return isMounted ? cachedTotal : 0; }
+uint64_t totalBytes() {
+#if HG_HAS_SD
+    return isMounted ? cachedTotal : 0;
+#else
+    return 0;
+#endif
+}
 
-uint64_t freeBytes() { return isMounted ? cachedFree : 0; }
+uint64_t freeBytes() {
+#if HG_HAS_SD
+    return isMounted ? cachedFree : 0;
+#else
+    return 0;
+#endif
+}
 
 void statusJson(JsonObject out) {
     out["slot"] = HG_HAS_SD != 0;

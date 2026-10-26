@@ -22,7 +22,9 @@ Identify, fix with the arrows.
   nobody.
 - The gauge waits for the hub's intro frame: up to 2 s after the first beacon it hears.
   With no beacon at all (bare Haltech bus, bench on USB) it plays its own intro 3 s
-  after boot and carries on. Brightness and screen commands that arrive before the
+  after boot and carries on, with the style and duration the hub last sent it (kept
+  in its preferences; sweep, 1.2 s before it has met a hub). So the page's duration
+  applies to a gauge playing alone too, from the next key-on or **Play now**. Brightness and screen commands that arrive before the
   intro are remembered and applied after it.
 - On the frame: wait the given delay, run the style for the given duration while the
   brightness comes up, then live data at the set brightness.

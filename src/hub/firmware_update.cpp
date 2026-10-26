@@ -149,6 +149,7 @@ int httpGet(const char* url, Sink sink, void* ctx, std::string& why, int64_t& le
     const int status = esp_http_client_get_status_code(c);
     std::vector<uint8_t> buf(kChunk);
     bool ok = true;
+    size_t sinceYield = 0;
     while (ok) {
         const int n = esp_http_client_read(c, reinterpret_cast<char*>(buf.data()), int(buf.size()));
         if (n < 0) {
@@ -158,6 +159,13 @@ int httpGet(const char* url, Sink sink, void* ctx, std::string& why, int64_t& le
         }
         if (n == 0) break;
         if (status >= 200 && status < 300) ok = sink(buf.data(), size_t(n), ctx);
+        // A megabyte of flash writes without a pause starves the idle task
+        // and trips the task watchdog (seen twice on gauge-firmware fetches).
+        sinceYield += size_t(n);
+        if (sinceYield >= 32 * 1024) {
+            sinceYield = 0;
+            vTaskDelay(1);
+        }
     }
     esp_http_client_close(c);
     esp_http_client_cleanup(c);

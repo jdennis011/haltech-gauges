@@ -1,5 +1,7 @@
 #include "face_renderer.h"
 
+#include <lvgl_private.h>  // lv_image_decoder_dsc_t, for decoding an image whole
+
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <math.h>
@@ -33,18 +35,22 @@ struct Item {
     bool valid = false;         // the value below is usable
     float value = 0;            // in display units
     uint32_t key = 0;           // the look last drawn, quantised
+    float drawn = 0;            // dial, ring: the value the last redraw covered
+    uint32_t drawnColour = 0;   // ring: the colour it was drawn in
     bool holdSet = false;
     float hold = 0;
     std::string text;           // number: the text drawn
     lv_obj_t* label = nullptr;  // rotated text, as an LVGL label
     std::vector<lv_obj_t*> chars;  // arched text, a label per character
     lv_obj_t* image = nullptr;  // an image widget
+    lv_draw_buf_t* imageBuf = nullptr;  // its pixels, decoded once (boards with PSRAM)
     lv_vector_path_t* vpath = nullptr;  // a path widget's path
 };
 
 lv_obj_t* painter = nullptr;
 lv_obj_t* screen = nullptr;
 lv_obj_t* background = nullptr;  // the face's background image
+lv_draw_buf_t* backgroundBuf = nullptr;
 std::vector<Item> items;
 const Config* config = nullptr;
 const Face* face = nullptr;
@@ -661,8 +667,46 @@ std::string imageSource(const std::string& name) {
 }
 
 // An image object filling a box, in design units, with the fit the config asks.
+// An image decoded once, whole, into a buffer of its own (in PSRAM, where
+// LVGL's pool lives). Left as a file, LVGL's JPEG decoder reopens the file
+// and decodes it a block at a time on every redraw that touches the image,
+// which held a face with a photo on it to 10 fps on the Waveshare panel.
+lv_draw_buf_t* decodeWhole(const char* src) {
+    lv_image_decoder_dsc_t dsc;
+    if (lv_image_decoder_open(&dsc, src, nullptr) != LV_RESULT_OK) return nullptr;
+    lv_draw_buf_t* out = nullptr;
+    if (dsc.decoded) {
+        out = lv_draw_buf_dup(dsc.decoded);  // PNG: decoded whole already
+    } else {
+        const lv_color_format_t cf = lv_color_format_t(dsc.header.cf);
+        const uint32_t px = lv_color_format_get_size(cf);
+        out = lv_draw_buf_create(dsc.header.w, dsc.header.h, cf, 0);
+        if (out) {
+            lv_area_t full = {0, 0, int32_t(dsc.header.w) - 1, int32_t(dsc.header.h) - 1};
+            lv_area_t part = {LV_COORD_MIN, LV_COORD_MIN, LV_COORD_MIN, LV_COORD_MIN};
+            bool ok = true;
+            while (lv_image_decoder_get_area(&dsc, &full, &part) == LV_RESULT_OK) {
+                const lv_draw_buf_t* block = dsc.decoded;
+                if (!block || !block->data || lv_color_format_t(block->header.cf) != cf) { ok = false; break; }
+                const int32_t w = lv_area_get_width(&part), h = lv_area_get_height(&part);
+                if (part.x1 < 0 || part.y1 < 0 || part.x1 + w > int32_t(out->header.w) || part.y1 + h > int32_t(out->header.h)) { ok = false; break; }
+                for (int32_t y = 0; y < h; y++) {
+                    memcpy(static_cast<uint8_t*>(out->data) + size_t(part.y1 + y) * out->header.stride + size_t(part.x1) * px,
+                           static_cast<const uint8_t*>(block->data) + size_t(y) * block->header.stride, size_t(w) * px);
+                }
+            }
+            if (!ok) {
+                lv_draw_buf_destroy(out);
+                out = nullptr;
+            }
+        }
+    }
+    lv_image_decoder_close(&dsc);
+    return out;
+}
+
 lv_obj_t* makeImage(const std::string& src, float cx, float cy, float boxW, float boxH, ImageFit fit, float rotateDeg,
-                    uint8_t opacity, bool background) {
+                    uint8_t opacity, bool background, lv_draw_buf_t** keep) {
     lv_image_header_t header;
     if (lv_image_decoder_get_info(src.c_str(), &header) != LV_RESULT_OK || header.w == 0 || header.h == 0) {
         Serial.printf("image %s could not be read\n", src.c_str());
@@ -679,7 +723,13 @@ lv_obj_t* makeImage(const std::string& src, float cx, float cy, float boxW, floa
         }
     }
     lv_obj_t* img = lv_image_create(screen);
-    lv_image_set_src(img, src.c_str());
+    lv_draw_buf_t* whole = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) ? decodeWhole(src.c_str()) : nullptr;
+    if (whole) {
+        *keep = whole;
+        lv_image_set_src(img, whole);
+    } else {
+        lv_image_set_src(img, src.c_str());
+    }
     lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
     const int32_t W = S(boxW), H = S(boxH);
     lv_obj_set_size(img, W, H);
@@ -1050,6 +1100,121 @@ void fetchThemeColours() { can_task::themeColours(themeCols); }
 
 // What the dynamic widgets look like right now, as a number: when it changes
 // the widget is redrawn.
+// ------------------------------------------- what moves when a value moves
+// A dial redrawn whole is nearly the full panel: 434 KB rendered and pushed
+// for a needle that moved a degree. These give the box the change fits in.
+
+// The value a dial or ring shows: clamped to its scale, the bottom with no reading.
+float shownValue(const Item& it) {
+    const Widget& w = *it.w;
+    return it.valid ? clampf(it.value, w.min, w.max) : w.min;
+}
+
+void includePoint(lv_area_t& a, float x, float y) {
+    const int32_t xi = int32_t(floorf(x)), yi = int32_t(floorf(y));
+    if (xi < a.x1) a.x1 = xi;
+    if (xi + 1 > a.x2) a.x2 = xi + 1;
+    if (yi < a.y1) a.y1 = yi;
+    if (yi + 1 > a.y2) a.y2 = yi + 1;
+}
+
+// A sweep between two angles bulges past the box its ends make wherever it
+// crosses a multiple of 90 degrees; those rim points go in too.
+void includeExtremes(lv_area_t& a, float cx, float cy, float radius, float a0, float a1) {
+    const float lo = a0 < a1 ? a0 : a1, hi = a0 < a1 ? a1 : a0;
+    for (int q = int(ceilf(lo / 90)); q <= int(floorf(hi / 90)); q++) {
+        const float ang = rad(float(q) * 90);
+        includePoint(a, cx + cosf(ang) * radius, cy + sinf(ang) * radius);
+    }
+}
+
+// The needle at `value`, the same shape drawDial() draws.
+void includeNeedle(lv_area_t& a, const Widget& w, float value) {
+    const float cx = widgetX(w), cy = widgetY(w), r = float(w.r);
+    const float ang = rad(float(w.start) + float(w.sweep) * (value - w.min) / (w.max - w.min));
+    const float len = float(w.needleLen), nw = float(w.needleWidth);
+    const float ca = cosf(ang), sa = sinf(ang);
+    auto rx = [&](float x, float y) { return cx + x * ca - y * sa; };
+    auto ry = [&](float x, float y) { return cy + x * sa + y * ca; };
+    switch (w.needle) {
+        case NeedleStyle::Marker:
+            includePoint(a, rx(r + 1, -nw), ry(r + 1, -nw));
+            includePoint(a, rx(r + 1, nw), ry(r + 1, nw));
+            includePoint(a, rx(r - len, 0), ry(r - len, 0));
+            break;
+        case NeedleStyle::MarkerOut:
+            includePoint(a, rx(r - len, -nw), ry(r - len, -nw));
+            includePoint(a, rx(r - len, nw), ry(r - len, nw));
+            includePoint(a, rx(r, 0), ry(r, 0));
+            break;
+        case NeedleStyle::Line:
+            includePoint(a, cx, cy);
+            includePoint(a, cx + ca * len, cy + sa * len);
+            break;
+        default:
+            includePoint(a, rx(-14, -nw), ry(-14, -nw));
+            includePoint(a, rx(-14, nw), ry(-14, nw));
+            includePoint(a, rx(len, -1), ry(len, -1));
+            includePoint(a, rx(len, 1), ry(len, 1));
+            includePoint(a, cx - nw * 2, cy - nw * 2);  // the cap
+            includePoint(a, cx + nw * 2, cy + nw * 2);
+            break;
+    }
+}
+
+// Where a dial changes when its needle goes from `from` to `to`.
+lv_area_t needleSweepArea(const Item& it, float from, float to) {
+    const Widget& w = *it.w;
+    lv_area_t a = {INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN};
+    includeNeedle(a, w, from);
+    includeNeedle(a, w, to);
+    const float span = w.max - w.min;
+    const float a0 = float(w.start) + float(w.sweep) * (from - w.min) / span;
+    const float a1 = float(w.start) + float(w.sweep) * (to - w.min) / span;
+    const float reach = w.needle == NeedleStyle::Marker ? float(w.r) + 1
+                      : w.needle == NeedleStyle::MarkerOut ? float(w.r) : float(w.needleLen);
+    includeExtremes(a, widgetX(w), widgetY(w), reach, a0, a1);
+    const int32_t m = int32_t(w.needleWidth) + 3;  // edges and anti-aliasing
+    a.x1 -= m; a.y1 -= m; a.x2 += m; a.y2 += m;
+    return a;
+}
+
+// Where a ring changes between two values: the band between the two angles,
+// its thickness, its rounded ends, and for a segmented ring the segments on
+// either side, which switch whole.
+lv_area_t ringSweepArea(const Item& it, float from, float to) {
+    const Widget& w = *it.w;
+    const float cx = widgetX(w), cy = widgetY(w), thick = float(w.thickness), r = float(w.r);
+    const float span = w.max - w.min;
+    const float lo = from < to ? from : to, hi = from < to ? to : from;
+    float a0 = float(w.start) + float(w.sweep) * (lo - w.min) / span;
+    float a1 = float(w.start) + float(w.sweep) * (hi - w.min) / span;
+    if (w.segments) {
+        const float seg = fabsf(float(w.sweep)) / float(w.segments) + float(w.gap);
+        if (w.sweep >= 0) { a0 -= seg; a1 += seg; } else { a0 += seg; a1 -= seg; }
+    }
+    lv_area_t a = {INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN};
+    for (float ang : {a0, a1}) {
+        const float ca = cosf(rad(ang)), sa = sinf(rad(ang));
+        includePoint(a, cx + ca * (r - thick), cy + sa * (r - thick));
+        includePoint(a, cx + ca * r, cy + sa * r);
+    }
+    includeExtremes(a, cx, cy, r, a0, a1);
+    const int32_t m = int32_t(thick) + 3;
+    a.x1 -= m; a.y1 -= m; a.x2 += m; a.y2 += m;
+    return a;
+}
+
+// Invalidates `a` clipped to `within`; nothing if they do not meet.
+void invalidateWithin(lv_area_t a, const lv_area_t& within) {
+    if (a.x1 < within.x1) a.x1 = within.x1;
+    if (a.y1 < within.y1) a.y1 = within.y1;
+    if (a.x2 > within.x2) a.x2 = within.x2;
+    if (a.y2 > within.y2) a.y2 = within.y2;
+    if (a.x1 > a.x2 || a.y1 > a.y2) return;
+    lv_obj_invalidate_area(painter, &a);
+}
+
 uint32_t lookKey(const Item& it) {
     const Widget& w = *it.w;
     uint32_t key = it.valid ? 1u : 0u;
@@ -1117,7 +1282,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
     // The background picture fills the face and sits under everything.
     const std::string bgSrc = imageSource(face->bgImage);
     if (!bgSrc.empty()) {
-        background = makeImage(bgSrc, 233, 233, 466, 466, ImageFit::Cover, 0, face->bgImageOpacity, true);
+        background = makeImage(bgSrc, 233, 233, 466, 466, ImageFit::Cover, 0, face->bgImageOpacity, true, &backgroundBuf);
     }
 
     painter = lv_obj_create(parent);
@@ -1134,6 +1299,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         Item it;
         it.w = &w;
         it.area = areaOf(it);
+        it.drawn = it.w->min;
         items.push_back(it);
     }
     for (Item& it : items) {
@@ -1147,7 +1313,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         } else if (w.type == WidgetType::Image) {
             const std::string src = imageSource(w.image);
             if (!src.empty()) {
-                it.image = makeImage(src, widgetX(w), widgetY(w), float(w.w), float(w.h), w.fit, float(w.rotate), w.opacity, false);
+                it.image = makeImage(src, widgetX(w), widgetY(w), float(w.w), float(w.h), w.fit, float(w.rotate), w.opacity, false, &it.imageBuf);
             }
         } else if (w.type == WidgetType::Path) {
             it.vpath = lv_vector_path_create(LV_VECTOR_PATH_QUALITY_MEDIUM);
@@ -1162,10 +1328,13 @@ void destroy() {
     painter = nullptr;
     if (background) lv_obj_delete(background);
     background = nullptr;
+    if (backgroundBuf) lv_draw_buf_destroy(backgroundBuf);
+    backgroundBuf = nullptr;
     for (Item& it : items) {
         if (it.label) lv_obj_delete(it.label);
         for (lv_obj_t* c : it.chars) lv_obj_delete(c);
         if (it.image) lv_obj_delete(it.image);
+        if (it.imageBuf) lv_draw_buf_destroy(it.imageBuf);
         if (it.vpath) lv_vector_path_delete(it.vpath);
     }
     items.clear();
@@ -1252,6 +1421,18 @@ void update(uint32_t nowMs) {
             if (it.image) {
                 const bool show = w.channel < 0 || litNow(w, valid, v);
                 if (show) lv_obj_remove_flag(it.image, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(it.image, LV_OBJ_FLAG_HIDDEN);
+            } else if (w.type == WidgetType::Dial) {
+                // Only the needle follows the value; the scale is fixed.
+                const float to = shownValue(it);
+                if (w.needle != NeedleStyle::None) invalidateWithin(needleSweepArea(it, it.drawn, to), it.area);
+                it.drawn = to;
+            } else if (w.type == WidgetType::Ring) {
+                const float to = shownValue(it);
+                const uint32_t colour = uint32_t(applyWarn(w, it.valid, to, zoneColor(w, to, w.color))) & 0xFFFFFF;
+                if (colour != it.drawnColour) lv_obj_invalidate_area(painter, &it.area);  // the whole arc recolours
+                else invalidateWithin(ringSweepArea(it, it.drawn, to), it.area);
+                it.drawn = to;
+                it.drawnColour = colour;
             } else {
                 lv_obj_invalidate_area(painter, &it.area);
             }

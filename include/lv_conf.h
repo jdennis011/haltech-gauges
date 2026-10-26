@@ -6,9 +6,21 @@
 
 #define LV_COLOR_DEPTH 16
 
-// Use the C library allocator. With PSRAM enabled, allocations above 4 KB
-// (draw layers, glyph caches) land in PSRAM instead of a fixed LVGL pool.
+// Where LVGL's own memory lives. The ESP32-S3 has about 180 KB of internal
+// RAM to share between Wi-Fi (45 KB when it starts), the draw buffer and
+// everything else; LVGL's objects, glyph caches, decoded images and draw
+// layers through the C allocator ate it (2026-10-26: the Waveshare gauge
+// aborted in fopen() and in Wi-Fi start with 5 KB left). On the Waveshare
+// board LVGL therefore gets its own 3 MB pool in PSRAM; the M5Stack Dial has
+// no PSRAM and keeps the C allocator.
+#ifdef HG_BOARD_M5DIAL
 #define LV_USE_STDLIB_MALLOC LV_STDLIB_CLIB
+#else
+#define LV_USE_STDLIB_MALLOC LV_STDLIB_BUILTIN
+#define LV_MEM_SIZE (4 * 1024 * 1024)  // images decoded whole live here too: 651 KB for a full face
+#define LV_MEM_POOL_INCLUDE <esp_heap_caps.h>
+#define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
+#endif
 #define LV_USE_STDLIB_STRING LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 

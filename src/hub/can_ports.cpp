@@ -18,6 +18,16 @@ TwaiCAN& gaugeCan = ESP32Can;
 const uint16_t kEcuRxQueue = 512;
 const uint16_t kGaugeRxQueue = 128;
 const uint16_t kGaugeTxSlots = 64;
+// The gauge controller is bus-off (no transceiver on the bench, a shorted
+// pair): nothing is handed to it until service() has it running again, or
+// the driver logs a refusal for every one of the simulator's 1400 frames a
+// second and that flood starves the rest of the hub.
+bool gaugeBusOff = false;
+#if HG_HAS_FG_PORT
+TwaiCAN fgCan;  // the third controller, taken by begin() after the other two
+const uint16_t kFgTxSlots = 16;
+const uint16_t kFgRxQueue = 64;
+#endif
 
 bool readFrom(TwaiCAN& can, hg::CanFrame& out, uint32_t timeoutMs) {
     CanFrame in;
@@ -99,7 +109,7 @@ bool GaugePort::write(const hg::CanFrame& frame) {
     // nothing on the wire acknowledging, the controller's queue fills and
     // stays full, so it is left alone then rather than refused for ever.
     const bool viaIp = ip_bus::send(frame);
-    if (gaugeCan.inTxQueue() + 2 >= kGaugeTxSlots) return viaIp;
+    if (gaugeBusOff || gaugeCan.inTxQueue() + 2 >= kGaugeTxSlots) return viaIp;
     CanFrame out = {};
     out.identifier = frame.id;
     out.extd = frame.extended;
@@ -112,4 +122,36 @@ uint32_t GaugePort::txPending() { return gaugeCan.inTxQueue(); }
 
 CanPortStats GaugePort::stats() { return statsOf(gaugeCan); }
 
-void GaugePort::service() { serviceCan(gaugeCan); }
+void GaugePort::service() {
+    const uint32_t state = gaugeCan.canState();
+    gaugeBusOff = state == TWAI_STATE_BUS_OFF || state == TWAI_STATE_RECOVERING || state == TWAI_STATE_STOPPED;
+    serviceCan(gaugeCan);
+}
+
+#if HG_HAS_FG_PORT
+
+bool FgPort::begin(TwaiSpeed speed) {
+    pinMode(PIN_FG_CAN_SILENT, OUTPUT);
+    digitalWrite(PIN_FG_CAN_SILENT, LOW);
+    return fgCan.begin(speed, PIN_FG_CAN_TX, PIN_FG_CAN_RX, kFgTxSlots, kFgRxQueue);
+}
+
+bool FgPort::read(hg::CanFrame& frame, uint32_t timeoutMs) { return readFrom(fgCan, frame, timeoutMs); }
+
+bool FgPort::write(const hg::CanFrame& frame) {
+    if (fgCan.inTxQueue() + 2 >= kFgTxSlots) return false;  // nobody acknowledging: do not pile up
+    CanFrame out = {};
+    out.identifier = frame.id;
+    out.extd = frame.extended;
+    out.data_length_code = frame.len;
+    memcpy(out.data, frame.data, frame.len);
+    return fgCan.writeFrame(out, 0);
+}
+
+void FgPort::setListenOnly(bool on) { digitalWrite(PIN_FG_CAN_SILENT, on ? HIGH : LOW); }
+
+CanPortStats FgPort::stats() { return statsOf(fgCan); }
+
+void FgPort::service() { serviceCan(fgCan); }
+
+#endif

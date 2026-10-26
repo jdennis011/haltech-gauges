@@ -28,6 +28,12 @@ void put32(uint8_t* p, uint32_t v) {
 }
 uint32_t get32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | get24(p + 1); }
 
+void put16(uint8_t* p, uint16_t v) {
+    p[0] = uint8_t(v >> 8);
+    p[1] = uint8_t(v);
+}
+uint16_t get16(const uint8_t* p) { return uint16_t((uint16_t(p[0]) << 8) | p[1]); }
+
 }  // namespace
 
 CanFrame pack(const Beacon& m) {
@@ -311,6 +317,44 @@ bool unpack(const CanFrame& f, AssetReply& m) {
     m.kind = XferKind(f.data[1]);
     m.crc = get32(f.data + 2);
     m.have = f.data[6] != 0;
+    return true;
+}
+
+CanFrame pack(const Input& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Input, Dir::GaugeToHub, node, 8);
+    f.data[0] = uint8_t((uint8_t(InputOp::State) << 4) | kInputLayout);
+    f.data[1] = m.seq;
+    put16(f.data + 2, m.mask);
+    f.data[4] = m.flags;
+    f.data[5] = m.lines;
+    return f;
+}
+
+bool unpack(const CanFrame& f, Input& m) {
+    if (f.len < 6 || (f.data[0] >> 4) != uint8_t(InputOp::State) || (f.data[0] & 0x0F) != kInputLayout) return false;
+    m.seq = f.data[1];
+    m.mask = get16(f.data + 2);
+    m.flags = f.data[4];
+    m.lines = f.data[5];
+    return true;
+}
+
+CanFrame pack(const InputRaw& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Input, Dir::GaugeToHub, node, 8);
+    const InputOp op = m.first >= 3 ? InputOp::Raw2 : InputOp::Raw;
+    f.data[0] = uint8_t((uint8_t(op) << 4) | kInputLayout);
+    f.data[1] = m.seq;
+    for (int i = 0; i < 3; i++) put16(f.data + 2 + 2 * i, m.mv[i]);
+    return f;
+}
+
+bool unpack(const CanFrame& f, InputRaw& m) {
+    if (f.len < 8 || (f.data[0] & 0x0F) != kInputLayout) return false;
+    const uint8_t op = f.data[0] >> 4;
+    if (op != uint8_t(InputOp::Raw) && op != uint8_t(InputOp::Raw2)) return false;
+    m.seq = f.data[1];
+    m.first = op == uint8_t(InputOp::Raw2) ? 3 : 0;
+    for (int i = 0; i < 3; i++) m.mv[i] = get16(f.data + 2 + 2 * i);
     return true;
 }
 

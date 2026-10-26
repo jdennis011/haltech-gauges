@@ -104,7 +104,9 @@ and partition table). After that:
 
 1. The release script builds the gauge boards too (`gauge` for the Waveshare 1.75" gauge,
    `gauge_m5dial` for the M5Stack Dial), with the version from `src/gauge/version.h`,
-   and publishes them on the site as `gauge-ws175` and `gauge-m5dial`.
+   and publishes them on the site as `gauge-ws175` and `gauge-m5dial`. The steering
+   wheel module (`wheel`, version from `src/wheel/version.h`) goes up as `wheel-c3` and
+   is updated the same way: it reports board 3 (docs/steering-wheel.md).
 2. On the hub's page, Settings, Firmware, **Gauge firmware**: **Check the site** reads
    the manifests; **Fetch** downloads a build onto the hub's filesystem (`/gfw/`), with
    the SHA-256 checked. The P4 hub has room for both; the C6 hub, with 1.5 MB in all,
@@ -125,6 +127,11 @@ and partition table). After that:
 Do it with the engine off, one gauge at a time: a gauge on Wi-Fi is still drawing its
 face, but its live data lags while it writes flash. The hub refuses a second transfer
 while one is running.
+
+Proven on 2026-10-26 with the first Waveshare gauge, linked to the P4 hub over Wi-Fi
+rather than CAN: Check, Fetch (1.87 MB from the site in about 15 s), Update on the card;
+the join frames landed, the gauge took the image, restarted and reported 0.1.2 twenty-one
+seconds after the button, and stayed on it past the rollback window.
 
 ## What could still go wrong
 

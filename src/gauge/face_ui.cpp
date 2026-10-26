@@ -57,6 +57,12 @@ hg::proto::IntroStyle introStyle = hg::proto::IntroStyle::Sweep;
 uint32_t bootMs = 0;
 uint32_t introStartMs = 0;
 uint32_t introDurationMs = 1200;
+// What the hub last asked for, kept in the preferences: a gauge that plays
+// alone (no hub yet, or none at all) plays the same intro as last time.
+hg::proto::IntroStyle soloStyle = hg::proto::IntroStyle::Sweep;
+uint16_t soloDurationMs = 1200;
+const char* kIntroStyleKey = "intro_style";
+const char* kIntroDurKey = "intro_dur";
 bool hubSeen = false;
 uint32_t hubSeenMs = 0;
 
@@ -146,16 +152,21 @@ void makeOverlays() {
     lv_obj_align(note, LV_ALIGN_BOTTOM_MID, 0, -scaled(26));
     lv_label_set_text(note, "");
 
-    // The hub's alert message: a band across the top in the alert's colour.
+    // The hub's alert message, drawn as the page draws it: a dark band across
+    // the middle, a line of the alert's colour above and below, the message
+    // in that colour in the condensed face.
     alertBand = lv_obj_create(screen);
     lv_obj_remove_style_all(alertBand);
-    lv_obj_set_size(alertBand, display::kSize, scaled(64));
-    lv_obj_align(alertBand, LV_ALIGN_TOP_MID, 0, scaled(60));
-    lv_obj_set_style_bg_opa(alertBand, LV_OPA_COVER, 0);
+    lv_obj_set_size(alertBand, display::kSize, scaled(120));
+    lv_obj_align(alertBand, LV_ALIGN_TOP_MID, 0, scaled(173));
+    lv_obj_set_style_bg_color(alertBand, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(alertBand, lv_opa_t(217), 0);  // 85%
+    lv_obj_set_style_border_width(alertBand, scaled(5), 0);
+    lv_obj_set_style_border_side(alertBand, lv_border_side_t(LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM), 0);
+    lv_obj_set_style_border_opa(alertBand, LV_OPA_COVER, 0);
     lv_obj_remove_flag(alertBand, LV_OBJ_FLAG_CLICKABLE);
     alertText = lv_label_create(alertBand);
-    lv_obj_set_style_text_font(alertText, fontGet(Font::Display, fontPx(28)), 0);
-    lv_obj_set_style_text_color(alertText, lv_color_black(), 0);
+    lv_obj_set_style_text_font(alertText, fontGet(Font::Condensed, fontPx(56)), 0);
     lv_obj_center(alertText);
     lv_obj_add_flag(alertBand, LV_OBJ_FLAG_HIDDEN);
 
@@ -170,12 +181,6 @@ void makeOverlays() {
     lv_obj_add_flag(identify, LV_OBJ_FLAG_HIDDEN);
 }
 
-// Black text reads on a light band, white on a dark one.
-lv_color_t textOn(uint32_t rgb) {
-    const uint32_t r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
-    return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? lv_color_black() : lv_color_white();
-}
-
 void updateOverlays(uint32_t now) {
     const uint32_t identifyUntil = can_task::identifyUntilMs();
     const bool showIdentify = identifyUntil != 0 && int32_t(identifyUntil - now) > 0;
@@ -183,6 +188,7 @@ void updateOverlays(uint32_t now) {
         if (showIdentify) {
             lv_label_set_text_fmt(identify, "%06lX", (unsigned long)can_task::nodeId());
             lv_obj_remove_flag(identify, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(identify);
         } else {
             lv_obj_add_flag(identify, LV_OBJ_FLAG_HIDDEN);
         }
@@ -195,10 +201,23 @@ void updateOverlays(uint32_t now) {
         if (show) {
             strncpy(alertShown, text, sizeof(alertShown) - 1);
             alertColour = colour;
-            lv_obj_set_style_bg_color(alertBand, lv_color_hex(colour), 0);
-            lv_obj_set_style_text_color(alertText, textOn(colour), 0);
+            lv_obj_set_style_border_color(alertBand, lv_color_hex(colour), 0);
+            lv_obj_set_style_text_color(alertText, lv_color_hex(colour), 0);
+            // A long message shrinks to fit the band, as on the page (410 of 466 px).
+            uint16_t px = fontPx(56);
+            const lv_font_t* f = fontGet(Font::Condensed, px);
+            lv_point_t size;
+            lv_text_get_size(&size, text, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            const int32_t maxWidth = scaled(410);
+            if (size.x > maxWidth) {
+                px = uint16_t(int32_t(px) * maxWidth / size.x);
+                if (px < 18) px = 18;
+                f = fontGet(Font::Condensed, px);
+            }
+            lv_obj_set_style_text_font(alertText, f, 0);
             lv_label_set_text(alertText, text);
             lv_obj_remove_flag(alertBand, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(alertBand);  // above whatever the face built since
         } else {
             alertShown[0] = 0;
             lv_obj_add_flag(alertBand, LV_OBJ_FLAG_HIDDEN);
@@ -216,18 +235,33 @@ void updateOverlays(uint32_t now) {
     }
 }
 
-void startIntro(const hg::proto::Intro& i, uint32_t now) {
+const char* introStyleName(hg::proto::IntroStyle s) {
+    return s == hg::proto::IntroStyle::Chase ? "chase" : s == hg::proto::IntroStyle::Fade ? "fade" : "sweep";
+}
+
+void startIntro(const hg::proto::Intro& i, uint32_t now, bool fromHub) {
     introStyle = i.style;
     introDurationMs = i.durationMs < 200 ? 200 : i.durationMs;
     introStartMs = now + i.delayMs;
     introState = IntroState::Delay;
+    Serial.printf("intro: %s, %lu ms%s\n", introStyleName(introStyle), (unsigned long)introDurationMs,
+                  fromHub ? "" : " (alone)");
+    if (fromHub && (i.style != soloStyle || uint16_t(introDurationMs) != soloDurationMs)) {
+        soloStyle = i.style;
+        soloDurationMs = uint16_t(introDurationMs);
+        Preferences p;
+        p.begin(kPrefs, false);
+        p.putUChar(kIntroStyleKey, uint8_t(soloStyle));
+        p.putUShort(kIntroDurKey, soloDurationMs);
+        p.end();
+    }
 }
 
 void runIntro(uint32_t now) {
     hg::proto::Intro frame;
     if (can_task::takeIntro(frame)) {
         // Once per start; the page's Play forces another.
-        if (introState != IntroState::Done || frame.force) startIntro(frame, now);
+        if (introState != IntroState::Done || frame.force) startIntro(frame, now, true);
     }
     if (!hubSeen && can_task::hubPresent()) {
         hubSeen = true;
@@ -236,7 +270,10 @@ void runIntro(uint32_t now) {
     switch (introState) {
         case IntroState::Waiting:
             if ((hubSeen && now - hubSeenMs >= kSoloAfterHubMs) || (!hubSeen && now - bootMs >= kSoloAfterBootMs)) {
-                startIntro(hg::proto::Intro(), now);
+                hg::proto::Intro solo;
+                solo.style = soloStyle;
+                solo.durationMs = soloDurationMs;
+                startIntro(solo, now, false);
             }
             break;
         case IntroState::Delay:
@@ -277,6 +314,10 @@ void begin() {
         Preferences p;
         p.begin(kPrefs, true);
         lastBrightness = p.getUChar(kBrightKey, 200);
+        const uint8_t style = p.getUChar(kIntroStyleKey, uint8_t(hg::proto::IntroStyle::Sweep));
+        if (style <= uint8_t(hg::proto::IntroStyle::Fade)) soloStyle = hg::proto::IntroStyle(style);
+        soloDurationMs = p.getUShort(kIntroDurKey, 1200);
+        if (soloDurationMs < 200) soloDurationMs = 200;
         p.end();
     }
     makeOverlays();
@@ -333,8 +374,9 @@ void update() {
 
     if (now - lastReportMs >= 5000) {
         lastReportMs = now;
-        Serial.printf("fps %u, face %u/%u, %s, hub %d, frames %u, link %s, internal heap %u (min %u), psram %u\n",
-                      unsigned(display::framesPerSecond()), unsigned(face_store::activeFace() + 1),
+        Serial.printf("fps %u (flush %u ms/s, lvgl %u ms/s), face %u/%u, %s, hub %d, frames %u, link %s, internal heap %u (min %u), psram %u\n",
+                      unsigned(display::framesPerSecond()), unsigned(display::flushMsPerSecond()),
+                      unsigned(display::lvglMsPerSecond()), unsigned(face_store::activeFace() + 1),
                       unsigned(face_store::faceCount()),
                       face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "LIVE"),
                       int(can_task::hubPresent()), unsigned(can_task::framesReceived()), ip_link::status(),

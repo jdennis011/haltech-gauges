@@ -63,13 +63,14 @@ void poll(uint32_t nowMs) {
     values(v);
     // With no gauge listening there is nobody to tell: the next one to come
     // online gets them from onOnline(). A busy bus is tried again shortly.
-    if (!m.anyOnline() || m.themeColours(proto::kBroadcastNode, v)) {
+    if (!m.anyGaugeOnline() || m.themeColours(proto::kBroadcastNode, v)) {
         sentVersion = version;
         lastSentMs = nowMs;
     }
 }
 
 void onOnline(const HubManager::Gauge& gauge, void*) {
+    if (HubManager::isWheel(gauge)) return;  // known only once its Info is in; the first time it just ignores them
     uint32_t v[proto::kThemeColourCount];
     values(v);
     hub::manager().themeColours(gauge.node, v);

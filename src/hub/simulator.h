@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <ArduinoJson.h>
+#include <string>
 
 #include "can_ports.h"
 #include "channel_store.h"
@@ -15,6 +16,10 @@
 // channel can be held at a value or swept between limits of your choosing.
 // All of this is touched under hub::lock().
 namespace simulator {
+
+// Restores on, paused, speed and the overrides from the hub's preferences;
+// every setter below saves them, so they survive a restart.
+void load();
 
 void setEnabled(bool enabled);
 bool enabled();
@@ -36,6 +41,10 @@ void clearOverrides();
 size_t overrideCount();
 // Appends {channel, hold} or {channel, min, max} per override.
 void overridesJson(JsonArray out);
+// Applies {paused, speed, clear, overrides}: the overrides as the API's map
+// {"rpm": {"hold": 3000}, "gear": null} or as a list [{channel, hold|min,max}]
+// (a preset, an export). False with a reason, part way applied.
+bool applyJson(JsonVariantConst in, std::string& error);
 
 // Generates whatever frames are due. Every frame is decoded into `store`, so
 // the web UI sees the data, and sent on the bus when `port` is given. Call

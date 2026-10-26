@@ -18,6 +18,10 @@ namespace {
 const char* kPrefs = "gauge";
 const uint32_t kRetryMs = 10000;
 const uint32_t kKeepaliveMs = 2000;
+// Linked, keepalives going out, and nothing back from the hub for this long:
+// the association is assumed stale (seen once after a reset: joined, got an
+// address, sent without error, the hub heard nothing) and is made afresh.
+const uint32_t kSilentRejoinMs = 15000;
 
 std::string ssid, password, host;
 bool on = false;
@@ -25,6 +29,7 @@ int sock = -1;
 sockaddr_in hubAddr = {};
 uint32_t lastTryMs = 0;
 uint32_t lastKeepaliveMs = 0;
+uint32_t lastHeardMs = 0;  // a packet from the hub, or the link coming up
 bool wasConnected = false;
 char statusText[64] = "off";
 
@@ -77,11 +82,19 @@ bool openSocket() {
     return true;
 }
 
+uint32_t sentPackets = 0, sendFailures = 0, lastLinkReportMs = 0;
+
 void sendPacket(const hg::CanFrame* frames, size_t count) {
     if (sock < 0) return;
     uint8_t packet[hg::kIpMaxPacket];
     const size_t len = hg::packIpFrames(frames, count, packet, sizeof(packet));
-    if (len) sendto(sock, packet, len, 0, reinterpret_cast<sockaddr*>(&hubAddr), sizeof(hubAddr));
+    if (!len) return;
+    const int r = sendto(sock, packet, len, 0, reinterpret_cast<sockaddr*>(&hubAddr), sizeof(hubAddr));
+    if (r < 0) {
+        if (sendFailures++ == 0) Serial.printf("ip link: sendto failed, errno %d\n", errno);
+    } else {
+        sentPackets++;
+    }
 }
 
 void join(uint32_t nowMs) {
@@ -131,6 +144,7 @@ bool read(hg::CanFrame& out) {
     if (rxNext >= rxCount) {
         uint8_t buf[hg::kIpMaxPacket + 16];
         const int n = recvfrom(sock, buf, sizeof(buf), MSG_DONTWAIT, nullptr, nullptr);
+        if (n > 0) lastHeardMs = millis();
         if (n <= 0) return false;
         const int count = hg::unpackIpFrames(buf, size_t(n), rxFrames, hg::kIpMaxFrames);
         if (count <= 0) return false;
@@ -155,12 +169,27 @@ void service(uint32_t nowMs) {
     }
     if (!wasConnected) {
         wasConnected = true;
+        lastHeardMs = nowMs;
         if (openSocket()) Serial.printf("ip link: %s\n", statusText);
+    }
+    if (sock >= 0 && uint32_t(nowMs - lastHeardMs) >= kSilentRejoinMs) {
+        Serial.println("ip link: nothing from the hub for 15 s, rejoining");
+        closeSocket();
+        wasConnected = false;
+        WiFi.disconnect();
+        lastTryMs = nowMs - kRetryMs;  // join again on the next pass
+        return;
     }
     // A keepalive, so the hub knows where this gauge is before it has anything to say.
     if (sock >= 0 && uint32_t(nowMs - lastKeepaliveMs) >= kKeepaliveMs) {
         lastKeepaliveMs = nowMs;
         sendPacket(nullptr, 0);
+    }
+    if (uint32_t(nowMs - lastLinkReportMs) >= 10000) {
+        lastLinkReportMs = nowMs;
+        Serial.printf("ip link: sent %lu packets, %lu send failures, ip %s, gateway %s, rssi %d\n",
+                      (unsigned long)sentPackets, (unsigned long)sendFailures, WiFi.localIP().toString().c_str(),
+                      WiFi.gatewayIP().toString().c_str(), int(WiFi.RSSI()));
     }
 }
 

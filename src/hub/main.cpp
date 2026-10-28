@@ -104,6 +104,10 @@ void bridgeTask(void*) {
 }
 #endif
 
+// Frames that arrived on the wire (the IP link counts its own), for the
+// Settings card: with a gauge on the chain this must climb.
+uint32_t gaugeRxFrames = 0;
+
 // Everything that talks on the gauge bus other than forwarding: beacon,
 // roster, transfers and the simulator.
 void gaugeBusTask(void*) {
@@ -114,8 +118,12 @@ void gaugeBusTask(void*) {
         hub::Lock lock;
         const uint32_t now = millis();
         if (got) {
+            gaugeRxFrames++;
             hubManager.onFrame(frame, now);
-            while (gaugePort.read(frame, 0)) hubManager.onFrame(frame, now);
+            while (gaugePort.read(frame, 0)) {
+                gaugeRxFrames++;
+                hubManager.onFrame(frame, now);
+            }
         }
         // Gauges linked over Wi-Fi: their frames join the bus's.
         while (ip_bus::read(frame)) hubManager.onFrame(frame, now);
@@ -257,6 +265,7 @@ HubStats stats() {
     s.forwardDropped = forwardDropped;
     s.simulated = simulator::framesGenerated();
     s.bus = gaugePort.stats();
+    s.busFrames = gaugeRxFrames;
     s.txPending = gaugePort.txPending();
     s.simulator = simulator::enabled();
     s.gaugesOnline = onlineCount;

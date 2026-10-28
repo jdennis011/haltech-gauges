@@ -284,6 +284,8 @@ void buildStatus(JsonObject o) {
     ecu["frames"] = s.ecuFrames;
     ecu["missed"] = s.ecu.rxMissed;
     ecu["errors"] = s.ecu.busErrors;
+    ecu["tec"] = s.ecu.txErrors;
+    ecu["rec"] = s.ecu.rxErrors;
     ecu["state"] = s.ecu.state;
 
     JsonObject bus = o["bus"].to<JsonObject>();
@@ -291,7 +293,11 @@ void buildStatus(JsonObject o) {
     bus["dropped"] = s.forwardDropped;
     bus["simulated"] = s.simulated;
     bus["missed"] = s.bus.rxMissed;
+    bus["frames"] = s.busFrames;
     bus["errors"] = s.bus.busErrors;
+    bus["rejected"] = s.bus.txRejected;
+    bus["tec"] = s.bus.txErrors;
+    bus["rec"] = s.bus.rxErrors;
     bus["state"] = s.bus.state;
     bus["tx_pending"] = s.txPending;
 

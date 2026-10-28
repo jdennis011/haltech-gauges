@@ -20,6 +20,7 @@ struct HubStats {
     uint32_t forwardDropped;
     uint32_t simulated;
     CanPortStats bus;
+    uint32_t busFrames;   // frames received on the wire
     uint32_t txPending;
     bool simulator;
     uint32_t gaugesOnline;

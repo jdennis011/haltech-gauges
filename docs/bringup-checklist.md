@@ -318,3 +318,34 @@ on Settings climbs by about 6000 a second: the beacon is never acknowledged and 
 controller keeps retrying it, so the transmit queue sits at 8. The chip stays green, and
 gauges linked over Wi-Fi still get every frame (the write path sends over the IP link
 before it looks at the CAN queue). It settles as soon as a gauge is on the wire.
+
+### 2026-10-28: first gauge on the chain from the carrier
+
+Carrier on a 12 V bench supply, one rev A adapter on J11 with the terminator plug in its
+J2, gauge D02424 on the adapter, no USB on either board. Power with the gauge at full
+brightness 1.455 W, screen off 1.395 W: about 0.3 A at the gauge, the figure the 5 V
+budget (spec 2.4) assumed. The small difference between on and off is the AMOLED showing
+a mostly black face; full white is the worst case and was not measured. The gauge reports
+4.625 V at its supply pin, the 5.0 V rail less the adapter's D1.
+
+The CAN link did not come up: the gauge stayed on the Wi-Fi link, the hub's gauge-bus
+error counter kept climbing at the same rate as with nothing on the wire and its transmit
+queue sat at 62 of 64, so nothing acknowledged the hub. Suspects, in order: the adapter's
+header positions 6-8 were never mapped (step 1 left them open; the firmware assumes
+position 6 = GPIO17 TX and 7 = GPIO18 RX); the carrier's gauge transceiver U3 on GPIO32/33,
+in use for the first time; CAN H/L crossed somewhere in the cable. Resolved by the meter
+checks in step 4 above and the header map from `gauge_bringup` stage 5.
+Narrowed down the same evening. Meter on the adapter's header, gauge running on the chain:
+position 3 = 3.3 V, positions 4 and 5 = 3 V (UART idle), position 6 = 1.4 V average,
+position 7 = 3 V. Hub 0.3.17 added the gauge bus's received-frame count and its TEC/REC to
+the status and the Settings row: received 0, TEC pinned at 128, REC 0, state running, 62
+frames waiting. TEC stuck at exactly 128 is the acknowledge-error signature: the hub puts
+whole frames on the bus and reads its own bits back (a bit error would push it past 128 to
+bus-off), and no other node ever acknowledges; REC 0 and received 0 say nothing the gauge
+sends reaches the hub, not even as a damaged frame. So position 6 is the gauge's CAN TX
+retrying for ever (GPIO17, the firmware's assumption holds), and the adapter's transceiver
+U1 is neither driving the bus nor echoing it: its R output (position 7) would toggle if it
+saw either the hub's frames or the gauge's own. Single faults that fit: U1 without 3.3 V at
+the chip, RS not at ground (standby, driver off), or a bad joint on U1. Next: meter U1's
+pins directly (SOIC-8: 1 D, 2 GND, 3 VCC, 4 R, 5 Vref, 6 CANL, 7 CANH, 8 RS) and the H/L
+resistance with the power off (60 ohm expected: the hub's 120 in parallel with the plug's).

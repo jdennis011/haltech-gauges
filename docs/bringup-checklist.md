@@ -146,6 +146,34 @@ Hub serial console: `?` lists commands.
 | Unplug the CAN wires | gauge shows `---` and NO DATA within a second; hub lists it offline within 3 s |
 | Plug back in | both recover without a reset |
 
+## Step 5: the Haltech, engine off (`hub_p4` on the carrier)
+
+Only after the carrier has run from a bench supply with its sockets empty (the rev A rule in
+the results below). The Rebel broadcasts the Haltech CAN protocol on its Haltech CAN port
+(CAN 1, the DTM-4 on the main loom, not CAN 2) whenever it is powered, so the key alone is
+enough: no cranking, RPM reads 0. The hub's ECU port listens and acknowledges at 1 Mbit/s
+and never transmits.
+
+Before plugging in:
+
+| Check | Expect |
+|---|---|
+| Loom, key on | DTM-4 pin 1 = +12 V, pin 2 = ground (spec section 1.6). CAN H and L cannot be told apart with a meter |
+| Key off, meter across CAN H and L at the loom | 60 ohm: terminated at both ends already, JP1 stays open. 120 ohm: the Rebel is the only terminator, fit JP1 |
+| The socket | J10, the ECU one. J11 is the chain and has the same shell (spec 1.5) |
+| Hub page | simulator off: it would put its own frames on the gauge bus beside the real ones |
+
+Then plug in, key on:
+
+| Check | Expect |
+|---|---|
+| Status chip `ECU` | green, `ECU N frames`, N climbing by several hundred a second (the table in `lib/hg_haltech/haltech_channels.def` adds up to 1400 a second if the Rebel sent every frame; it sends the ones its setup uses) |
+| Settings, ECU bus row | a healthy state, 0 missed, 0 errors, still 0 after ten minutes |
+| Live data tab | channels fill in: RPM 0, battery voltage near 12, coolant and air temperatures at room temperature, manifold pressure near 100 kPa |
+| A gauge on the chain | shows the live values, label says CAN |
+| No frames at all | swap CAN H and L at the hub end and retry (nothing is damaged); then check in NSP that the Haltech CAN protocol is on for that port |
+| Errors or missed climbing | termination (the 60 ohm check) or the H/L pair not twisted |
+
 ## What to send back
 
 - Header positions of GPIO16/17/18
@@ -275,3 +303,18 @@ Rules from this: a carrier is first powered with its sockets empty and must show
 TP2 and at the VSYS pad before any processor board is fitted; a library footprint for a
 module is checked against the module in hand before the order; rev B gets an over-voltage
 cutoff on the 5 V feed to the board.
+
+### 2026-10-28: carrier rev A running
+
+The Pololu D36V28F5 went in on jumper wires in the module's own pin order (EN, VIN, GND,
+GND, VOUT) rather than the swapped footprint. The carrier was run from a bench supply at
+J10 with the P4 socket empty first, then the replacement P4 was fitted: the hub runs on the
+carrier. Its ECU side has not seen a Haltech yet (step 5).
+
+Seen from the page once it was back on the home network: the carrier's DS3231 is found and
+NTP sets it (time card: RTC ok), the account sync runs, the ECU port reads 0 frames with
+0 errors (nothing plugged in). With nothing on the chain's wire the gauge-bus error counter
+on Settings climbs by about 6000 a second: the beacon is never acknowledged and the
+controller keeps retrying it, so the transmit queue sits at 8. The chip stays green, and
+gauges linked over Wi-Fi still get every frame (the write path sends over the IP link
+before it looks at the CAN queue). It settles as soon as a gauge is on the wire.

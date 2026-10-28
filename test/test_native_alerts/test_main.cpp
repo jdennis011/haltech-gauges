@@ -162,6 +162,11 @@ void test_bad_rules_are_refused_and_named() {
         std::vector<Rule> only;
         TEST_ASSERT_TRUE(parse(R"([{"channel":"rpm","when":"above","value":1,"sound":"alarm"}])", only).ok);
         TEST_ASSERT_EQUAL(int(hg::proto::Sound::Alarm), int(only[0].sound));
+        TEST_ASSERT_TRUE(parse(R"([{"channel":"rpm","when":"above","value":1,"sound":"riff"}])", only).ok);
+        TEST_ASSERT_EQUAL(int(hg::proto::Sound::Riff), int(only[0].sound));
+        JsonDocument doc;
+        toJson(only[0], doc.to<JsonObject>());
+        TEST_ASSERT_EQUAL_STRING("riff", doc["sound"].as<const char*>());
     }
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","color":"red"}])", "'color' must look like");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","gauge":"left"}])", "'gauge' must be");

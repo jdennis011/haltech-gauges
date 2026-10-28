@@ -190,7 +190,7 @@ void begin() {
         return;
     }
 
-    queue = xQueueCreate(16, sizeof(Note));
+    queue = xQueueCreate(32, sizeof(Note));
     if (!queue || xTaskCreatePinnedToCore(playerTask, "audio", 4096, nullptr, 2, nullptr, 1) != pdPASS) {
         Serial.println("Audio: player task failed");
         return;
@@ -233,6 +233,18 @@ void play(uint8_t sound) {
                 enqueue(1300, 110);
             }
             break;
+        case 4: {
+            // The riff from the tab: D string frets 6, 7, 9, then A string 7, 9, 11, 7
+            // (G#3 A3 B3, E3 F#3 G#3 E3), two octaves up for the small speaker. The
+            // rhythm is a guess: a quick run, then four longer notes.
+            static const Note kRiff[] = {{831, 200}, {880, 200}, {988, 260}, {659, 300},
+                                         {740, 300}, {831, 300}, {659, 520}};
+            for (size_t i = 0; i < sizeof(kRiff) / sizeof(kRiff[0]); i++) {
+                if (i) enqueue(0, 40);
+                enqueue(kRiff[i].hz, kRiff[i].ms);
+            }
+            break;
+        }
         default:
             break;
     }

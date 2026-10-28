@@ -48,6 +48,7 @@ void help() {
     Serial.println("  time HH:MM[:SS]       set the clock the clock widgets show");
     Serial.println("  tone [HZ] [MS]        a test tone on the speaker (default 1000 Hz, 300 ms)");
     Serial.println("  chime                 the identify chime");
+    Serial.println("  play N                a built-in sound: 1 beep, 2 chime, 3 alarm, 4 riff");
     Serial.println("  volume N              speaker volume 0..100, kept");
     Serial.println("  info                  faces, hub, heap, audio");
     Serial.println("  link SSID PASSWORD [HUB]  reach the hub over Wi-Fi: its access point (hub 192.168.4.1), or a network with its address");
@@ -139,6 +140,10 @@ void run(const std::string& cmd) {
         }
         audio::tone(uint16_t(hz < 0 ? 0 : hz), uint16_t(ms < 0 ? 0 : ms));
         Serial.printf("tone %d Hz for %d ms at volume %u\n", hz, ms, unsigned(audio::volume()));
+    } else if (cmd.rfind("play ", 0) == 0) {
+        const int n = atoi(cmd.c_str() + 5);
+        audio::play(uint8_t(n < 0 ? 0 : n));
+        Serial.println(audio::present() ? "playing" : "play: no codec on this board");
     } else if (cmd == "chime") {
         audio::chime();
         Serial.println(audio::present() ? "chime" : "chime: no codec on this board");

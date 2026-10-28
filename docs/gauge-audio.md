@@ -27,12 +27,13 @@ the sequence in Espressif's `es8311` driver reduced to the playback path.
   the gauge's id on the screen as before, and now also plays a two-note chime
   (880 Hz then 1320 Hz). That is the test from the page: a gauge with a speaker plugged
   in sounds when identified.
-- **Alerts.** A rule on the hub's Alerts tab can name a sound (`beep`, `chime` or
-  `alarm`) and how often to play it again while the alert holds (docs/alerts.md). The
+- **Alerts.** A rule on the hub's Alerts tab can name a sound (`beep`, `chime`, `alarm`
+  or `riff`) and how often to play it again while the alert holds (docs/alerts.md). The
   hub sends `PlaySound` commands; the gauge plays them at its volume.
 - **Volume from the hub.** A gauge with a speaker reports its volume in its status, so
   its card on the Gauges tab shows a volume slider (0 to 100 in steps of 4) and a
-  **Beep** button to hear it; the All gauges strip sets every speaker at once. The
+  **Beep** button to hear it, and **Riff** for the guitar riff; the All gauges strip sets
+  every speaker at once. The
   gauge keeps the value in flash. The commands are `SetVolume` and `PlaySound`.
 - **Console.** On the gauge's USB serial port:
 
@@ -40,6 +41,7 @@ the sequence in Espressif's `es8311` driver reduced to the playback path.
   |---|---|
   | `tone [HZ] [MS]` | a sine tone, 50 to 8000 Hz, 10 to 5000 ms (default 1000 Hz, 300 ms) |
   | `chime` | the identify chime |
+  | `play N` | a built-in sound: 1 beep, 2 chime, 3 alarm, 4 riff |
   | `volume N` | speaker volume 0 to 100, kept in flash (default 60); 0 mutes the codec |
   | `info` | now ends with `audio codec` or `audio none` |
 
@@ -49,6 +51,17 @@ amplifier is woken on silence before the first note.
 
 A gauge whose codec does not answer (or the M5Stack Dial build, which has no audio)
 prints `Audio: no ES8311 codec on the I2C bus` at start and ignores the commands.
+
+## The built-in sounds
+
+| Number | Name | What it is |
+|---|---|---|
+| 1 | beep | 1500 Hz for 150 ms |
+| 2 | chime | 880 Hz then 1320 Hz, the identify chime |
+| 3 | alarm | 900 and 1300 Hz alternating, three pairs |
+| 4 | riff | the guitar tab given on 2026-10-28: D string frets 6, 7, 9, then A string 7, 9, 11, 7 (G#3 A3 B3, E3 F#3 G#3 E3), played two octaves up (831, 880, 988, 659, 740, 831, 659 Hz) so the small speaker carries it. The rhythm is a guess, a quick run then four longer notes |
+
+Every note has a 5 ms ramp in and out; a 40 ms rest separates the riff's notes.
 
 ## Proven
 

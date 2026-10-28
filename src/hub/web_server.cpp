@@ -630,15 +630,16 @@ void handleGauges(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
-// The sound a request names: "beep", "chime" or "alarm", or the number.
+// The sound a request names: "beep", "chime", "alarm" or "riff", or the number.
 uint8_t soundArg(JsonVariantConst v) {
     if (v.is<int>()) {
         const int n = v.as<int>();
-        return uint8_t(n < 1 ? 1 : (n > 3 ? 3 : n));
+        return uint8_t(n < 1 ? 1 : (n > 4 ? 4 : n));
     }
     const char* s = v.as<const char*>();
     if (s && strcmp(s, "chime") == 0) return uint8_t(proto::Sound::Chime);
     if (s && strcmp(s, "alarm") == 0) return uint8_t(proto::Sound::Alarm);
+    if (s && strcmp(s, "riff") == 0) return uint8_t(proto::Sound::Riff);
     return uint8_t(proto::Sound::Beep);
 }
 

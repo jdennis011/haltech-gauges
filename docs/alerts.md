@@ -53,7 +53,7 @@ them ten times a second.
 | `hold` | Seconds the alert stays in force after the condition stops holding, 0 to 600 (3). For `changes`, how long each change is shown |
 | `message` | Text shown over the face, up to 32 characters (none) |
 | `color` | Colour of the message, `#RRGGBB` (`#FF3B30`) |
-| `sound` | Played on the gauge's speaker when the alert fires: `none`, `beep`, `chime` or `alarm` (`none`). Needs gauge firmware 0.1.5 and a speaker (docs/gauge-audio.md) |
+| `sound` | Played on the gauge's speaker when the alert fires: `none`, `beep`, `chime`, `alarm` or `riff` (`none`). Needs gauge firmware 0.1.5 and a speaker (docs/gauge-audio.md) |
 | `repeat` | Seconds between plays while the alert stays in force, 0 to 600 (0: once, when it fires) |
 | `config` | The name of a config in the hub's library to show in place of the gauge's own while the alert is in force, up to 32 characters (none). The gauge goes back to its own config when the alert ends |
 | `face` | Face to switch to, counted from 0, up to 7 (no change). With a `config`, a face of that config |

@@ -78,6 +78,7 @@ enum class Sound : uint8_t {
     Beep = 1,   // one short note
     Chime = 2,  // two rising notes, the identify chime
     Alarm = 3,  // three two-tone pairs
+    Riff = 4,   // the guitar riff from the tab (docs/gauge-audio.md), two octaves up
 };
 
 enum class XferKind : uint8_t {

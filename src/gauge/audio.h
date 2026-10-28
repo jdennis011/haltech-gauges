@@ -22,7 +22,7 @@ void tone(uint16_t hz, uint16_t ms);
 // The identify chime: two short rising notes.
 void chime();
 
-// One of the protocol's sounds (hg::proto::Sound as a number): 1 beep, 2 chime, 3 alarm.
+// One of the protocol's sounds (hg::proto::Sound as a number): 1 beep, 2 chime, 3 alarm, 4 riff.
 void play(uint8_t sound);
 
 // From loop(): writes a changed volume to the codec and to flash. The codec is

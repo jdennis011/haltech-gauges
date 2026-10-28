@@ -780,6 +780,7 @@ function renderGauges() {
         : el('div', { class: 'row' },
             btn('Identify', () => act(g, 'identify', { seconds: 5 }), off, 'small'),
             g.volume == null ? null : btn('Beep', () => act(g, 'sound', { sound: 'beep' }), off, 'small', 'A short note on its speaker, at the volume set'),
+            g.volume == null ? null : btn('Riff', () => act(g, 'sound', { sound: 'riff' }), off, 'small', 'The guitar riff, on its speaker'),
             g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
             btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
             btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),
@@ -1918,7 +1919,7 @@ const ALERT_WHEN = [['above', 'goes above'], ['below', 'goes below'], ['outside'
 const MAX_ALERTS = 16;
 const ALERT_RED = '#FF3B30';
 // Starting points; every value can be changed once the alert is in the list.
-const ALERT_SOUNDS = [['none', 'no sound'], ['beep', 'beep'], ['chime', 'chime'], ['alarm', 'alarm']];
+const ALERT_SOUNDS = [['none', 'no sound'], ['beep', 'beep'], ['chime', 'chime'], ['alarm', 'alarm'], ['riff', 'riff']];
 const ALERT_PRESETS = {
   'Coolant hot': { channel: 'coolant_temp', unit: 'C', when: 'above', value: 105, for: 1, message: 'COOLANT HOT' },
   'Oil pressure low': { channel: 'oil_pressure', unit: 'kPa', when: 'below', value: 100, for: 0.5, message: 'OIL PRESSURE' },
@@ -4445,7 +4446,7 @@ const mock = {
       if ((r.when === 'outside' || r.when === 'inside') && !(typeof r.low === 'number' && typeof r.high === 'number')) return head + "'low' and 'high' must be numbers";
       if ((r.when === 'outside' || r.when === 'inside') && !(r.low < r.high)) return head + "'low' must be less than 'high'";
       if (typeof r.config === 'string' && r.config.length > 32) return head + "'config' is longer than 32 characters";
-      if (r.sound && !ALERT_SOUNDS.some(s => s[0] === r.sound)) return head + "'sound' must be one of none, beep, chime, alarm";
+      if (r.sound && !ALERT_SOUNDS.some(s => s[0] === r.sound)) return head + "'sound' must be one of none, beep, chime, alarm, riff";
       if (!r.message && r.face == null && !r.config && !(r.sound && r.sound !== 'none')) return head + "needs a 'message' to show, a 'sound' to play, a 'config' or a 'face' to switch to";
     }
     return null;

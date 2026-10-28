@@ -161,8 +161,10 @@ bool parseRule(JsonObjectConst o, Rule& r, std::string& why) {
         r.sound = proto::Sound::Chime;
     } else if (strcmp(sound, "alarm") == 0) {
         r.sound = proto::Sound::Alarm;
+    } else if (strcmp(sound, "riff") == 0) {
+        r.sound = proto::Sound::Riff;
     } else {
-        why = "'sound' must be one of none, beep, chime, alarm";
+        why = "'sound' must be one of none, beep, chime, alarm, riff";
         return false;
     }
     if (!readSeconds(o, "repeat", 0, r.repeatMs, why)) return false;
@@ -276,7 +278,10 @@ void toJson(const Rule& r, JsonObject o) {
     snprintf(buf, sizeof(buf), "#%06lX", (unsigned long)(r.color & 0xFFFFFF));
     o["color"] = buf;
     if (r.sound != proto::Sound::None) {
-        o["sound"] = r.sound == proto::Sound::Beep ? "beep" : r.sound == proto::Sound::Chime ? "chime" : "alarm";
+        o["sound"] = r.sound == proto::Sound::Beep    ? "beep"
+                     : r.sound == proto::Sound::Chime ? "chime"
+                     : r.sound == proto::Sound::Alarm ? "alarm"
+                                                      : "riff";
         if (r.repeatMs) o["repeat"] = r.repeatMs / 1000.0f;
     }
     if (!r.config.empty()) o["config"] = r.config;

@@ -70,12 +70,13 @@ void test_rules_parse_and_write_back() {
        "message":"COOLANT HOT","color":"#FFCC00","face":2,"restore":false,"gauge":"A0:76:4E:11:22:33"},
       {"channel":"wideband_1","when":"outside","low":0.8,"high":1.1,"message":"LAMBDA"},
       {"name":"CEL","enabled":false,"channel":"check_engine_light","when":"on","face":0},
-      {"name":"Cruise","channel":"cruise_state","when":"above","value":1,"hold":1,"config":"Cruise face","face":0}
+      {"name":"Cruise","channel":"cruise_state","when":"above","value":1,"hold":1,"config":"Cruise face","face":0},
+      {"name":"Shift","channel":"rpm","when":"above","value":7000,"hold":0.5,"sound":"beep","repeat":2}
     ])";
     std::vector<Rule> rules;
     const ParseResult r = parse(json, rules);
     TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
-    TEST_ASSERT_EQUAL(4, rules.size());
+    TEST_ASSERT_EQUAL(5, rules.size());
 
     TEST_ASSERT_EQUAL_STRING("Coolant hot", rules[0].name.c_str());
     TEST_ASSERT_EQUAL(int(CH_coolant_temp), rules[0].channel);
@@ -106,6 +107,13 @@ void test_rules_parse_and_write_back() {
     TEST_ASSERT_TRUE(rules[3].restore);
     TEST_ASSERT_EQUAL(1000, rules[3].holdMs);
 
+    // A sound, played again every two seconds; the others have none.
+    TEST_ASSERT_EQUAL(int(hg::proto::Sound::Beep), int(rules[4].sound));
+    TEST_ASSERT_EQUAL(2000, rules[4].repeatMs);
+    TEST_ASSERT_TRUE(rules[4].message.empty());
+    TEST_ASSERT_EQUAL(int(hg::proto::Sound::None), int(rules[0].sound));
+    TEST_ASSERT_EQUAL(0, rules[0].repeatMs);
+
     // What is written back reads as the same rules.
     JsonDocument doc;
     JsonArray list = doc.to<JsonArray>();
@@ -114,8 +122,11 @@ void test_rules_parse_and_write_back() {
     serializeJson(doc, text);
     std::vector<Rule> again;
     TEST_ASSERT_TRUE(parse(text, again).ok);
-    TEST_ASSERT_EQUAL(4, again.size());
+    TEST_ASSERT_EQUAL(5, again.size());
     TEST_ASSERT_EQUAL_STRING("Cruise face", again[3].config.c_str());
+    TEST_ASSERT_EQUAL(int(hg::proto::Sound::Beep), int(again[4].sound));
+    TEST_ASSERT_EQUAL(2000, again[4].repeatMs);
+    TEST_ASSERT_EQUAL(int(hg::proto::Sound::None), int(again[0].sound));
     TEST_ASSERT_EQUAL(0, again[3].face);
     TEST_ASSERT_EQUAL_STRING("COOLANT HOT", again[0].message.c_str());
     TEST_ASSERT_EQUAL_FLOAT(105, again[0].value);
@@ -144,6 +155,14 @@ void test_bad_rules_are_refused_and_named() {
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"config":"a name that is far too long for a config"}])",
                    "'config' is longer than 32");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"face":8}])", "'face' must be");
+    assertRejected(R"([{"channel":"rpm","when":"above","value":1,"sound":"siren"}])", "'sound' must be one of");
+    assertRejected(R"([{"channel":"rpm","when":"above","value":1,"sound":"beep","repeat":601}])", "'repeat' must be between");
+    {
+        // A sound on its own is something to do.
+        std::vector<Rule> only;
+        TEST_ASSERT_TRUE(parse(R"([{"channel":"rpm","when":"above","value":1,"sound":"alarm"}])", only).ok);
+        TEST_ASSERT_EQUAL(int(hg::proto::Sound::Alarm), int(only[0].sound));
+    }
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","color":"red"}])", "'color' must look like");
     assertRejected(R"([{"channel":"rpm","when":"above","value":1,"message":"X","gauge":"left"}])", "'gauge' must be");
     assertRejected(R"([{"channel":"rpm","unit":"psi","when":"above","value":1,"message":"X"}])", "unit 'psi' is not available");

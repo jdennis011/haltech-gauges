@@ -68,6 +68,16 @@ enum class Cmd : uint8_t {
     SetDisplay = 7,     // arg = 0 screen off (panel asleep), 1 on
     Intro = 8,          // the key-on intro: a whole Intro frame, not a two-byte Command
     InputRaw = 9,       // steering wheel: stream raw ladder readings for arg seconds (0 stops)
+    PlaySound = 10,     // arg = a Sound: the gauge plays it on its speaker (docs/gauge-audio.md)
+    SetVolume = 11,     // arg = speaker volume 0..100; the gauge keeps it
+};
+
+// What Cmd::PlaySound asks for, and what an alert rule names.
+enum class Sound : uint8_t {
+    None = 0,
+    Beep = 1,   // one short note
+    Chime = 2,  // two rising notes, the identify chime
+    Alarm = 3,  // three two-tone pairs
 };
 
 enum class XferKind : uint8_t {
@@ -130,6 +140,17 @@ struct Status {
 constexpr uint8_t kStatusFlagTrying = 0x01;  // showing a RAM-only "try" config
 constexpr uint8_t kStatusFlagDemo = 0x02;
 constexpr uint8_t kStatusFlagWifi = 0x04;  // fetching over the hub's Wi-Fi
+// Bits 3 to 7 of Status::flags carry the speaker volume as volume / 4 + 1, so
+// 0 means no speaker (or firmware before 0.1.5) and 26 means 100.
+constexpr uint8_t kStatusVolumeShift = 3;
+inline uint8_t statusVolumeField(bool speaker, uint8_t volume) {
+    return speaker ? uint8_t((volume > 100 ? 100 : volume) / 4 + 1) : 0;
+}
+// The volume a status carries, 0..100 in steps of 4, or -1 for no speaker.
+inline int statusVolume(uint8_t flags) {
+    const uint8_t v = uint8_t(flags >> kStatusVolumeShift);
+    return v ? int(v - 1) * 4 : -1;
+}
 
 struct Command {
     Cmd cmd = Cmd::Identify;

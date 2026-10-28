@@ -64,10 +64,20 @@ private:
         bool restore = false;
         bool haveSaved = false;  // the face it was on before any alert moved it
         uint8_t savedFace = 0;
+
+        // Sounds, per rule: in force for this gauge at the last run (coming
+        // into force plays it), a play owed, and when it last played.
+        bool soundSeen[kMaxRules] = {};
+        bool soundDue[kMaxRules] = {};
+        uint32_t soundMs[kMaxRules] = {};
+        bool soundFresh = true;  // alerts already in force when the slot starts do not play
+        uint32_t soundGeneration = 0;
     };
 
     void serve(const Engine& engine, proto::HubManager& manager, const proto::HubManager::Gauge& gauge,
                Slot& slot, uint32_t nowMs);
+    void serveSounds(const Engine& engine, proto::HubManager& manager, const proto::HubManager::Gauge& gauge,
+                     Slot& slot, uint32_t nowMs);
     void serveConfig(const Rule& rule, int index, proto::HubManager& manager,
                      const proto::HubManager::Gauge& gauge, Slot& slot, uint32_t nowMs);
     void endConfig(proto::HubManager& manager, const proto::HubManager::Gauge& gauge, Slot& slot);

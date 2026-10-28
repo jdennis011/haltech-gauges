@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "audio.h"
 #include "board.h"
 #include "can_task.h"
 #include "display.h"
@@ -24,6 +25,7 @@ void setup() {
 
     if (!display::begin()) Serial.println("Display start failed");
     if (!touch::begin()) Serial.println("Touch start failed");
+    audio::begin();
 
     can_task::begin();
     face_ui::begin();
@@ -35,6 +37,7 @@ void loop() {
     face_ui::update();
     display::loop();
     serial_console::poll();
+    audio::poll();
 
     static uint32_t lastPowerMs = 0;
     if (millis() - lastPowerMs >= 1000) {

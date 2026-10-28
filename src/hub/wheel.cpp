@@ -178,7 +178,11 @@ void statusJson(JsonObject out) {
             break;
         }
     }
+#if HG_FG_ON_GAUGE_PORT
+    out["present"] = true;  // the test build is about the card's FG bus section
+#else
     out["present"] = w != nullptr || s.seen || !calibration.empty();
+#endif
     out["online"] = w && w->online;
     if (w) {
         char buf[24];

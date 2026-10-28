@@ -8,6 +8,7 @@
 
 #include <atomic>
 
+#include "audio.h"
 #include "board_pins.h"
 #include "face_model.h"
 #include "face_store.h"
@@ -88,6 +89,7 @@ bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
             uint32_t until = millis() + uint32_t(arg) * 1000;
             if (until == 0) until = 1;  // 0 means "not requested"
             identifyUntil = until;
+            audio::chime();
             return true;
         }
         case proto::Cmd::SetBrightness:
@@ -105,6 +107,12 @@ bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
             return true;
         case proto::Cmd::EndTry:
             face_store::endTry();
+            return true;
+        case proto::Cmd::PlaySound:
+            audio::play(arg);
+            return true;
+        case proto::Cmd::SetVolume:
+            audio::setVolume(arg > 100 ? 100 : arg);
             return true;
         case proto::Cmd::SendConfig: {
             size_t size = 0;
@@ -144,7 +152,8 @@ void onStatus(proto::Status& status, void*) {
     status.faceCount = uint8_t(face_store::faceCount());
     status.vbusMillivolts = vbus;
     status.flags = (face_store::trying() ? proto::kStatusFlagTrying : 0) | (demoMode ? proto::kStatusFlagDemo : 0) |
-                   (wifi_fetch::busy() ? proto::kStatusFlagWifi : 0);
+                   (wifi_fetch::busy() ? proto::kStatusFlagWifi : 0) |
+                   uint8_t(proto::statusVolumeField(audio::present(), audio::volume()) << proto::kStatusVolumeShift);
 }
 
 // Images are taken in to PSRAM and handed to the image store, which writes

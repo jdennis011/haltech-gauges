@@ -248,12 +248,12 @@
               <text x="-11.5" y="8.5" size="1.016" layer="25">&gt;NAME</text>
             </package>
             <package name="POLOLU-D36V28F-PLACEHOLDER">
-              <description>PLACEHOLDER. Replace with the hole pattern from Pololu's D36V28Fx drill guide.</description>
-              <pad name="VIN" x="-5.08" y="0" drill="1" diameter="1.8" shape="square" />
-              <pad name="GND1" x="-2.54" y="0" drill="1" diameter="1.8" />
-              <pad name="GND2" x="0" y="0" drill="1" diameter="1.8" />
-              <pad name="VOUT" x="2.54" y="0" drill="1" diameter="1.8" />
-              <pad name="EN" x="5.08" y="0" drill="1" diameter="1.8" />
+              <description>Pads in the module's order EN, VIN, GND, GND, VOUT (checked 2026-10-27). Row position within the outline from Pololu's D36V28Fx drill guide.</description>
+              <pad name="EN" x="-5.08" y="0" drill="1" diameter="1.8" />
+              <pad name="VIN" x="-2.54" y="0" drill="1" diameter="1.8" shape="square" />
+              <pad name="GND1" x="0" y="0" drill="1" diameter="1.8" />
+              <pad name="GND2" x="2.54" y="0" drill="1" diameter="1.8" />
+              <pad name="VOUT" x="5.08" y="0" drill="1" diameter="1.8" />
               <wire x1="-8.9" y1="10.2" x2="8.9" y2="10.2" width="0.127" layer="21" />
               <wire x1="8.9" y1="10.2" x2="8.9" y2="-10.2" width="0.127" layer="21" />
               <wire x1="8.9" y1="-10.2" x2="-8.9" y2="-10.2" width="0.127" layer="21" />

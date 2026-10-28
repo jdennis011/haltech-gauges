@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "audio.h"
 #include "can_task.h"
 #include "display.h"
 #include "face_model.h"
@@ -45,7 +46,10 @@ void help() {
     Serial.println("  bright N              brightness 0..255");
     Serial.println("  intro [style] [ms]    play the intro now: sweep, chase or fade; duration");
     Serial.println("  time HH:MM[:SS]       set the clock the clock widgets show");
-    Serial.println("  info                  faces, hub, heap");
+    Serial.println("  tone [HZ] [MS]        a test tone on the speaker (default 1000 Hz, 300 ms)");
+    Serial.println("  chime                 the identify chime");
+    Serial.println("  volume N              speaker volume 0..100, kept");
+    Serial.println("  info                  faces, hub, heap, audio");
     Serial.println("  link SSID PASSWORD [HUB]  reach the hub over Wi-Fi: its access point (hub 192.168.4.1), or a network with its address");
     Serial.println("  link                  the link's state;  link off  drops it");
 }
@@ -126,10 +130,26 @@ void run(const std::string& cmd) {
         }
         ip_link::set(ssid, pass, host);
         Serial.printf("link: joining %s, hub %s\n", ssid, host[0] ? host : "192.168.4.1");
+    } else if (cmd == "tone" || cmd.rfind("tone ", 0) == 0) {
+        int hz = 1000, ms = 300;
+        sscanf(cmd.c_str() + 4, "%d %d", &hz, &ms);
+        if (!audio::present()) {
+            Serial.println("tone: no codec on this board");
+            return;
+        }
+        audio::tone(uint16_t(hz < 0 ? 0 : hz), uint16_t(ms < 0 ? 0 : ms));
+        Serial.printf("tone %d Hz for %d ms at volume %u\n", hz, ms, unsigned(audio::volume()));
+    } else if (cmd == "chime") {
+        audio::chime();
+        Serial.println(audio::present() ? "chime" : "chime: no codec on this board");
+    } else if (cmd.rfind("volume ", 0) == 0) {
+        const int n = atoi(cmd.c_str() + 7);
+        audio::setVolume(uint8_t(n < 0 ? 0 : (n > 100 ? 100 : n)));
+        Serial.printf("volume %u\n", unsigned(audio::volume()));
     } else if (cmd == "info") {
-        Serial.printf("faces %u, on face %u, hub %d, trying %d, heap %u\n", unsigned(face_store::faceCount()),
+        Serial.printf("faces %u, on face %u, hub %d, trying %d, heap %u, audio %s\n", unsigned(face_store::faceCount()),
                       unsigned(face_store::activeFace() + 1), int(can_task::hubPresent()), int(face_store::trying()),
-                      unsigned(ESP.getFreeHeap()));
+                      unsigned(ESP.getFreeHeap()), audio::present() ? "codec" : "none");
     } else {
         Serial.printf("unknown: %s (? for help)\n", cmd.c_str());
     }

@@ -103,6 +103,7 @@ struct SimGauge {
     int rejectCount = 0;
     bool rejectConfigs = false;
     bool alertShown = false;
+    std::vector<uint8_t> sounds;  // PlaySound commands, in order
     int themeChanges = 0;
     uint32_t theme[kThemeColourCount] = {};
     std::string alertText;
@@ -128,6 +129,7 @@ struct SimGauge {
             case Cmd::Identify: g->identifyCount++; return true;
             case Cmd::SetFace: g->activeFace = arg; return true;
             case Cmd::EndTry: g->trying = false; return true;
+            case Cmd::PlaySound: g->sounds.push_back(arg); return true;
             case Cmd::SendConfig: return g->node.upload(g->stored.data(), uint32_t(g->stored.size()), *g->now);
             default: return false;
         }
@@ -865,6 +867,52 @@ void test_alert_rules_are_carried_out_on_the_gauges() {
     TEST_ASSERT_FALSE(w.g1.alertShown);
     TEST_ASSERT_FALSE(w.g2.alertShown);
     TEST_ASSERT_EQUAL(1, w.g1.activeFace);
+}
+
+void test_alert_sound_plays_when_it_fires_and_repeats() {
+    World w;
+    w.run(1500);
+
+    // A beep on every gauge, again every second while it holds; an alarm once, on gauge 1 only.
+    AlertRig rig(w, R"([
+      {"channel":"rpm","when":"above","value":7000,"hold":0.5,"sound":"beep","repeat":1},
+      {"channel":"rpm","when":"above","value":7500,"hold":0.5,"sound":"alarm","gauge":"24:6F:28:11:22:33"}
+    ])");
+    rig.run(CH_rpm, 3000, 500);
+    TEST_ASSERT_EQUAL(0, w.g1.sounds.size());
+    TEST_ASSERT_EQUAL(0, w.g2.sounds.size());
+
+    rig.run(CH_rpm, 7800, 300);
+    TEST_ASSERT_EQUAL(2, w.g1.sounds.size());
+    TEST_ASSERT_EQUAL(int(Sound::Beep), w.g1.sounds[0]);
+    TEST_ASSERT_EQUAL(int(Sound::Alarm), w.g1.sounds[1]);
+    TEST_ASSERT_EQUAL(1, w.g2.sounds.size());
+    TEST_ASSERT_EQUAL(int(Sound::Beep), w.g2.sounds[0]);
+
+    // Two more seconds in force: two more beeps each, no second alarm.
+    rig.run(CH_rpm, 7800, 2100);
+    TEST_ASSERT_EQUAL(4, w.g1.sounds.size());
+    TEST_ASSERT_EQUAL(int(Sound::Beep), w.g1.sounds[3]);
+    TEST_ASSERT_EQUAL(3, w.g2.sounds.size());
+
+    // A gauge that resets in the middle of it is not played the alarm it already had,
+    // but the beep keeps repeating once it is back.
+    w.g1.boot();
+    w.g1.sounds.clear();
+    rig.run(CH_rpm, 7800, 3000);
+    TEST_ASSERT_TRUE(w.g1.sounds.size() >= 1);
+    for (uint8_t s : w.g1.sounds) TEST_ASSERT_EQUAL(int(Sound::Beep), s);
+
+    // The alert ends: nothing more.
+    rig.run(CH_rpm, 3000, 1000);
+    const size_t g1 = w.g1.sounds.size(), g2 = w.g2.sounds.size();
+    rig.run(CH_rpm, 3000, 3000);
+    TEST_ASSERT_EQUAL(g1, w.g1.sounds.size());
+    TEST_ASSERT_EQUAL(g2, w.g2.sounds.size());
+
+    // Firing again plays it again.
+    rig.run(CH_rpm, 7800, 300);
+    TEST_ASSERT_EQUAL(g1 + 2, w.g1.sounds.size());
 }
 
 void test_alert_switches_a_gauge_to_another_config_and_back() {
@@ -1612,6 +1660,7 @@ int main(int, char**) {
     RUN_TEST(test_commands_reach_the_gauge_and_are_acknowledged);
     RUN_TEST(test_alert_message_stays_up_only_while_the_hub_repeats_it);
     RUN_TEST(test_alert_rules_are_carried_out_on_the_gauges);
+    RUN_TEST(test_alert_sound_plays_when_it_fires_and_repeats);
     RUN_TEST(test_alert_switches_a_gauge_to_another_config_and_back);
     RUN_TEST(test_alert_naming_a_missing_config_does_nothing);
     RUN_TEST(test_hub_time_reaches_the_gauges);

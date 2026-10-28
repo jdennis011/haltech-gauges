@@ -34,4 +34,12 @@
 #define PIN_CAN_TX 17
 #define PIN_CAN_RX 18
 #define PIN_SPARE 16
+
+// ES8311 codec (0x18 on the shared I2C bus) and its speaker amplifier (docs/gauge-audio.md)
+#define PIN_I2S_MCLK 42
+#define PIN_I2S_BCLK 9
+#define PIN_I2S_WS 45
+#define PIN_I2S_DOUT 8   // to the codec's DSDIN
+#define PIN_I2S_DIN 10   // from the codec's ASDOUT (microphone path, unused)
+#define PIN_AUDIO_AMP 46 // amplifier enable, high = on
 #endif

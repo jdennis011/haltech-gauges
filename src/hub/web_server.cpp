@@ -255,7 +255,11 @@ void buildStatus(JsonObject o) {
     const HubStats s = hub::stats();
     o["uptime_s"] = millis() / 1000;
     o["fw"] = HUB_FW_VERSION;
+#if HG_FG_ON_GAUGE_PORT
+    o["board"] = String(hub::boardName()) + " (vehicle CAN test build)";
+#else
     o["board"] = hub::boardName();
+#endif
     o["reset"] = hub::resetReason();
     o["heap_free"] = ESP.getFreeHeap();
     o["heap_min"] = ESP.getMinFreeHeap();
@@ -393,6 +397,8 @@ void buildGauges(JsonArray arr) {
                 o["trying"] = (g.status.flags & proto::kStatusFlagTrying) != 0;
                 o["wifi"] = (g.status.flags & proto::kStatusFlagWifi) != 0;
                 o["demo"] = (g.status.flags & proto::kStatusFlagDemo) != 0;
+                const int volume = proto::statusVolume(g.status.flags);
+                if (volume >= 0) o["volume"] = volume;  // only a gauge with a speaker
             }
             JsonObject push = o["push"].to<JsonObject>();
             push["failed"] = g.pushFailed;
@@ -624,6 +630,23 @@ void handleGauges(AsyncWebServerRequest* r) {
     sendJson(r, doc);
 }
 
+// The sound a request names: "beep", "chime" or "alarm", or the number.
+uint8_t soundArg(JsonVariantConst v) {
+    if (v.is<int>()) {
+        const int n = v.as<int>();
+        return uint8_t(n < 1 ? 1 : (n > 3 ? 3 : n));
+    }
+    const char* s = v.as<const char*>();
+    if (s && strcmp(s, "chime") == 0) return uint8_t(proto::Sound::Chime);
+    if (s && strcmp(s, "alarm") == 0) return uint8_t(proto::Sound::Alarm);
+    return uint8_t(proto::Sound::Beep);
+}
+
+uint8_t volumeArg(JsonVariantConst v) {
+    const int n = v | 60;
+    return uint8_t(n < 0 ? 0 : (n > 100 ? 100 : n));
+}
+
 void handleGaugeAction(AsyncWebServerRequest* r) {
     const String nodeText = segment(r->url(), 2);
     const String action = segment(r->url(), 3);
@@ -669,6 +692,10 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
             display_control::setDisplaysOff(!(body["on"] | true));
         } else if (action == "identify") {
             display_control::sendAll(proto::Cmd::Identify, uint8_t(body["seconds"] | 5));
+        } else if (action == "volume") {
+            display_control::sendAll(proto::Cmd::SetVolume, volumeArg(body["level"]));
+        } else if (action == "sound") {
+            display_control::sendAll(proto::Cmd::PlaySound, soundArg(body["sound"]));
         } else {
             return sendError(r, 404, "unknown action for all gauges");
         }
@@ -684,6 +711,10 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
         ok = m.command(node, proto::Cmd::SetFace, uint8_t(body["index"] | 0));
     } else if (action == "brightness") {
         ok = m.command(node, proto::Cmd::SetBrightness, uint8_t(body["level"] | 200));
+    } else if (action == "volume") {
+        ok = m.command(node, proto::Cmd::SetVolume, volumeArg(body["level"]));
+    } else if (action == "sound") {
+        ok = m.command(node, proto::Cmd::PlaySound, soundArg(body["sound"]));
     } else if (action == "reboot") {
         ok = m.command(node, proto::Cmd::Reboot, 0);
     } else if (action == "endtry") {

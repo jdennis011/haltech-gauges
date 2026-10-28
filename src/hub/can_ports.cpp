@@ -23,6 +23,7 @@ const uint16_t kGaugeTxSlots = 64;
 // the driver logs a refusal for every one of the simulator's 1400 frames a
 // second and that flood starves the rest of the hub.
 bool gaugeBusOff = false;
+bool gaugeUp = false;  // the controller started; nothing touches it otherwise
 #if HG_HAS_FG_PORT
 TwaiCAN fgCan;  // the third controller, taken by begin() after the other two
 const uint16_t kFgTxSlots = 16;
@@ -96,11 +97,24 @@ void EcuPort::service() { serviceCan(ecuCan); }
 #endif
 
 bool GaugePort::begin() {
-    return gaugeCan.begin(TWAI_SPEED_1000KBPS, PIN_GAUGE_CAN_TX, PIN_GAUGE_CAN_RX, kGaugeTxSlots,
-                          kGaugeRxQueue);
+#if HG_FG_ON_GAUGE_PORT
+    // Test build: this port's pins and transceiver carry the vehicle CAN
+    // (docs/steering-wheel.md, "Without the third port"); gauges link over Wi-Fi.
+    Serial.println("Gauge CAN not started: its transceiver carries the vehicle CAN in this build");
+    gaugeBusOff = true;
+    return true;
+#else
+    gaugeUp = gaugeCan.begin(TWAI_SPEED_1000KBPS, PIN_GAUGE_CAN_TX, PIN_GAUGE_CAN_RX, kGaugeTxSlots,
+                             kGaugeRxQueue);
+    return gaugeUp;
+#endif
 }
 
 bool GaugePort::read(hg::CanFrame& frame, uint32_t timeoutMs) {
+    if (!gaugeUp) {
+        if (timeoutMs) vTaskDelay(pdMS_TO_TICKS(timeoutMs));
+        return false;
+    }
     return readFrom(gaugeCan, frame, timeoutMs);
 }
 
@@ -109,7 +123,7 @@ bool GaugePort::write(const hg::CanFrame& frame) {
     // nothing on the wire acknowledging, the controller's queue fills and
     // stays full, so it is left alone then rather than refused for ever.
     const bool viaIp = ip_bus::send(frame);
-    if (gaugeBusOff || gaugeCan.inTxQueue() + 2 >= kGaugeTxSlots) return viaIp;
+    if (!gaugeUp || gaugeBusOff || gaugeCan.inTxQueue() + 2 >= kGaugeTxSlots) return viaIp;
     CanFrame out = {};
     out.identifier = frame.id;
     out.extd = frame.extended;
@@ -118,11 +132,18 @@ bool GaugePort::write(const hg::CanFrame& frame) {
     return gaugeCan.writeFrame(out, 0) || viaIp;
 }
 
-uint32_t GaugePort::txPending() { return gaugeCan.inTxQueue(); }
+uint32_t GaugePort::txPending() { return gaugeUp ? gaugeCan.inTxQueue() : 0; }
 
-CanPortStats GaugePort::stats() { return statsOf(gaugeCan); }
+CanPortStats GaugePort::stats() {
+    if (!gaugeUp) {
+        CanPortStats none = {};
+        return none;
+    }
+    return statsOf(gaugeCan);
+}
 
 void GaugePort::service() {
+    if (!gaugeUp) return;
     const uint32_t state = gaugeCan.canState();
     gaugeBusOff = state == TWAI_STATE_BUS_OFF || state == TWAI_STATE_RECOVERING || state == TWAI_STATE_STOPPED;
     serviceCan(gaugeCan);

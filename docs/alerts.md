@@ -53,6 +53,8 @@ them ten times a second.
 | `hold` | Seconds the alert stays in force after the condition stops holding, 0 to 600 (3). For `changes`, how long each change is shown |
 | `message` | Text shown over the face, up to 32 characters (none) |
 | `color` | Colour of the message, `#RRGGBB` (`#FF3B30`) |
+| `sound` | Played on the gauge's speaker when the alert fires: `none`, `beep`, `chime` or `alarm` (`none`). Needs gauge firmware 0.1.5 and a speaker (docs/gauge-audio.md) |
+| `repeat` | Seconds between plays while the alert stays in force, 0 to 600 (0: once, when it fires) |
 | `config` | The name of a config in the hub's library to show in place of the gauge's own while the alert is in force, up to 32 characters (none). The gauge goes back to its own config when the alert ends |
 | `face` | Face to switch to, counted from 0, up to 7 (no change). With a `config`, a face of that config |
 | `restore` | Go back to the face that was showing when the alert ends (`true`) |
@@ -87,6 +89,12 @@ The cruise control example:
   over whatever face is showing. The hub repeats it every second while the alert
   is in force; a gauge takes it down three seconds after the last repeat, so a
   hub that is switched off or unplugged cannot leave a message up.
+- **The sound** plays on each gauge the rule applies to when the alert comes into
+  force, and again every `repeat` seconds while it holds. It goes as a command on
+  the bus, so a play lost to a busy bus is owed until it gets through. A gauge
+  that connects while an alert is already in force does not play the sound it
+  missed, and neither does any gauge when the rules are replaced; the repeats
+  carry on. A gauge without a speaker ignores it.
 - **The face.** The hub notes the face the gauge was on, switches it, and with
   `restore` switches it back when the alert ends. Swiping to another face during
   the alert is not fought: the hub sends the switch once.
@@ -114,7 +122,7 @@ Thresholds are compared in the rule's unit, so `"unit": "F", "value": 221` and
 
 The **Alerts** tab lists the rules in priority order. Each row has the
 condition (channel, kind, limits, unit, delay), what to do (message and colour,
-face, back afterwards, which gauge, hold time), a switch to turn it off, **Test**,
+sound and how often, face, back afterwards, which gauge, hold time), a switch to turn it off, **Test**,
 and arrows to change its priority. A chip on each row shows whether it is in
 force, the current reading and how many times it has fired since the rules were
 last changed. Changes are saved as they are made; the hub checks the whole list
@@ -171,6 +179,10 @@ On the gauge, the band on the screen, `SetFace` and the switched config are in
 the face screen (`src/gauge/face_ui.cpp`, `face_store.cpp`), written with the
 renderer and not yet seen on a panel.
 
+Sounds (2026-10-28): a rule's `sound` and `repeat` go to the gauges as `PlaySound`
+commands from the dispatcher; the gauge plays them through its speaker
+(docs/gauge-audio.md). Covered by the host tests.
+
 Ideas left out for now: the live reading inside the message ("COOLANT 108"), a
 second condition on a rule (oil pressure low *while* the engine is running), and
-a sound or an output pin on the hub.
+an output pin on the hub.

@@ -127,6 +127,26 @@ With no id nothing is sent. Finding the frame:
 4. A real FG at its OBD port (HS-CAN pins 6 and 14 at 500 k, MS-CAN 3 and 11 at 125 k)
    while pressing the buttons, if one is ever reachable.
 
+### Without the third port
+
+The `hub_p4_fgtest` build runs the vehicle CAN on the gauge port's pins (GPIO32/33) and
+transceiver instead of GPIO26/27, and does not start the gauge CAN bus, so a hub with only
+its two transceivers can do the listen, probe and send tests above; the gauges link over
+Wi-Fi meanwhile. The status card's board name ends in "vehicle CAN test build", and the
+Wheel card is always shown. Wiring: the gauge port's transceiver to the Rebel's CAN 2 (a
+two-node bus, 120 R at each end, so a breakout's own resistor is right), and the ECU port
+to the Haltech bus as usual if the probe is to watch `cruise_input_state` itself (NSP
+shows it too). The silent pin stays GPIO52; Listen only needs it wired to the transceiver's
+RS pin, otherwise it is a software setting only.
+
+```
+pio run -e hub_p4_fgtest
+curl -X PUT -H "Content-Type: application/octet-stream" --data-binary @.pio/build/hub_p4_fgtest/firmware.bin http://<hub>/api/update
+```
+
+Back to the normal build the same way with `.pio/build/hub_p4/firmware.bin`, or from the
+site once a newer release exists.
+
 Fallback if no frame turns up: the Nexus's own switch inputs (confirm in NSP whether Cruise
 Control takes a ladder on an AVI or momentary DPIs with the integration on), driven by the
 wired-remote outputs' open-drain switches.

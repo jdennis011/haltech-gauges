@@ -33,8 +33,15 @@
 // Steering wheel module outputs (docs/steering-wheel.md, electrical-spec.md 6.3),
 // on spare pins: the vehicle CAN transceiver to the Nexus's CAN 2, its silent
 // pin, the horn relay drive (pulled down on the carrier), the wired-remote outputs.
+#if HG_FG_ON_GAUGE_PORT
+// Test build (env hub_p4_fgtest): the vehicle CAN on the gauge port's pins and
+// transceiver, the gauge CAN bus not started (docs/steering-wheel.md).
+#define PIN_FG_CAN_TX PIN_GAUGE_CAN_TX
+#define PIN_FG_CAN_RX PIN_GAUGE_CAN_RX
+#else
 #define PIN_FG_CAN_TX 26
 #define PIN_FG_CAN_RX 27
+#endif
 #define PIN_FG_CAN_SILENT 52
 #define PIN_HORN 49
 #define PIN_SWC_0 2

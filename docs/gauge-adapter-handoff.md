@@ -19,7 +19,7 @@ connectors are wired pin for pin in parallel, so neither is "in" or "out".
 | | |
 |---|---|
 | Rev A | Designed and in the 2026-10-04 PCBWay order with the hub carrier (confirm with the owner that the adapters were included). Treat its files as the as-built record: change them only to record bench results. It needs a 120 R terminator plug in the last gauge's spare port. |
-| Rev B | Decided 2026-10-09/10. Self-terminating: each adapter senses an empty port and switches its own 120 R in. Chain connector goes from 2x2 to 2x3. Spec section 2.5 and the rev B table in `docs/bom-pcbway.md` are complete. The owner drew the schematic in EasyEDA on 2026-10-10 (a 46 mm round board, Micro-Fits on the outer face); it was reviewed against the spec and matches apart from the items in "Open items". Layout not started. |
+| Rev B | Decided 2026-10-09/10. Self-terminating: each adapter senses an empty port and switches its own 120 R in. Chain connector goes from 2x2 to 2x3. Spec section 2.5 and the rev B table in `docs/bom-jlcpcb.md` are complete. The owner drew the schematic in EasyEDA on 2026-10-10 (a 46 mm round board, Micro-Fits on the outer face); it was reviewed against the spec and matches apart from the items in "Open items". Layout not started. |
 | Bench | Nothing on the adapter has been powered yet. The gauge board's header pin order for GPIO16/17/18 is still unknown (below). |
 
 ## Files
@@ -30,7 +30,7 @@ connectors are wired pin for pin in parallel, so neither is "in" or "out".
 | `hardware/gauge-adapter.sch` | Rev A schematic, Eagle 7 XML, importable into EasyEDA and Fusion. Generated, do not hand-edit. |
 | `scripts/gen_eagle_sch.py` | The generator. `gauge_adapter()` is the adapter; `python scripts/gen_eagle_sch.py` rewrites every `.sch` in `hardware/`. Add rev B as a new function writing `hardware/gauge-adapter-rev-b.sch` rather than changing `gauge_adapter()`. |
 | `docs/gauge-adapter-schematic.svg` | Rev A schematic drawn out for reading. |
-| `docs/bom-pcbway.md`, `hardware/pcbway/gauge-adapter-bom.csv` | Rev A BOM with manufacturer and LCSC numbers, and the rev B additions table. Keep the CSV and the markdown table in step. |
+| `docs/bom-jlcpcb.md`, `hardware/jlcpcb/gauge-adapter-bom.csv` | Rev A BOM with manufacturer and LCSC numbers, and the rev B additions table. Keep the CSV and the markdown table in step. |
 | `docs/bom.md` | Shopping list by store, including the Micro-Fit housings, terminals and crimp tool. |
 | `docs/bringup-checklist.md` | Step 1 (bare gauge board) maps the header pins; step 4 is hub plus gauge through the adapter. |
 | `src/gauge/board_pins.h` | `PIN_CAN_TX` 17, `PIN_CAN_RX` 18, `PIN_SPARE` 16 on the Waveshare build; set from the step 1 result. |
@@ -73,7 +73,7 @@ lowest working voltage come from bring-up step 1.
 ## Rev B: self-terminating
 
 The owner chose this over a terminator plug. Full description in spec 2.5; the parts with
-manufacturer numbers are in `docs/bom-pcbway.md` under "Gauge adapter, rev B".
+manufacturer numbers are in `docs/bom-jlcpcb.md` under "Gauge adapter, rev B".
 
 - **Connector**: J1 and J2 become 2x3, Molex 43045-0612 (housings 43025-0600, same terminals).
   Pins 1 to 4 unchanged; **pin 6 = GND, pin 5 = sense**. The hub's chain connector J11 goes 2x3
@@ -138,7 +138,7 @@ protocol's `Info` message already carries `hwRevision` for the gauge board).
 
 - Spec text is the source of truth; the schematic generator, BOMs and firmware pin defines follow
   it. When something changes, change the spec first.
-- Parts carry LCSC numbers where they exist (PCBWay and JLCPCB both place from them); add one
+- Parts carry LCSC numbers where they exist (JLCPCB places from them); add one
   for every new part, and give a distributor alternative in the notes where the LCSC part is a
   generic.
 - Molex part numbers: board headers 43045-xxxx, cable housings 43025-xxxx, terminals 43030-0007.

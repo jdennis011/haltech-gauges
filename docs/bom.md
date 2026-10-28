@@ -9,8 +9,8 @@ Already on hand: M5Stack Dial, ESP32-C3 DevKitM-1, DTM connector kit.
 
 ## 1. JLCPCB (PCBs with surface-mount assembly)
 
-Prefer PCBWay? See `docs/bom-pcbway.md`: it needs manufacturer part numbers rather
-than LCSC numbers, and `hardware/pcbway/` has the BOM in its format.
+The assembly order itself, JLCPCB's BOM layout with the LCSC numbers and what to upload,
+is in `docs/bom-jlcpcb.md`; `hardware/jlcpcb/` has the BOM files.
 
 Order after layout. JLCPCB fits every surface-mount part from its own stock; nothing
 needs to be bought for these separately. LCSC numbers were checked against JLCPCB's

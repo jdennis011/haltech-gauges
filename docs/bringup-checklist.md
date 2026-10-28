@@ -256,3 +256,22 @@ COM6, MAC B8:1F:3F:D0:24:24, node D02424. Flashed gauge 0.1.3 over USB without t
 bring-up build (the board type was proven on the first): built-in face at 30 fps, linked to
 the hub's access point as 192.168.4.3, took the two-face NFS config in 3 s. The roster lists
 both gauges (D029F0 in slot 0, D02424 in slot 1) and Play now sent the intro to both.
+
+### 2026-10-27: carrier rev A first power-up, and the P4 it took
+
+The first P4 carrier (rev A, from the EasyEDA project) was powered from 12 V at J10 with
+the P4 fitted. The library footprint used for the Pololu D36V28F5 socket had VIN and VOUT
+swapped; the module itself reads EN, VIN, GND, GND, VOUT left to right. Twelve volts went
+into the module's output, through the synchronous switch's body diode to its VIN pin, and
+from there onto the carrier's 5 V net and the P4's VSYS. The Waveshare board's USB bridge
+still enumerates, but the P4 gives no boot log and does not answer esptool.
+
+Replaced by a new board (COM7, MAC e8:f6:0a:e8:a6:24), flashed 0.3.14 by USB. The account
+sync brought back the configs, the image, the alerts and the theme colours; planned gauges,
+assignments and the hub's own settings have to be redone. The footprint is fixed in EasyEDA
+and in `scripts/gen_eagle_sch.py`; `docs/bom-jlcpcb.md` names the pin order.
+
+Rules from this: a carrier is first powered with its sockets empty and must show 5.0 V at
+TP2 and at the VSYS pad before any processor board is fitted; a library footprint for a
+module is checked against the module in hand before the order; rev B gets an over-voltage
+cutoff on the 5 V feed to the board.

@@ -157,6 +157,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
     <div class="row" style="width:100%;margin-top:6px">
       <strong>All gauges</strong>
       <label class="inline">Brightness <input type="range" id="all-brightness" min="10" max="255" value="200"></label>
+      <label class="inline" title="Speaker volume for every gauge that has one">Volume <input type="range" id="all-volume" min="0" max="100" step="4" value="60"></label>
       <button class="btn small" id="all-screens-off">Screens off</button>
       <button class="btn small" id="all-screens-on">Screens on</button>
       <button class="btn small" id="btn-show-startup" title="Plays the start-up intro now on every gauge that is online, in order">Show start-up</button>
@@ -758,7 +759,10 @@ function renderGauges() {
         el('span', { class: 'muted' }, 'Face'), faceControl(g),
         g.virtual ? null : el('span', { class: 'muted' }, 'Brightness'),
         g.virtual ? null : el('input', { type: 'range', min: 10, max: 255, value: 200, disabled: off ? '' : null,
-          onchange: ev => act(g, 'brightness', { level: +ev.target.value }) })),
+          onchange: ev => act(g, 'brightness', { level: +ev.target.value }) }),
+        g.volume == null ? null : el('span', { class: 'muted' }, 'Volume'),
+        g.volume == null ? null : el('input', { type: 'range', min: 0, max: 100, step: 4, value: g.volume, disabled: off ? '' : null,
+          title: 'Speaker volume; the gauge keeps it', onchange: ev => act(g, 'volume', { level: +ev.target.value }) })),
       el('div', { class: 'row' },
         pushChip(g),
         el('span', { class: 'spacer' }),
@@ -775,6 +779,7 @@ function renderGauges() {
             btn('Remove', () => { if (confirm('Remove planned gauge "' + gaugeTitle(g) + '"?')) planned('DELETE', '/api/virtual/' + g.id); }, false, 'small danger'))
         : el('div', { class: 'row' },
             btn('Identify', () => act(g, 'identify', { seconds: 5 }), off, 'small'),
+            g.volume == null ? null : btn('Beep', () => act(g, 'sound', { sound: 'beep' }), off, 'small', 'A short note on its speaker, at the volume set'),
             g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
             btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
             btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),
@@ -792,6 +797,7 @@ async function allGauges(action, body) {
   try { await api.post('/api/gauges/all/' + action, body); } catch (e) { alert(e.message); }
 }
 $('#all-brightness').addEventListener('change', ev => allGauges('brightness', { level: +ev.target.value }));
+$('#all-volume').addEventListener('change', ev => allGauges('volume', { level: +ev.target.value }));
 $('#all-screens-off').addEventListener('click', () => allGauges('display', { on: false }));
 $('#all-screens-on').addEventListener('click', () => allGauges('display', { on: true }));
 
@@ -1912,13 +1918,14 @@ const ALERT_WHEN = [['above', 'goes above'], ['below', 'goes below'], ['outside'
 const MAX_ALERTS = 16;
 const ALERT_RED = '#FF3B30';
 // Starting points; every value can be changed once the alert is in the list.
+const ALERT_SOUNDS = [['none', 'no sound'], ['beep', 'beep'], ['chime', 'chime'], ['alarm', 'alarm']];
 const ALERT_PRESETS = {
   'Coolant hot': { channel: 'coolant_temp', unit: 'C', when: 'above', value: 105, for: 1, message: 'COOLANT HOT' },
   'Oil pressure low': { channel: 'oil_pressure', unit: 'kPa', when: 'below', value: 100, for: 0.5, message: 'OIL PRESSURE' },
   'Lambda out of range': { channel: 'wideband_1', unit: 'lambda', when: 'outside', low: 0.75, high: 1.15, for: 1, message: 'CHECK MIXTURE' },
   'Check engine light': { channel: 'check_engine_light', when: 'on', message: 'CHECK ENGINE' },
   'Battery low': { channel: 'battery_voltage', when: 'below', value: 12, for: 5, message: 'BATTERY LOW', color: '#FFCC00' },
-  'Shift': { channel: 'rpm', when: 'above', value: 7000, hold: 0.5, message: 'SHIFT', color: '#FFCC00' },
+  'Shift': { channel: 'rpm', when: 'above', value: 7000, hold: 0.5, message: 'SHIFT', color: '#FFCC00', sound: 'beep' },
   // Cruise state: 0 disabled, 1 inactive, 2 cruising and above. Pick the config to switch to once added.
   'Cruise control': { channel: 'cruise_state', when: 'above', value: 1, hold: 1, message: 'CRUISE', color: '#34C759' },
 };
@@ -2058,6 +2065,11 @@ function renderAlerts() {
       el('label', { title: 'Shown across the middle of the face while the alert is in force. Up to 32 characters; leave empty for no message.' }, 'Show',
         el('input', { type: 'text', class: 'amsg', maxlength: 32, value: r.message || '', placeholder: 'no message', onchange: ev => setAlert(i, { message: ev.target.value.trim() }) })),
       el('input', { type: 'color', value: hex6(r.color || ALERT_RED), title: 'Message colour', onchange: ev => setAlert(i, { color: ev.target.value.toUpperCase() }) }),
+      el('label', { title: 'Played on the gauge\'s speaker when the alert fires: a beep, the two-note chime, or an alarm' }, 'Sound',
+        el('select', { onchange: ev => setAlert(i, { sound: ev.target.value === 'none' ? '' : ev.target.value, repeat: ev.target.value === 'none' ? '' : r.repeat }, true) },
+          ...ALERT_SOUNDS.map(([v, label]) => el('option', { value: v, selected: v === (r.sound || 'none') ? '' : null }, label)))),
+      r.sound && r.sound !== 'none' ? el('label', { title: 'Play it again every so many seconds while the alert stays in force; 0 plays it once, when it fires' }, 'every',
+        num('repeat', { min: 0, max: 600, placeholder: 0 }), 's') : null,
       el('label', { title: 'A config the gauge shows in place of its own while the alert is in force. It is sent each time and not stored; the gauge goes back to its own config when the alert ends.' }, 'Switch to',
         el('select', { onchange: ev => setAlert(i, { config: ev.target.value, face: ev.target.value && r.face == null ? 0 : r.face }, true) },
           el('option', { value: '' }, 'its own config'),
@@ -4433,7 +4445,8 @@ const mock = {
       if ((r.when === 'outside' || r.when === 'inside') && !(typeof r.low === 'number' && typeof r.high === 'number')) return head + "'low' and 'high' must be numbers";
       if ((r.when === 'outside' || r.when === 'inside') && !(r.low < r.high)) return head + "'low' must be less than 'high'";
       if (typeof r.config === 'string' && r.config.length > 32) return head + "'config' is longer than 32 characters";
-      if (!r.message && r.face == null && !r.config) return head + "needs a 'message' to show, a 'config' or a 'face' to switch to";
+      if (r.sound && !ALERT_SOUNDS.some(s => s[0] === r.sound)) return head + "'sound' must be one of none, beep, chime, alarm";
+      if (!r.message && r.face == null && !r.config && !(r.sound && r.sound !== 'none')) return head + "needs a 'message' to show, a 'sound' to play, a 'config' or a 'face' to switch to";
     }
     return null;
   },

@@ -152,6 +152,21 @@ bool parseRule(JsonObjectConst o, Rule& r, std::string& why) {
         return false;
     }
 
+    const char* sound = o["sound"] | "none";
+    if (strcmp(sound, "none") == 0 || sound[0] == 0) {
+        r.sound = proto::Sound::None;
+    } else if (strcmp(sound, "beep") == 0) {
+        r.sound = proto::Sound::Beep;
+    } else if (strcmp(sound, "chime") == 0) {
+        r.sound = proto::Sound::Chime;
+    } else if (strcmp(sound, "alarm") == 0) {
+        r.sound = proto::Sound::Alarm;
+    } else {
+        why = "'sound' must be one of none, beep, chime, alarm";
+        return false;
+    }
+    if (!readSeconds(o, "repeat", 0, r.repeatMs, why)) return false;
+
     const char* config = o["config"] | "";
     if (strlen(config) > kMaxConfigName) {
         why = "'config' is longer than 32 characters";
@@ -168,8 +183,8 @@ bool parseRule(JsonObjectConst o, Rule& r, std::string& why) {
         r.face = int16_t(o["face"].as<int>());
     }
     r.restore = o["restore"] | true;
-    if (r.message.empty() && r.face < 0 && r.config.empty()) {
-        why = "needs a 'message' to show, a 'config' or a 'face' to switch to";
+    if (r.message.empty() && r.face < 0 && r.config.empty() && r.sound == proto::Sound::None) {
+        why = "needs a 'message' to show, a 'sound' to play, a 'config' or a 'face' to switch to";
         return false;
     }
 
@@ -260,6 +275,10 @@ void toJson(const Rule& r, JsonObject o) {
     char buf[18];
     snprintf(buf, sizeof(buf), "#%06lX", (unsigned long)(r.color & 0xFFFFFF));
     o["color"] = buf;
+    if (r.sound != proto::Sound::None) {
+        o["sound"] = r.sound == proto::Sound::Beep ? "beep" : r.sound == proto::Sound::Chime ? "chime" : "alarm";
+        if (r.repeatMs) o["repeat"] = r.repeatMs / 1000.0f;
+    }
     if (!r.config.empty()) o["config"] = r.config;
     if (r.face >= 0) o["face"] = r.face;
     if (r.face >= 0 || !r.config.empty()) o["restore"] = r.restore;

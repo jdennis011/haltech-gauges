@@ -44,6 +44,8 @@ void Dispatcher::serve(const Engine& engine, HubManager& manager, const HubManag
                        uint32_t nowMs) {
     const std::vector<Rule>& rules = engine.rules();
 
+    serveSounds(engine, manager, g, s, nowMs);
+
     // The message: sent when it changes, then repeated so the gauge keeps it up.
     const int message = engine.messageFor(g.mac);
     if (message >= 0) {
@@ -101,6 +103,41 @@ void Dispatcher::serve(const Engine& engine, HubManager& manager, const HubManag
     } else if (!s.restore || !s.haveSaved || manager.command(g.node, proto::Cmd::SetFace, s.savedFace)) {
         s.face = -1;
         s.haveSaved = false;
+    }
+}
+
+// A sound plays when its rule comes into force for the gauge, and again every
+// `repeat` while it holds. It goes as a command, so a send lost to a busy bus
+// is owed until it gets through. A gauge that has just appeared, or a new set
+// of rules, starts from what is in force now without playing it.
+void Dispatcher::serveSounds(const Engine& engine, HubManager& manager, const HubManager::Gauge& g, Slot& s,
+                             uint32_t nowMs) {
+    const std::vector<Rule>& rules = engine.rules();
+    const size_t n = rules.size() < kMaxRules ? rules.size() : kMaxRules;
+    if (s.soundFresh || s.soundGeneration != generation_) {
+        for (size_t i = 0; i < kMaxRules; i++) {
+            s.soundSeen[i] = i < n && engine.state(i).active;
+            s.soundDue[i] = false;
+            s.soundMs[i] = nowMs;
+        }
+        s.soundFresh = false;
+        s.soundGeneration = generation_;
+        return;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const Rule& r = rules[i];
+        const bool active = engine.state(i).active && r.sound != proto::Sound::None && engine.applies(i, g.mac);
+        if (active && !s.soundSeen[i]) s.soundDue[i] = true;
+        s.soundSeen[i] = active;
+        if (!active) {
+            s.soundDue[i] = false;
+            continue;
+        }
+        if (!s.soundDue[i] && r.repeatMs && uint32_t(nowMs - s.soundMs[i]) >= r.repeatMs) s.soundDue[i] = true;
+        if (s.soundDue[i] && manager.command(g.node, proto::Cmd::PlaySound, uint8_t(r.sound))) {
+            s.soundDue[i] = false;
+            s.soundMs[i] = nowMs;
+        }
     }
 }
 

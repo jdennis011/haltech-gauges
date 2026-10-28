@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "channel_store.h"
+#include "proto.h"
 #include "units.h"
 
 namespace hg {
@@ -49,6 +50,8 @@ struct Rule {
 
     std::string message;      // shown over the face; empty for none
     uint32_t color = 0xFF3B30;
+    proto::Sound sound = proto::Sound::None;  // played when the alert fires
+    uint32_t repeatMs = 0;    // and again this often while it holds; 0 = once
     std::string config;       // config to show in place of the gauge's own; empty for none
     int16_t face = -1;        // face to switch to (within `config` if set); -1 leaves the face alone
     bool restore = true;      // go back to the earlier face when the alert ends
@@ -104,6 +107,10 @@ public:
     int messageFor(const uint8_t mac[6]) const;
     int configFor(const uint8_t mac[6]) const;
     int faceFor(const uint8_t mac[6]) const;
+    // Whether rule `index` is for this gauge.
+    bool applies(size_t index, const uint8_t mac[6]) const {
+        return index < rules_.size() && appliesTo(rules_[index], mac);
+    }
 
 private:
     bool appliesTo(const Rule& rule, const uint8_t mac[6]) const;

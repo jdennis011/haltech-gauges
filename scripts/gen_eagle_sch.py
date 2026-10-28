@@ -2,15 +2,18 @@
 
     python scripts/gen_eagle_sch.py
 
-Writes hardware/gauge-adapter.sch, hardware/hub-carrier.sch (ESP32-C6 DevKit)
-and hardware/hub-carrier-p4.sch (Waveshare ESP32-P4-WIFI6). They import
-into EasyEDA (File > Import > Eagle). The circuits are the ones described in
+Writes hardware/gauge-adapter.sch, hardware/hub-carrier.sch (ESP32-C6 DevKit),
+hardware/hub-carrier-p4.sch (Waveshare ESP32-P4-WIFI6, rev A as built) and
+hardware/hub-carrier-p4-rev-b.sch (rev B, with its BOM in JLCPCB's layout at
+hardware/jlcpcb/hub-carrier-p4-rev-b-bom.csv). They import into EasyEDA
+(File > Import > Eagle). The circuits are the ones described in
 docs/electrical-spec.md; this script is their machine-readable form.
 
 Every pin gets a short wire and a net label; pins that share a label are
 connected. Standard library only.
 """
 
+import csv
 import os
 import xml.etree.ElementTree as ET
 
@@ -230,7 +233,7 @@ def build_packages():
     soic16.labels(-3.75, 5.7)
     packages.append(soic16)
 
-    for count in (2, 8):
+    for count in (2, 3, 6, 8):
         hdr = Package(f"HDR-1X{count}", "Pin header, 2.54 mm pitch, 1.0 mm drill.")
         for i in range(count):
             hdr.pad(str(i + 1), (i - (count - 1) / 2) * G, 0, square=(i == 0))
@@ -252,6 +255,36 @@ def build_packages():
     mf.outline(-4.825, 3.685, 4.825, -3.685)
     mf.labels(-4.825, 4.2)
     packages.append(mf)
+
+    # The 2x3 of the rev B chain and vehicle CAN ports: the 2x2 pattern widened by one
+    # 3.00 mm pitch, circuits 1-3 in one row and 4-6 opposite (4 opposite 1).
+    mf6 = Package("MOLEX-43045-0612",
+                  "Molex Micro-Fit 3.0 vertical header, 2x3, drawn from the 2x2 pattern of SD-43045-005 "
+                  "widened by one 3.00 mm pitch. Check the peg spacing and body against the Molex "
+                  "drawing for the 6-circuit part before ordering boards.")
+    for name, x, y in (("1", 3.0, -1.5), ("2", 0, -1.5), ("3", -3.0, -1.5),
+                       ("4", 3.0, 1.5), ("5", 0, 1.5), ("6", -3.0, 1.5)):
+        mf6.pad(name, x, y, drill=1.02, diameter=1.9, square=(name == "1"))
+    for x in (-6.0, 6.0):
+        mf6.elements.append(("hole", dict(x=f(x), y=f(2.44), drill="1.02"), None))
+    mf6.outline(-6.325, 3.685, 6.325, -3.685)
+    mf6.labels(-6.325, 4.2)
+    packages.append(mf6)
+
+    msop = Package("MSOP8", generic + " 0.65 mm pitch.")
+    for i in range(4):
+        msop.smd(str(i + 1), -2.0, 0.975 - i * 0.65, 1.45, 0.4)
+        msop.smd(str(8 - i), 2.0, 0.975 - i * 0.65, 1.45, 0.4)
+    msop.outline(-1.5, 1.5, 1.5, -1.5)
+    msop.labels(-1.5, 1.9)
+    packages.append(msop)
+
+    axial = Package("AXIAL-10MM", "Through-hole resistor, 10.16 mm lead spacing, 1.0 mm drill.")
+    axial.pad("1", -5.08, 0, square=True)
+    axial.pad("2", 5.08, 0)
+    axial.outline(-3.5, 1.3, 3.5, -1.3)
+    axial.labels(-3.5, 1.7)
+    packages.append(axial)
 
     tp = Package("TESTPAD", "1.5 mm round test pad.")
     tp.smd("1", 0, 0, 1.5, 1.5, round_=True)
@@ -318,10 +351,17 @@ def build_packages():
     cell.labels(-11.5, 8.5)
     packages.append(cell)
 
+    # Pin ORDER checked against a D36V28F5 module on 2026-10-27: EN, VIN, GND, GND,
+    # VOUT left to right on a 0.1 inch pitch (components up, pins towards you).
+    # The rev A P4 carrier was built from a library footprint with VIN and VOUT
+    # swapped: 12 V went into the module's output and out of its VIN pin onto
+    # the 5 V net, which killed the P4 (docs/bringup-checklist.md). Only the
+    # position of the row within the outline is still a placeholder.
     buck = Package("POLOLU-D36V28F-PLACEHOLDER",
-                   "PLACEHOLDER. Replace with the hole pattern from Pololu's D36V28Fx drill guide.")
-    for i, name in enumerate(("VIN", "GND1", "GND2", "VOUT", "EN")):
-        buck.pad(name, (i - 2) * G, 0, square=(i == 0))
+                   "Pads in the module's order EN, VIN, GND, GND, VOUT (checked 2026-10-27). "
+                   "Row position within the outline from Pololu's D36V28Fx drill guide.")
+    for i, name in enumerate(("EN", "VIN", "GND1", "GND2", "VOUT")):
+        buck.pad(name, (i - 2) * G, 0, square=(i == 1))
     buck.outline(-8.9, 10.2, 8.9, -10.2)
     buck.labels(-8.9, 10.7)
     packages.append(buck)
@@ -417,6 +457,31 @@ def build_library():
         box_symbol("BUCK-MODULE", ["VIN", "EN", "GND@1"], ["VOUT", "GND@2"], 8 * G),
         "POLOLU-D36V28F-PLACEHOLDER",
         {"VIN": "VIN", "EN": "EN", "GND@1": "GND1", "VOUT": "VOUT", "GND@2": "GND2"})
+    # Rev B of the P4 carrier (hub_carrier_p4_rev_b). SOT-23 pin maps are the
+    # usual ones (FETs G S D, PNP B E C, TL431 REF A K, XC6206 GND VOUT VIN,
+    # BAT54S A1 K2 COM): confirm against the LCSC part chosen before layout.
+    add("MICROFIT-2X3", "J", box_symbol("MICROFIT-2X3", ["1", "2", "3", "4", "5", "6"], [], 4 * G),
+        "MOLEX-43045-0612", {str(i): str(i) for i in range(1, 7)})
+    for count in (3, 6):
+        pins = [str(i + 1) for i in range(count)]
+        add(f"HEADER-1X{count}", "J", box_symbol(f"HEADER-1X{count}", pins, [], 4 * G),
+            f"HDR-1X{count}", {pin: pin for pin in pins})
+    add("R-AXIAL", "R", resistor, "AXIAL-10MM", {"1": "1", "2": "2"})
+    add("PFET-SOT23", "Q", box_symbol("PFET", ["G"], ["S", "D"], 4 * G), "SOT23",
+        {"G": "1", "S": "2", "D": "3"})
+    add("PNP-SOT23", "Q", box_symbol("PNP", ["B"], ["E", "C"], 4 * G), "SOT23",
+        {"B": "1", "E": "2", "C": "3"})
+    add("TL431-SOT23", "U", box_symbol("TL431", ["REF", "A"], ["K"], 4 * G), "SOT23",
+        {"REF": "1", "A": "2", "K": "3"})
+    add("BAT54S", "D", box_symbol("BAT54S", ["A1", "K2"], ["COM"], 4 * G), "SOT23",
+        {"A1": "1", "K2": "2", "COM": "3"})
+    add("BAS70", "D", two_pin("DIODE", "A", "K", draw_diode), "SOT23", {"A": "1", "K": "3"})
+    add("XC6206", "U", box_symbol("XC6206", ["VIN", "GND"], ["VOUT"], 4 * G), "SOT23",
+        {"GND": "1", "VOUT": "2", "VIN": "3"})
+    add("MCP4531-MSOP", "U",
+        box_symbol("MCP4531", ["VDD", "SCL", "SDA", "VSS"], ["A0", "P0A", "P0W", "P0B"], 8 * G),
+        "MSOP8", {"VDD": "1", "SCL": "2", "SDA": "3", "VSS": "4", "P0B": "5", "P0W": "6",
+                  "P0A": "7", "A0": "8"})
     return symbols, sets
 
 
@@ -667,6 +732,229 @@ def hub_carrier_p4():
     s.net("GPS_OFF", "U4.IO50", "Q1.G", "R24.1")
     return s
 
+def hub_carrier_p4_rev_b():
+    """Rev B of the P4 carrier: rev A as built (ML2032 charger included), plus the
+    over-voltage cutoff on the 5 V rail, the 2x3 chain connector with its sense pin,
+    the vehicle CAN port, the horn relay drive and the wired-remote outputs
+    (electrical-spec.md sections 2.5 and 6.3 to 6.6)."""
+    s = Schematic(
+        "Haltech gauges: hub carrier rev B, ESP32-P4 (Waveshare ESP32-P4-WIFI6)",
+        ["J10 ECU, the only 2x2: 1 +12V switched, 2 GND, 3 CAN H, 4 CAN L. J11 gauge chain, 2x3: 1 +5V, 2 GND, 3 CAN H, 4 CAN L, 5 sense, 6 GND. J14 vehicle CAN, 2x3: 1 NC, 2 GND, 3 CAN H, 4 CAN L, 5 NC, 6 GND.",
+         "U1 Pololu D36V28F5, pins EN, VIN, GND, GND, VOUT left to right (checked against a module 2026-10-27). Its output is +5V_RAW; Q7 passes it to +5V only while U9 (TL431, trip 6.24 V) sees it under the limit, so a wrong module, socket or supply cannot reach the board or the chain.",
+         "U4 Waveshare ESP32-P4-WIFI6 (SKU 32020) on two 1x20 sockets. 5 V reaches VSYS through D3; never connect VBUS. Keep the carrier's copper away from the antenna end.",
+         "U2 ECU transceiver (receive only in firmware), U3 gauge bus, U7 vehicle CAN to the Nexus Rebel's CAN 2 in FG Falcon mode: GPIO26 TX, GPIO27 RX, GPIO52 silent (listen only when high). JP3 is the 120 R of the two-node vehicle bus: fitted.",
+         "Horn: J15 takes an opto-isolated relay module set to low-level trigger; Q2 pulls its IN low. GPIO49 drives Q2 through a charge pump (C21, D8, C22, R47): only a 1 kHz square wave holds the relay and a stuck level drops it in about 50 ms (firmware HG_HORN_PULSED). JP4 bypasses the pump for a plain level drive through R49.",
+         "Wired remote for the head unit: J13 1x6 (GND, REM, SW1-SW4). Q3-Q6 switch R30-R33 (through-hole, unfitted until the head unit is known) to REM from GPIO2-5. U8 MCP4531 (DNP) is the digital-pot alternative on the board's I2C, wiper to REM.",
+         "Clock U5 on GPIO7/8 with INT on GPIO31; BT1 ML2032 ONLY, charged through U6 (3.0 V), D6 and R21 when JP2 is fitted. GPS socket J12: GPIO28 in, 29 out, 30 PPS, 50 off (Q1); R24 keeps the GPS on while the P4 is in reset.",
+         "J11 pin 5 (chain sense) goes to GPIO51 with R44's pull-up: low while a chain plug is in. Not used by the firmware yet.",
+         "Footprints are generic or placeholders except U4 and J12: replace them with the LCSC parts' own before layout. LCSC numbers marked unchecked in docs/bom-jlcpcb.md are to be confirmed in EasyEDA."])
+
+    # 12 V input, the buck, and the over-voltage cutoff between the buck and the rail
+    s.part("J10", "MICROFIT-2X2", "43045-0412 ECU", 14, 150)
+    s.part("D1", "TVS-SMB", "SMBJ26CA", 34, 150, LCSC="C515606")
+    s.part("D2", "SCHOTTKY-SMA", "SS34", 54, 150, LCSC="C8678")
+    s.part("C1", "CPOL-8X10", "100u 50V", 74, 150, LCSC="C116241")
+    s.part("C2", "C0805", "1u 50V", 94, 150, LCSC="C28323")
+    s.part("U1", "POLOLU-D36V28F5", "D36V28F5", 18, 136)
+    s.part("C3", "CPOL-8X10", "100u 50V", 46, 140, LCSC="C116241")
+    s.part("C4", "C0805", "10u 25V", 66, 140, LCSC="C15850")
+    s.part("TP6", "TESTPOINT", "+5V_RAW", 86, 140)
+    s.part("Q7", "PFET-SOT23", "AO3401A", 46, 131, LCSC="C15127")
+    s.part("Q8", "PNP-SOT23", "MMBT3906", 66, 131)
+    s.part("U9", "TL431-SOT23", "TL431", 86, 131, LCSC="C3113")
+    s.part("R40", "R0805", "10k", 106, 140, LCSC="C17414")
+    s.part("R41", "R0805", "2k2", 106, 135, LCSC="C17520")
+    s.part("R42", "R0805", "15k", 106, 130)
+    s.part("R43", "R0805", "10k", 126, 140, LCSC="C17414")
+    s.part("C19", "C0805", "100n", 126, 135, LCSC="C49678")
+    s.part("C5", "C0805", "10u 25V", 126, 130, LCSC="C15850")
+    s.part("D3", "SCHOTTKY-SMA", "SS14", 46, 124, LCSC="C2480")
+    s.part("F2", "POLYFUSE-1812", "1812L200/16DR", 70, 124, LCSC="C439873")
+    s.part("J11", "MICROFIT-2X3", "43045-0612 CHAIN", 110, 122)
+    s.part("R44", "R0805", "4k7", 130, 124, LCSC="C17673")
+
+    # The board and the three CAN transceivers
+    s.part("U4", "WAVESHARE-ESP32-P4-WIFI6", "ESP32-P4-WIFI6", 30, 100)
+    s.part("U2", "TJA1051T-3", "TJA1051T/3", 72, 112, LCSC="C38695")
+    s.part("U3", "SN65HVD230", "SN65HVD230DR", 72, 94, LCSC="C12084")
+    s.part("D4", "PESD2CAN", "PESD2CAN", 100, 116, LCSC="C75176")
+    s.part("R3", "R1206", "120R", 100, 109, LCSC="C17909")
+    s.part("JP1", "JUMPER-2", "ECU TERM", 120, 109)
+    s.part("D5", "PESD2CAN", "PESD2CAN", 100, 100, LCSC="C75176")
+    s.part("R4", "R1206", "120R", 100, 93, LCSC="C17909")
+    s.part("R5", "R1206", "120R", 120, 93, LCSC="C17909")
+    s.part("R6", "R1206", "120R", 100, 88, LCSC="C17909")
+    s.part("R7", "R1206", "120R", 120, 88, LCSC="C17909")
+    s.part("C9", "C0805", "4n7", 100, 83, LCSC="C1744")
+    s.part("U7", "TJA1051T-3", "TJA1051T/3", 72, 76, LCSC="C38695")
+    s.part("D7", "PESD2CAN", "PESD2CAN", 100, 78, LCSC="C75176")
+    s.part("R46", "R1206", "120R", 100, 73, LCSC="C17909")
+    s.part("JP3", "JUMPER-2", "VEHICLE TERM", 120, 73)
+    s.part("J14", "MICROFIT-2X3", "43045-0612 VEHICLE CAN", 140, 76)
+    s.part("R45", "R0805", "10k", 100, 68, LCSC="C17414")
+    s.part("C20", "C0805", "100n", 120, 68, LCSC="C49678")
+    s.part("C23", "C0805", "100n", 140, 68, LCSC="C49678")
+
+    # GPS socket, its power-off switch and series resistors
+    s.part("J12", "ADAFRUIT-ULTIMATE-GPS", "ADAFRUIT 746 SOCKET", 172, 112)
+    s.part("Q1", "2N7002", "2N7002", 170, 95, LCSC="C8545")
+    s.part("R24", "R0805", "100k", 170, 88, LCSC="C149504")
+    s.part("R22", "R0805", "1k", 170, 83, LCSC="C17513")
+    s.part("R23", "R0805", "1k", 170, 78, LCSC="C17513")
+    s.part("C16", "C0805", "10u 25V", 170, 73, LCSC="C15850")
+
+    # Decoupling, pulls and the 12 V sense divider (150 k over 10 k: the firmware's 16)
+    s.part("C6", "C0805", "100n", 62, 62, LCSC="C49678")
+    s.part("C7", "C0805", "100n", 84, 62, LCSC="C49678")
+    s.part("C8", "C0805", "100n", 106, 62, LCSC="C49678")
+    s.part("C10", "C0805", "100n", 128, 62, LCSC="C49678")
+    s.part("R1", "R0805", "10k", 62, 57, LCSC="C17414")
+    s.part("R2", "R0805", "10k", 84, 57, LCSC="C17414")
+    s.part("R8", "R0805", "150k", 106, 57)
+    s.part("R9", "R0805", "10k", 128, 57, LCSC="C17414")
+
+    # Real-time clock and the ML2032 charger as built on rev A
+    s.part("U5", "DS3231SN", "DS3231SN#", 30, 44, LCSC="C9866")
+    s.part("C14", "C0805", "100n", 62, 50, LCSC="C49678")
+    s.part("R20", "R0805", "10k", 84, 50, LCSC="C17414")
+    s.part("BT1", "BATTERY-2032", "ML2032 holder", 62, 43)
+    s.part("C15", "C0805", "100n", 84, 43, LCSC="C49678")
+    s.part("U6", "XC6206", "XC6206P302MR", 106, 46)
+    s.part("C17", "C0805", "1u 50V", 128, 50, LCSC="C28323")
+    s.part("C18", "C0805", "1u 50V", 128, 43, LCSC="C28323")
+    s.part("D6", "BAS70", "BAS70", 62, 36)
+    s.part("R21", "R0805", "1k", 84, 36, LCSC="C17513")
+    s.part("JP2", "JUMPER-2", "ML2032 CHARGE", 106, 36)
+
+    # Horn relay drive: the charge pump, the FET and the relay-module header
+    s.part("J15", "HEADER-1X3", "RELAY 5V GND IN", 14, 22)
+    s.part("Q2", "2N7002", "AO3400A", 34, 22, LCSC="C20917")
+    s.part("C21", "C0805", "1u 50V", 54, 24, LCSC="C28323")
+    s.part("D8", "BAT54S", "BAT54S", 74, 22, LCSC="C47546")
+    s.part("C22", "C0805", "10u 25V", 94, 24, LCSC="C15850")
+    s.part("R47", "R0805", "4k7", 94, 19, LCSC="C17673")
+    s.part("R48", "R0805", "100k", 54, 19, LCSC="C149504")
+    s.part("R49", "R0805", "1k", 114, 24, LCSC="C17513")
+    s.part("JP4", "JUMPER-2", "HORN DIRECT", 114, 19)
+
+    # Wired remote: four switched resistors to REM, and the digital-pot alternative
+    s.part("J13", "HEADER-1X6", "REMOTE GND REM SW1-4", 150, 50)
+    s.part("Q3", "2N7002", "2N7002", 150, 36, LCSC="C8545")
+    s.part("Q4", "2N7002", "2N7002", 166, 36, LCSC="C8545")
+    s.part("Q5", "2N7002", "2N7002", 182, 36, LCSC="C8545")
+    s.part("Q6", "2N7002", "2N7002", 198, 36, LCSC="C8545")
+    s.part("R30", "R-AXIAL", "DNP head unit", 150, 29)
+    s.part("R31", "R-AXIAL", "DNP head unit", 166, 29)
+    s.part("R32", "R-AXIAL", "DNP head unit", 182, 29)
+    s.part("R33", "R-AXIAL", "DNP head unit", 198, 29)
+    s.part("R50", "R0805", "100k", 150, 24, LCSC="C149504")
+    s.part("R51", "R0805", "100k", 166, 24, LCSC="C149504")
+    s.part("R52", "R0805", "100k", 182, 24, LCSC="C149504")
+    s.part("R53", "R0805", "100k", 198, 24, LCSC="C149504")
+    s.part("U8", "MCP4531-MSOP", "MCP4531T-103E/MS DNP", 150, 10)
+    s.part("C24", "C0805", "100n", 182, 12, LCSC="C49678")
+
+    for i, name in enumerate(("GND", "+5V", "+3V3", "VBAT_SENSE", "RST")):
+        s.part(f"TP{i + 1}", "TESTPOINT", name, 172, 150 - 4 * i)
+
+    rtc_unused = [f"U5.NC@{n}" for n in range(5, 13)]  # the datasheet wants these on ground
+
+    s.net("+12V_IN", "J10.1", "D1.1", "D2.A", "R8.1")
+    s.net("+12V_PROT", "D2.K", "C1.+", "C2.1", "U1.VIN")
+    # The buck's output, before the cutoff
+    s.net("+5V_RAW", "U1.VOUT", "C3.+", "C4.1", "TP6.TP", "Q7.S", "Q8.E", "R42.1")
+    s.net("OV_SENSE", "R42.2", "R43.1", "C19.1", "U9.REF")
+    s.net("OV_K", "U9.K", "R41.1")
+    s.net("OV_BASE", "R41.2", "Q8.B")
+    s.net("OV_GATE", "Q8.C", "Q7.G", "R40.1")
+    # The rail everything hangs off
+    s.net("+5V", "Q7.D", "C5.1", "F2.1", "D3.A", "U2.VCC", "C6.1", "TP2.TP", "J12.VIN", "C16.1",
+          "U7.VCC", "C20.1", "J15.1")
+    s.net("+5V_MCU", "D3.K", "U4.VSYS")
+    s.net("+5V_CHAIN", "F2.2", "J11.1")
+    s.net("+3V3", "U4.3V3", "U2.VIO", "C7.1", "U3.VCC", "C8.1", "R2.1", "TP3.TP",
+          "U5.VCC", "C14.1", "R20.1", "U6.VIN", "C17.1", "U7.VIO", "C23.1", "R44.1",
+          "U8.VDD", "C24.1")
+    s.net("RTC_3V0", "U6.VOUT", "C18.1", "D6.A")
+    s.net("GND", "J10.2", "D1.2", "C1.-", "C2.2", "U1.GND@1", "U1.GND@2", "C3.-", "C4.2", "C5.2",
+          "J11.2", "J11.6", *[f"U4.GND@{n}" for n in range(1, 9)], "U2.GND", "U3.GND", "U3.RS",
+          "D4.GND", "D5.GND", "C9.2", "C6.2", "C7.2", "C8.2", "C10.2", "R1.2", "R9.2", "TP1.TP",
+          "U5.GND", *rtc_unused, "C14.2", "BT1.-", "C15.2", "J12.GND", "C16.2", "Q1.S", "R24.2",
+          "U6.GND", "C17.2", "C18.2",
+          "R40.2", "R43.2", "C19.2", "U9.A",
+          "U7.GND", "D7.GND", "R45.2", "C20.2", "C23.2", "J14.2", "J14.6",
+          "J15.2", "Q2.S", "D8.A1", "C22.2", "R47.2", "R48.2",
+          "J13.1", "Q3.S", "Q4.S", "Q5.S", "Q6.S", "R50.2", "R51.2", "R52.2", "R53.2",
+          "U8.VSS", "U8.A0", "U8.P0A", "C24.2")
+
+    # CAN and the 12 V sense, on the board's header
+    s.net("ECU_TX", "U4.IO21", "U2.TXD")
+    s.net("ECU_RX", "U4.IO22", "U2.RXD")
+    s.net("ECU_SILENT", "U4.IO23", "U2.S", "R1.1")
+    s.net("GAUGE_TX", "U4.IO32", "U3.D", "R2.2")
+    s.net("GAUGE_RX", "U4.IO33", "U3.R")
+    s.net("VBAT_SENSE", "U4.IO20", "R8.2", "R9.1", "C10.1", "TP4.TP")
+    s.net("RST", "U4.RUN", "TP5.TP")
+    s.net("ECU_CANH", "J10.3", "U2.CANH", "D4.IO1", "R3.1")
+    s.net("ECU_CANL", "J10.4", "U2.CANL", "D4.IO2", "JP1.2")
+    s.net("ECU_TERM", "R3.2", "JP1.1")
+    s.net("CANH", "J11.3", "U3.CANH", "D5.IO1", "R4.1", "R5.1")
+    s.net("CANL", "J11.4", "U3.CANL", "D5.IO2", "R6.2", "R7.2")
+    s.net("TERM_MID", "R4.2", "R5.2", "R6.1", "R7.1", "C9.1")
+    s.net("CHAIN_SENSE", "J11.5", "R44.2", "U4.IO51")
+    # Vehicle CAN: the Rebel's CAN 2 in FG Falcon mode (docs/steering-wheel.md)
+    s.net("FG_TX", "U4.IO26", "U7.TXD")
+    s.net("FG_RX", "U4.IO27", "U7.RXD")
+    s.net("FG_SILENT", "U4.IO52", "U7.S", "R45.1")
+    s.net("FG_CANH", "J14.3", "U7.CANH", "D7.IO1", "R46.1")
+    s.net("FG_CANL", "J14.4", "U7.CANL", "D7.IO2", "JP3.2")
+    s.net("FG_TERM", "R46.2", "JP3.1")
+
+    # Horn: GPIO49 -> C21 -> D8 (clamp to ground, feed to the gate) -> C22 with R47 bleed
+    s.net("HORN_DRV", "U4.IO49", "C21.1", "R48.1", "R49.1")
+    s.net("HORN_PUMP", "C21.2", "D8.COM")
+    s.net("HORN_GATE", "D8.K2", "C22.1", "R47.1", "Q2.G", "JP4.2")
+    s.net("HORN_DIRECT", "R49.2", "JP4.1")
+    s.net("HORN_IN", "J15.3", "Q2.D")
+
+    # Wired remote: each GPIO turns a FET on, which puts its resistor between REM and ground
+    for n, (q, r, pull, gpio) in enumerate((("Q3", "R30", "R50", "IO2"), ("Q4", "R31", "R51", "IO3"),
+                                             ("Q5", "R32", "R52", "IO4"), ("Q6", "R33", "R53", "IO5"))):
+        s.net(f"SWC_{n}", f"U4.{gpio}", f"{q}.G", f"{pull}.1")
+        s.net(f"SW{n + 1}", f"{q}.D", f"{r}.1", f"J13.{n + 3}")
+    s.net("REM", "R30.2", "R31.2", "R32.2", "R33.2", "J13.2", "U8.P0W")
+
+    # Clock: the board's I2C bus, a 1 Hz tick, and the cell with its charger
+    s.net("I2C_SDA", "U4.IO7_SDA", "U5.SDA", "U8.SDA")
+    s.net("I2C_SCL", "U4.IO8_SCL", "U5.SCL", "U8.SCL")
+    s.net("RTC_INT", "U4.IO31", "U5.INT_SQW", "R20.2")
+    s.net("RTC_VBAT", "U5.VBAT", "BT1.+", "C15.1", "JP2.2")
+    s.net("RTC_CHG_A", "D6.K", "R21.1")
+    s.net("RTC_CHG_B", "R21.2", "JP2.1")
+
+    # GPS: 1 k in each line coming from the module, and its enable pulled low by Q1
+    s.net("GPS_TX", "J12.TX", "R22.1")
+    s.net("GPS_TX_IN", "R22.2", "U4.IO28")
+    s.net("GPS_RX", "J12.RX", "U4.IO29")
+    s.net("GPS_PPS", "J12.PPS", "R23.1")
+    s.net("GPS_PPS_IN", "R23.2", "U4.IO30")
+    s.net("GPS_EN", "J12.EN", "Q1.D")
+    s.net("GPS_OFF", "U4.IO50", "Q1.G", "R24.1")
+    return s
+
+
+def write_bom(schematic, sets, path):
+    """The schematic's parts in JLCPCB's BOM layout, one row per value and package."""
+    rows = {}
+    for ref, deviceset, value, _, _, attrs in schematic.parts:
+        rows.setdefault((value, sets[deviceset][2], attrs.get("LCSC", "")), []).append(ref)
+    with open(path, "w", newline="", encoding="utf-8") as out:
+        w = csv.writer(out)
+        w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #"])
+        for (value, package, lcsc), refs in rows.items():
+            w.writerow([value, ", ".join(refs), package, lcsc])
+
+
 # ------------------------------------------------------------------ output
 
 LAYERS = [
@@ -800,11 +1088,16 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     for filename, schematic in (("gauge-adapter.sch", gauge_adapter()),
                                 ("hub-carrier.sch", hub_carrier()),
-                                ("hub-carrier-p4.sch", hub_carrier_p4())):
+                                ("hub-carrier-p4.sch", hub_carrier_p4()),
+                                ("hub-carrier-p4-rev-b.sch", hub_carrier_p4_rev_b())):
         path = os.path.join(out_dir, filename)
         write(path, build_xml(schematic, symbols, sets, packages))
         pins = sum(len(v) for v in schematic.nets.values())
         print(f"{filename}: {len(schematic.parts)} parts, {len(schematic.nets)} nets, {pins} pins")
+        if filename == "hub-carrier-p4-rev-b.sch":
+            bom = os.path.join(out_dir, "jlcpcb", "hub-carrier-p4-rev-b-bom.csv")
+            write_bom(schematic, sets, bom)
+            print(f"{os.path.relpath(bom, out_dir)}: BOM in JLCPCB's layout")
 
 
 if __name__ == "__main__":

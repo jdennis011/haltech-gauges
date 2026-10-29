@@ -379,3 +379,13 @@ bus-off. TEC and REC sit at 0 on both ends between bursts. The gauge was on PC U
 with JP1 pulled throughout, so the ground path through the PC is the first suspect:
 re-measure on chain power only, then with the Wi-Fi link off (`link off` on the console
 forgets the stored network; the hub sends it again when it needs a transfer).
+
+Chain power only (USB out, JP1 back in), 60 s watched from the hub with the simulator at
+1400 frames a second: 1 bus error, TEC 0, REC 0, ten status frames from the gauge every
+10 s, VBUS 4.60 V at the gauge. So the bursts were the bench USB ground path and the chain
+is clean; the Wi-Fi-off test was not needed. The 300 000 errors the counter had gathered by
+then were the minutes with the gauge unplugged (the hub retries about a thousand times a
+second with nobody acknowledging); the counter only clears at a hub restart. Still open:
+the roster says `wifi` while the gauge is on both links and management frames arrive
+twice; the hub should prefer CAN once it hears a gauge there, or the gauge should drop the
+Wi-Fi link while CAN carries the beacon.

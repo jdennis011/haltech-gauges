@@ -389,3 +389,11 @@ second with nobody acknowledging); the counter only clears at a hub restart. Sti
 the roster says `wifi` while the gauge is on both links and management frames arrive
 twice; the hub should prefer CAN once it hears a gauge there, or the gauge should drop the
 Wi-Fi link while CAN carries the beacon.
+
+Two gauges on the chain the same afternoon (D02424 then D029F0 on the second adapter, the
+terminator plug moved to its spare port). D029F0 came up on 0.1.3 with the old pin map and
+was on Wi-Fi only, as expected; the user released gauge 0.1.7 and hub 0.3.17 to the site
+with `scripts/release_fw.ps1` and installed it from the card's Update button. Then, 30 s
+watched from the hub with the simulator at 1400 frames a second: two status frames a
+second from the chain (one per gauge), 0 bus errors, TEC 0, REC 0, VBUS 4.60 V at the
+first gauge and 4.575 V at the second. The site serves gauge 0.1.7 and hub 0.3.17.

@@ -176,7 +176,7 @@ Then plug in, key on:
 
 ## What to send back
 
-- Header positions of GPIO16/17/18
+- Header positions of GPIO16/17/18 (answered 2026-10-29: 6 = GPIO16, 7 = GPIO17, nothing on 8)
 - Whether the board starts by itself on USB and on header 5 V
 - Full-white current, and the lowest voltage it runs at
 - Step 2 frame rate and anything that looked wrong
@@ -199,7 +199,7 @@ flashed over USB at the first attempt.
 | 2 Brightness ramp | smooth |
 | 3 Full white | bright; supply current not measured (no inline meter yet) |
 | 4 Touch | CST9217; dot under the finger, two fingers tracked; reported x 49-416, y 10-444 across the panel, so the panel's coordinates are the screen's with no mirroring |
-| 5 Header pins | the stage runs (GPIO16, 17, 18 each driven high in turn, named on screen); **positions 6, 7, 8 not yet mapped**: needs a multimeter from a GND pin |
+| 5 Header pins | the stage runs (GPIO16, 17, 18 each driven high in turn, named on screen); mapped with a meter on 2026-10-29 while chasing the first chain test: position 6 = GPIO16, 7 = GPIO17, nothing found on 8 |
 | Power checks | not done: no bench supply yet (replug without PWR, 5 V on the header, brown-out voltage) |
 
 A plain multimeter is enough for the pin map; only the brown-out and the 5 V-on-header
@@ -349,3 +349,33 @@ saw either the hub's frames or the gauge's own. Single faults that fit: U1 witho
 the chip, RS not at ground (standby, driver off), or a bad joint on U1. Next: meter U1's
 pins directly (SOIC-8: 1 D, 2 GND, 3 VCC, 4 R, 5 Vref, 6 CANL, 7 CANH, 8 RS) and the H/L
 resistance with the power off (60 ohm expected: the hub's 120 in parallel with the plug's).
+
+### 2026-10-29: the header map was the fault; CAN link up
+
+Meter on the adapter's transceiver with the gauge on the chain: pin 3 (VCC) 3.3 V, pin 5
+(Vref) 1.6 V, pin 8 (RS) 0 V, pin 4 (R) 1.9 to 2.4 V and moving, pin 1 (D) 3.3 V, pins 7
+and 6 (CANH, CANL) 2.4 and 1.4 V, continuity from pin 1 to header position 6 and from pin 4
+to position 7. So the chip was alive, its receiver was passing the hub's frames to the
+header, and the adapter was fine. Then the gauge's socket was traced: position 6 is GPIO16
+and position 7 is GPIO17, with nothing found on position 8. Waveshare's hardware reference
+has 6 and 7 the other way round and the firmware had followed it (transmit on GPIO17,
+receive on GPIO18): the transceiver's D input hung on a pin the firmware never drove, so
+the gauge never put a bit on the bus, and the R output was fighting the firmware's transmit
+output on GPIO17, which is where the 1.9 to 2.4 V on the receive line came from.
+
+Gauge 0.1.7: `PIN_CAN_TX 16` and `PIN_CAN_RX 17` in `src/gauge/board_pins.h`, plus a `can`
+console command (state, frames received, TEC, REC, bus errors, missed, failed to send, hub
+heard, link), flashed over USB on COM6 with the adapter's JP1 pulled. Within 30 s of the
+hub powering: hub gauge bus TEC 0, REC 0, 30 frames received from the gauge, 0 waiting to
+send; gauge `can: running, 51133 frames received, TEC 0, REC 0, hub heard`. The gauge also
+joined the hub's access point, so the roster shows its link as `wifi` while it is on both,
+and every management frame reaches it twice (harmless so far; a `PlaySound` would play
+twice).
+
+Not yet clean: the hub's gauge-bus error counter still climbs in bursts, 323 in one 30 s
+window and 2 in another (about 1 % of the 900 simulator frames a second), and the gauge's
+counters reset at least once in its first minute, which is its driver restarting after a
+bus-off. TEC and REC sit at 0 on both ends between bursts. The gauge was on PC USB power
+with JP1 pulled throughout, so the ground path through the PC is the first suspect:
+re-measure on chain power only, then with the Wi-Fi link off (`link off` on the console
+forgets the stored network; the hub sends it again when it needs a transfer).

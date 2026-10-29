@@ -51,6 +51,7 @@ void help() {
     Serial.println("  play N                a built-in sound: 1 beep, 2 chime, 3 alarm, 4 riff");
     Serial.println("  volume N              speaker volume 0..100, kept");
     Serial.println("  info                  faces, hub, heap, audio");
+    Serial.println("  can                   the CAN controller: state, frames received, TEC, REC, errors");
     Serial.println("  link SSID PASSWORD [HUB]  reach the hub over Wi-Fi: its access point (hub 192.168.4.1), or a network with its address");
     Serial.println("  link                  the link's state;  link off  drops it");
 }
@@ -151,6 +152,14 @@ void run(const std::string& cmd) {
         const int n = atoi(cmd.c_str() + 7);
         audio::setVolume(uint8_t(n < 0 ? 0 : (n > 100 ? 100 : n)));
         Serial.printf("volume %u\n", unsigned(audio::volume()));
+    } else if (cmd == "can") {
+        const can_task::BusCounters c = can_task::busCounters();
+        static const char* const kStates[] = {"stopped", "running", "bus off", "recovering"};
+        Serial.printf("can: %s, %u frames received, TEC %u, REC %u, %u bus errors, %u missed, %u failed to send, hub %s, link %s",
+                      c.state < 4 ? kStates[c.state] : "?", unsigned(c.frames), unsigned(c.tec), unsigned(c.rec),
+                      unsigned(c.busErrors), unsigned(c.rxMissed), unsigned(c.txFailed),
+                      can_task::hubPresent() ? "heard" : "not heard", ip_link::status());
+        Serial.println();
     } else if (cmd == "info") {
         Serial.printf("faces %u, on face %u, hub %d, trying %d, heap %u, audio %s\n", unsigned(face_store::faceCount()),
                       unsigned(face_store::activeFace() + 1), int(can_task::hubPresent()), int(face_store::trying()),

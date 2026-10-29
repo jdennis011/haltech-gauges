@@ -223,12 +223,15 @@ One per gauge. Plugs onto the gauge's rear 1x8 female header and carries the cha
 | 2 | GND | GND |
 | 3 | 3V3 | Transceiver supply |
 | 4, 5 | GPIO43/44 (UART0) | Not connected. Order of these two is disputed and does not matter |
-| 6, 7, 8 | GPIO16, 17, 18 in some order **[bench]** | Two go to transceiver TXD/RXD, one to a spare pad |
+| 6 | GPIO16 | Transceiver D: the gauge's CAN transmit, `PIN_CAN_TX` |
+| 7 | GPIO17 | Transceiver R: the gauge's CAN receive, `PIN_CAN_RX` |
+| 8 | nothing found (GPIO18 expected) | Spare pad TP1, unused |
 
-Waveshare's hardware reference and its schematic disagree on which of positions 6-8 is which
-GPIO. Bring-up step 1 drives them one at a time; write the result here before laying out. The
-firmware's `PIN_CAN_TX`/`PIN_CAN_RX` in `src/gauge/board_pins.h` are then set to match, so any
-assignment of the three positions works.
+Measured on the gauge with a meter on 2026-10-29: position 6 is GPIO16, position 7 is GPIO17,
+and nothing was found on position 8. Waveshare's hardware reference on GitHub has 6 and 7 the
+other way round (6 = GPIO17, 7 = GPIO18, 8 = GPIO16); the firmware followed it until the first
+chain test failed on exactly that. `PIN_CAN_TX 16` and `PIN_CAN_RX 17` in
+`src/gauge/board_pins.h` match the board now.
 
 ### 2.2 Schematic
 
@@ -249,9 +252,8 @@ into Fusion:
 | CANL | J1-4, J2-4, U1-6, D2-2 |
 
 U1-5 (Vref) is left unconnected.
-P1-4 and P1-5 (the gauge's UART0) are left unconnected. P1 positions 6-8 carry GPIO16/17/18
-in an order confirmed at bring-up; whichever two GPIOs land on 6 and 7 become `PIN_CAN_TX`
-and `PIN_CAN_RX` in the firmware.
+P1-4 and P1-5 (the gauge's UART0) are left unconnected. P1-6 is GPIO16 (`PIN_CAN_TX`) and
+P1-7 is GPIO17 (`PIN_CAN_RX`), as measured in section 2.1.
 
 ### 2.3 Parts
 

@@ -360,6 +360,18 @@ void begin() {
 
 ChannelStore& channels() { return store; }
 uint32_t framesReceived() { return frames; }
+
+BusCounters busCounters() {
+    BusCounters c{};
+    c.frames = frames;
+    c.state = ESP32Can.canState();
+    c.tec = ESP32Can.txErrorCounter();
+    c.rec = ESP32Can.rxErrorCounter();
+    c.busErrors = ESP32Can.busErrCounter();
+    c.rxMissed = ESP32Can.rxMissedCounter();
+    c.txFailed = ESP32Can.txFailedCounter();
+    return c;
+}
 bool hubPresent() { return hub; }
 
 bool localTime(uint32_t& seconds) { return node.localTime(millis(), seconds); }

@@ -31,9 +31,13 @@
 // The only free GPIOs, on the rear 1x8 header. Waveshare's hardware reference
 // and schematic disagree on which header position each one sits at; the
 // bring-up firmware toggles them at different rates so they can be mapped.
-#define PIN_CAN_TX 17
-#define PIN_CAN_RX 18
-#define PIN_SPARE 16
+// Rear header, measured with the meter on 2026-10-29 (Waveshare's hardware
+// reference has positions 6 and 7 the other way round): position 6 = GPIO16,
+// position 7 = GPIO17, position 8 showed no connection. The adapter puts the
+// transceiver's D input on 6 and its R output on 7.
+#define PIN_CAN_TX 16
+#define PIN_CAN_RX 17
+#define PIN_SPARE 18  // would be position 8; not found on the board, unused
 
 // ES8311 codec (0x18 on the shared I2C bus) and its speaker amplifier (docs/gauge-audio.md)
 #define PIN_I2S_MCLK 42

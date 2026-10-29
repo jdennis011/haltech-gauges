@@ -15,6 +15,17 @@ void begin();
 
 hg::ChannelStore& channels();
 uint32_t framesReceived();
+// The controller's counters, for the console's `can` command. state: 0 stopped,
+// 1 running, 2 bus off, 3 recovering.
+struct BusCounters {
+    uint32_t frames;     // frames received on the wire
+    uint32_t state;
+    uint32_t tec, rec;   // transmit and receive error counters
+    uint32_t busErrors;  // bit, stuff, CRC, form and acknowledge errors seen
+    uint32_t rxMissed;   // frames lost to a full receive queue
+    uint32_t txFailed;   // frames the controller gave up sending
+};
+BusCounters busCounters();
 bool hubPresent();
 uint32_t nodeId();
 

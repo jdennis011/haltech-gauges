@@ -160,6 +160,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       <label class="inline" title="Speaker volume for every gauge that has one">Volume <input type="range" id="all-volume" min="0" max="100" step="4" value="60"></label>
       <button class="btn small" id="all-screens-off">Screens off</button>
       <button class="btn small" id="all-screens-on">Screens on</button>
+      <button class="btn small" id="all-reset-holds" title="Clears the held peaks and minimums on every gauge">Reset peaks</button>
       <button class="btn small" id="btn-show-startup" title="Plays the start-up intro now on every gauge that is online, in order">Show start-up</button>
       <span class="muted" id="all-note"></span>
     </div>
@@ -784,6 +785,7 @@ function renderGauges() {
             g.trying ? btn('End try', () => act(g, 'endtry'), off, 'small') : null,
             btn('Screen off', () => act(g, 'display', { on: false }), off, 'small'),
             btn('Screen on', () => act(g, 'display', { on: true }), off, 'small'),
+            btn('Reset peaks', () => act(g, 'reset_holds'), off, 'small', 'Clears the held peaks and minimums on its faces'),
             btn('Reboot', () => { if (confirm('Reboot ' + gaugeTitle(g) + '?')) act(g, 'reboot'); }, off, 'small'),
             g.fw_update ? btn('Update firmware', () => {
               if (confirm('Send the hub\'s newer firmware to ' + gaugeTitle(g) + ' over Wi-Fi?\nIt restarts when done, and comes back to its current build if the new one fails to start.')) act(g, 'update', {});
@@ -801,6 +803,7 @@ $('#all-brightness').addEventListener('change', ev => allGauges('brightness', { 
 $('#all-volume').addEventListener('change', ev => allGauges('volume', { level: +ev.target.value }));
 $('#all-screens-off').addEventListener('click', () => allGauges('display', { on: false }));
 $('#all-screens-on').addEventListener('click', () => allGauges('display', { on: true }));
+$('#all-reset-holds').addEventListener('click', () => allGauges('reset_holds', {}));
 
 $('#btn-add-gauge').addEventListener('click', () => {
   const label = prompt('Name for the planned gauge (e.g. "Left pod")', '');
@@ -1387,13 +1390,16 @@ const MORE_FIELDS = {
            ['arcWidth', 'int', 'Arc line', [0, 20, 0], 'A thin arc along the sweep where the ticks start; 0 is none'],
            ['labels', 'bool', 'Labels', true], ['labelScale', 'number', 'Label /', null, 'Labels show value divided by this; 1000 for RPM x1000'],
            ['needleWidth', 'int', 'Needle w', [1, 20, 6]], ['needleLen', 'int', 'Needle len', [10, 233, ''], 'Default is the radius less 24, or 28 for a marker'],
-           ['zoneWidth', 'int', 'Zone w', [1, 40, 6]], ['zones', 'zones', 'Zones', null, 'Coloured bands on the rim, e.g. a redline']],
+           ['zoneWidth', 'int', 'Zone w', [1, 40, 6]], ['zones', 'zones', 'Zones', null, 'Coloured bands on the rim, e.g. a redline'],
+           ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'A thin tell-tale needle stays at the highest or lowest value seen, until Reset peaks on the gauge'], ['holdColor', 'color', 'Hold colour', '=needleColor'], ['holdSeconds', 'int', 'Hold for', [0, 3600, 0], 'Seconds a peak is kept before it rolls back to the live value; 0 keeps it until Reset peaks']],
   ring:   [...XY, ['r', 'int', 'Radius', [40, 233, 225]], ['thickness', 'int', 'Thickness', [2, 120, 20]], ['rounded', 'bool', 'Round ends', true],
            ['track', 'bool', 'Track', true], ['gap', 'int', 'Gap', [0, 20, 3], 'Degrees between segments'],
-           ['zones', 'zones', 'Zones', null, 'The arc takes a zone\'s colour while the value is inside it'], ['warn', 'warn', 'Warn']],
+           ['zones', 'zones', 'Zones', null, 'The arc takes a zone\'s colour while the value is inside it'],
+           ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'A line across the arc stays at the highest or lowest value seen, until Reset peaks on the gauge'], ['holdColor', 'color', 'Hold colour', '=color'], ['holdSeconds', 'int', 'Hold for', [0, 3600, 0], 'Seconds a peak is kept before it rolls back to the live value; 0 keeps it until Reset peaks'], ['warn', 'warn', 'Warn']],
   bar:    [...XY, ['w', 'int', 'W', [4, 466, 260]], ['h', 'int', 'H', [4, 466, 28]], ['track', 'bool', 'Track', true], ['gap', 'int', 'Gap', [0, 20, 3], 'Pixels between segments'],
-           ['cornerRadius', 'int', 'Corners', [0, 60, 4]], ['zones', 'zones', 'Zones'], ['warn', 'warn', 'Warn']],
-  number: [...XY, ['unitSize', 'int', 'Unit size', [8, 80, ''], 'Default is a third of the number size'], ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'Show the highest or lowest value seen'], ['warn', 'warn', 'Warn']],
+           ['cornerRadius', 'int', 'Corners', [0, 60, 4]], ['zones', 'zones', 'Zones'],
+           ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'A line across the bar stays at the highest or lowest value seen, until Reset peaks on the gauge'], ['holdColor', 'color', 'Hold colour', '=color'], ['holdSeconds', 'int', 'Hold for', [0, 3600, 0], 'Seconds a peak is kept before it rolls back to the live value; 0 keeps it until Reset peaks'], ['warn', 'warn', 'Warn']],
+  number: [...XY, ['unitSize', 'int', 'Unit size', [8, 80, ''], 'Default is a third of the number size'], ['hold', 'select', 'Hold', ['none', 'max', 'min'], 'Show the highest or lowest value seen'], ['holdSeconds', 'int', 'Hold for', [0, 3600, 0], 'Seconds a peak is kept before it rolls back to the live value; 0 keeps it until Reset peaks'], ['warn', 'warn', 'Warn']],
   label:  [...XY],
   light:  [...XY, ['r', 'int', 'Half size', [4, 100, 14]], ['flash', 'bool', 'Flash', false]],
   rim:    [...XY, ['mode', 'select', 'Mode', ['flash', 'fill']], ['r', 'int', 'Radius', [40, 233, 233]], ['thickness', 'int', 'Thickness', [2, 60, 12]]],
@@ -3323,6 +3329,19 @@ function unitFor(w) {
 
 // The widget's value in its display unit: live data when the hub has it,
 // otherwise a slow sweep so the layout can be judged.
+// The peak or minimum a widget with `hold` would be showing on the gauge,
+// tracked while the preview runs (the gauge holds live readings only).
+const HELD = new WeakMap();
+function heldValue(w, v) {
+  if (!w.hold || w.hold === 'none' || v == null) return null;
+  const now = Date.now();
+  let prev = HELD.get(w);
+  if (prev && w.holdSeconds && now - prev.ms >= w.holdSeconds * 1000) prev = null;  // a timed hold rolls back
+  if (prev == null || (w.hold === 'max' ? v > prev.value : v < prev.value)) prev = { value: v, ms: now };
+  HELD.set(w, prev);
+  return prev.value;
+}
+
 function valueOf(w, t) {
   const v = state.live[w.channel];
   if (v != null) { const u = unitFor(w); return u ? v * u.m + u.a : v; }
@@ -3349,7 +3368,7 @@ function drawDial(ctx, w, th, t) {
   const min = w.min, max = w.max, major = w.major || 10, minor = w.minor || 5;
   const tickLen = w.tickLen == null ? 16 : w.tickLen, tickW = w.tickWidth == null ? 3 : w.tickWidth;
   const fg = color(w.color, th, th.fg);
-  const v = clamp(valueOf(w, t), min, max);
+  const v = clamp(valueOf(w, t), min, max), hv = heldValue(w, v);
   const zw = w.zoneWidth == null ? 6 : w.zoneWidth;
   for (const z of w.zones || []) {
     const a0 = start + sweep * (z.from - min) / (max - min), a1 = start + sweep * (z.to - min) / (max - min);
@@ -3390,6 +3409,14 @@ function drawDial(ctx, w, th, t) {
   const style = w.needle || 'tapered';
   const len = w.needleLen == null ? (style === 'marker' || style === 'marker_out' ? 28 : r - 24) : w.needleLen, nw = w.needleWidth == null ? 6 : w.needleWidth;
   const nc = color(w.needleColor, th, th.accent);
+  if (hv != null) {
+    // The tell-tale: a thin needle, or a line in a marker's span, at the held value.
+    const ha = rad(start + sweep * (clamp(hv, min, max) - min) / (max - min)), hc = color(w.holdColor, th, nc);
+    const hw = nw > 4 ? nw / 2 : 2, mk = style === 'marker' || style === 'marker_out' || style === 'none';
+    ctx.beginPath(); ctx.strokeStyle = hc; ctx.lineWidth = hw; ctx.lineCap = 'round';
+    ctx.moveTo(cx + (mk ? Math.cos(ha) * (r - len) : 0), cy + (mk ? Math.sin(ha) * (r - len) : 0));
+    ctx.lineTo(cx + Math.cos(ha) * (mk ? r + 1 : len), cy + Math.sin(ha) * (mk ? r + 1 : len)); ctx.stroke();
+  }
   if (style === 'none') return;
   if (style === 'marker') {
     // An arrow sitting on the rim, pointing inward at the value.
@@ -3426,6 +3453,19 @@ function zoneColor(w, v, th, base) {
 }
 
 function drawRing(ctx, w, th, t) {
+  drawRingBody(ctx, w, th, t);
+  const hv = heldValue(w, clamp(valueOf(w, t), w.min, w.max));
+  if (hv == null) return;
+  // The tell-tale: a line across the arc at the held value.
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 225 : w.r;
+  const thick = w.thickness == null ? 20 : w.thickness, start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
+  const ha = rad(start + sweep * (clamp(hv, w.min, w.max) - w.min) / (w.max - w.min));
+  ctx.beginPath(); ctx.strokeStyle = color(w.holdColor, th, color(w.color, th, th.fg)); ctx.lineWidth = 3; ctx.lineCap = 'butt';
+  ctx.moveTo(cx + Math.cos(ha) * (r - thick - 3), cy + Math.sin(ha) * (r - thick - 3));
+  ctx.lineTo(cx + Math.cos(ha) * (r + 3), cy + Math.sin(ha) * (r + 3)); ctx.stroke();
+}
+
+function drawRingBody(ctx, w, th, t) {
   const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 225 : w.r;
   const thick = w.thickness == null ? 20 : w.thickness, start = w.start == null ? 135 : w.start, sweep = w.sweep == null ? 270 : w.sweep;
   const min = w.min, max = w.max, v = clamp(valueOf(w, t), min, max), frac = (v - min) / (max - min);
@@ -3450,6 +3490,22 @@ function drawRing(ctx, w, th, t) {
 }
 
 function drawBar(ctx, w, th, t) {
+  drawBarBody(ctx, w, th, t);
+  const hv = heldValue(w, clamp(valueOf(w, t), w.min, w.max));
+  if (hv == null) return;
+  // The tell-tale: a line across the bar at the held value. The body left the
+  // context rotated for a rotated bar, so the bar is then at the origin.
+  const horiz = (w.style || 'horizontal') === 'horizontal';
+  const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
+  const cx = w.rotate ? 0 : (w.x == null ? 233 : w.x), cy = w.rotate ? 0 : (w.y == null ? 233 : w.y);
+  const x0 = cx - W / 2, y0 = cy - H / 2, hf = (clamp(hv, w.min, w.max) - w.min) / (w.max - w.min);
+  ctx.beginPath(); ctx.strokeStyle = color(w.holdColor, th, color(w.color, th, th.fg)); ctx.lineWidth = 3; ctx.lineCap = 'butt';
+  if (horiz) { ctx.moveTo(x0 + W * hf, y0 - 3); ctx.lineTo(x0 + W * hf, y0 + H + 3); }
+  else { ctx.moveTo(x0 - 3, y0 + H * (1 - hf)); ctx.lineTo(x0 + W + 3, y0 + H * (1 - hf)); }
+  ctx.stroke();
+}
+
+function drawBarBody(ctx, w, th, t) {
   const horiz = (w.style || 'horizontal') === 'horizontal';
   const W = w.w == null ? (horiz ? 260 : 28) : w.w, H = w.h == null ? (horiz ? 28 : 260) : w.h;
   let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
@@ -3501,7 +3557,8 @@ function drawNumber(ctx, w, th, t) {
   let cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y;
   const size = w.size || 72, font = fontStack(w.font);
   if (w.rotate) { ctx.translate(cx, cy); ctx.rotate(rad(w.rotate)); cx = 0; cy = 0; }
-  const v = valueOf(w, t), col = applyWarn(w, v, color(w.color, th, th.fg), th, t);
+  const v0 = valueOf(w, t), hv = heldValue(w, v0), v = hv == null ? v0 : hv;
+  const col = applyWarn(w, v, color(w.color, th, th.fg), th, t);
   const txt = numberText(w, v), align = w.align || 'center';
   ctx.font = size + 'px ' + font; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = col;
   ctx.fillText(txt, cx, cy);

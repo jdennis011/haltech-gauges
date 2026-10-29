@@ -39,6 +39,8 @@ int takeBrightnessRequest();
 // A face index the hub asked for, or -1; a display request (0 off, 1 on), or -1.
 int takeFaceRequest();
 int takeDisplayRequest();
+// The hub asked for the held peaks and minimums to be cleared; true once per request.
+bool takeHoldReset();
 // The key-on intro the hub asked for, or a replay from the page; false if none is waiting.
 bool takeIntro(hg::proto::Intro& out);
 

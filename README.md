@@ -83,7 +83,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/sd-card.md` | The P4 hub's microSD card and the datalog on it: every channel, ten times a second, a CSV per drive |
 | `docs/steering-wheel.md` | A steering wheel module on the gauge chain through the clock spring: its buttons by ADC, the horn relay with a fail-safe, the cruise buttons to the Nexus as FG Falcon frames on a third CAN bus, a wired-remote provision for the head unit |
 | `docs/time-of-day.md` | The clock: NTP, the phone, a DS3231 on the carrier; the zone; the beacon field and the `clock` widget |
-| `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles |
+| `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles; the oaGauge boot splash shown while a gauge waits for it (`assets/splash/oagauge.svg`, made by `scripts/gen_splash.py`) |
 | `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness and screen off, this one or all |
 | `docs/gauge-audio.md` | The gauge speaker: the chime on Identify, the console tone and volume commands |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |

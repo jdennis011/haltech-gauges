@@ -26,6 +26,9 @@ void destroy();
 // the UI loop at about 30 Hz.
 void update(uint32_t nowMs);
 
+// Clears every held peak and minimum (the pull-down menu's Reset peaks, or the hub).
+void resetHold();
+
 // The key-on intro: while set, every widget with a channel shows a made-up
 // reading driven by `phase` (0 to 1) instead of its channel: needles up to
 // full scale and back, bars fill and empty, digits count, lights on. The

@@ -170,7 +170,9 @@ struct Widget {
     int16_t unitDx = 0;     // nudge of the unit text from its position, px
     int16_t unitDy = 0;
     Align align = Align::Center;
-    Hold hold = Hold::None;
+    Hold hold = Hold::None;  // number: shows the held value; dial, ring, bar: a tell-tale at it
+    Color holdColor = 0;     // dial, ring, bar: the tell-tale, parsed default the needle or widget colour
+    uint16_t holdSeconds = 0;  // a peak older than this rolls back to the live value; 0 = until Reset peaks
     std::string text;
     int16_t rotate = 0;     // label, number, light, bar: degrees clockwise about x, y
     // label along a circle centred on x, y: radius (0 = straight), where the

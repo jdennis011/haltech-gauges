@@ -703,6 +703,8 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
             display_control::sendAll(proto::Cmd::SetVolume, volumeArg(body["level"]));
         } else if (action == "sound") {
             display_control::sendAll(proto::Cmd::PlaySound, soundArg(body["sound"]));
+        } else if (action == "reset_holds") {
+            display_control::sendAll(proto::Cmd::ResetHold, 0);
         } else {
             return sendError(r, 404, "unknown action for all gauges");
         }
@@ -722,6 +724,8 @@ void handleGaugeAction(AsyncWebServerRequest* r) {
         ok = m.command(node, proto::Cmd::SetVolume, volumeArg(body["level"]));
     } else if (action == "sound") {
         ok = m.command(node, proto::Cmd::PlaySound, soundArg(body["sound"]));
+    } else if (action == "reset_holds") {
+        ok = m.command(node, proto::Cmd::ResetHold, 0);
     } else if (action == "reboot") {
         ok = m.command(node, proto::Cmd::Reboot, 0);
     } else if (action == "endtry") {

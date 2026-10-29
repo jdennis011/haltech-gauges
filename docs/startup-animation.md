@@ -18,7 +18,9 @@ Identify, fix with the arrows.
 
 ## Gauge side
 
-- The panel comes up with brightness at zero; the face is built in memory and shown to
+- The panel comes up showing the boot splash (below) at the saved brightness while
+  the face is built in memory under it. (With no splash in the build the panel would
+  stay at brightness zero instead.) The face is shown to
   nobody.
 - The gauge waits for the hub's intro frame: up to 2 s after the first beacon it hears.
   With no beacon at all (bare Haltech bus, bench on USB) it plays its own intro 3 s
@@ -37,6 +39,35 @@ Identify, fix with the arrows.
   - `fade`: no sweep; the face fades up from black over the duration, live data showing.
 - A gauge plays once per start. A second intro frame is ignored unless its force flag is
   set, which is what the page's **Play now** sends.
+
+## Boot splash
+
+The gauge is live a few hundred milliseconds after power but the intro cannot start until
+the hub has heard every gauge (or, alone, three seconds have passed). That gap shows the
+splash: **oaGauge** in large letters, the `o` blue, the `a` orange, `Gauge` white, with
+"open source gauges" under it, on black. The letters rise and fade in one after another
+over the first 0.8 s, the tag line fades in under them, and a short blue arc circles the
+rim once every 1.6 s for as long as the gauge waits. When the intro starts the splash
+hands over inside the window the panel would otherwise have lit up in (the first quarter
+of the sweep and chase styles, the whole of a fade): the lettering and the arc fade into
+the black over the first half, the panel is dimmed for the one redraw that removes the
+splash, and the face comes up from black over the second half as it always has. (A
+cross-fade with the face showing through was tried first: each full redraw of a face
+under the splash costs about a quarter of a second, and the intro dropped from 25 to
+15 frames a second.)
+
+The splash is `assets/splash/oagauge.svg`, an SVG animation that plays in any browser,
+and the same lettering compiled into the gauge firmware as path data
+(`src/gauge/splash_art.h`, drawn by ThorVG through the path parser the path widgets use,
+`src/gauge/svg_path.cpp`; the arc is an LVGL arc so only its moving ends are redrawn).
+Both files are made by `scripts/gen_splash.py`, which turns the text into outlines from
+the bundled fonts (Russo One for the wordmark, Fira Sans for the tag line), so neither
+the SVG nor the gauge needs a font at run time; edit the words, colours, sizes or timing
+at the top of that script and run it again (it needs `pip install fonttools`). About
+12 KB of flash. `src/gauge/splash.cpp` plays it: `begin()` right after the panel starts,
+`update()` from the UI loop, `setFade()` from the intro, `end()` when the intro is done.
+Touches do nothing while it shows. A screen-off command before the intro darkens it like
+anything else; a brightness command applies at once.
 
 ## Hub side
 

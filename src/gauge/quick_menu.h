@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 // The pull-down menu (docs/gauge-quick-menu.md): swipe down from the top of
-// any face and a panel slides over it with a brightness slider, a screen-off
-// button, and whether the change is for this gauge or for all of them (which
+// any face and a panel slides over it with a brightness slider, screen-off and
+// reset-peaks buttons, and whether the change is for this gauge or for all of them (which
 // goes to the hub). Swipe up, tap outside it, or wait five seconds to close it.
 namespace quick_menu {
 
@@ -16,6 +16,8 @@ struct Handlers {
     void (*screenOff)();
     // "All gauges": ask the hub to apply the same to every gauge.
     void (*sendAll)(uint8_t cmd, uint8_t arg);
+    // Reset peaks: clear the held peaks and minimums on this gauge.
+    void (*resetHold)();
 };
 
 // Builds the panel, hidden, on the screen.

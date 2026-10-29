@@ -6,10 +6,15 @@
 #include "display.h"
 #include "face_ui.h"
 #include "serial_console.h"
+#include "splash.h"
 #include "touch.h"
 
-// LVGL's software renderer and the TTF rasteriser need more than the default 8 KB.
-SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+// LVGL's software renderer and the TTF rasteriser need more than the default
+// 8 KB, and ThorVG (the path widgets and the boot splash) keeps a 16 KB cell
+// buffer on the stack of the task that draws (tvgSwRle.cpp, rleRender). With a
+// 16 KB stack that buffer landed below the stack, past the canary, and smashed
+// the heap: the idle task then died in the task watchdog's list. 48 KB.
+SET_LOOP_TASK_STACK_SIZE(48 * 1024);
 
 // A build installed over Wi-Fi is confirmed by face_store::markHealthy() after
 // ten seconds of running, not by the core at start, so a bad one is rolled back.
@@ -26,6 +31,7 @@ void setup() {
     if (!display::begin()) Serial.println("Display start failed");
     if (!touch::begin()) Serial.println("Touch start failed");
     audio::begin();
+    splash::begin();  // the panel shows oaGauge while the rest starts
 
     can_task::begin();
     face_ui::begin();

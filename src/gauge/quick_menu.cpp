@@ -80,6 +80,13 @@ void onScreenOff(lv_event_t*) {
     if (handlers.screenOff) handlers.screenOff();
 }
 
+void onResetHold(lv_event_t*) {
+    touched();
+    if (handlers.resetHold) handlers.resetHold();
+    if (forAll && handlers.sendAll) handlers.sendAll(uint8_t(hg::proto::Cmd::ResetHold), 0);
+    close();
+}
+
 void onThis(lv_event_t*) {
     touched();
     setScope(false);
@@ -96,7 +103,7 @@ void onPanelTouched(lv_event_t*) { touched(); }
 
 void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     handlers = h;
-    const int w = display::kSize * 78 / 100, hgt = display::kSize * 44 / 100, pad = scaled(16);
+    const int w = display::kSize * 78 / 100, hgt = display::kSize * 50 / 100, pad = scaled(16);
     panel = lv_obj_create(screen);
     lv_obj_remove_style_all(panel);
     lv_obj_set_size(panel, w, hgt);
@@ -138,7 +145,9 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     lv_obj_add_event_cb(slider, onSlider, LV_EVENT_RELEASED, nullptr);
 
     lv_obj_t* off = makeButton(panel, "Screen off", onScreenOff);
-    lv_obj_align(off, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_align(off, LV_ALIGN_TOP_LEFT, 0, scaled(100));
+    lv_obj_t* reset = makeButton(panel, "Reset peaks", onResetHold);
+    lv_obj_align_to(reset, off, LV_ALIGN_OUT_RIGHT_MID, scaled(10), 0);
 
     lv_obj_t* scope = lv_label_create(panel);
     lv_label_set_text(scope, "Apply to");

@@ -35,6 +35,7 @@ std::atomic<uint32_t> identifyUntil{0};
 std::atomic<int> brightnessRequest{-1};
 std::atomic<int> faceRequest{-1};
 std::atomic<int> displayRequest{-1};
+std::atomic<bool> holdReset{false};
 std::atomic<bool> reboot{false};
 std::atomic<bool> demoMode{true};
 
@@ -113,6 +114,9 @@ bool onCommand(proto::Cmd cmd, uint8_t arg, void*) {
             return true;
         case proto::Cmd::SetVolume:
             audio::setVolume(arg > 100 ? 100 : arg);
+            return true;
+        case proto::Cmd::ResetHold:
+            holdReset = true;
             return true;
         case proto::Cmd::SendConfig: {
             size_t size = 0;
@@ -422,6 +426,7 @@ int takeFaceRequest() { return faceRequest.exchange(-1); }
 int takeDisplayRequest() { return displayRequest.exchange(-1); }
 void setDemo(bool demo) { demoMode = demo; }
 bool rebootRequested() { return reboot; }
+bool takeHoldReset() { return holdReset.exchange(false); }
 
 void themeColours(uint32_t out[32]) {
     portENTER_CRITICAL(&alertMux);

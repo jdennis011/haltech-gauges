@@ -604,6 +604,25 @@ void test_clock_widget() {
     assertRejected(withWidget(R"({"type":"clock","style":"sundial"})"), "style");
 }
 
+void test_hold_on_dial_ring_bar() {
+    Config c;
+    ParseResult r = parse(R"({"schema":1,"faces":[{"widgets":[
+        {"type":"dial","channel":"rpm","min":0,"max":8000,"hold":"max","holdColor":"#ff0000","holdSeconds":10},
+        {"type":"ring","channel":"rpm","min":0,"max":8000,"hold":"min","color":"#00ff00"},
+        {"type":"bar","channel":"rpm","min":0,"max":8000}]}]})", c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    const Widget& dial = c.faces[0].widgets[0];
+    TEST_ASSERT_EQUAL(int(Hold::Max), int(dial.hold));
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, dial.holdColor);
+    TEST_ASSERT_EQUAL(10, dial.holdSeconds);
+    const Widget& ring = c.faces[0].widgets[1];
+    TEST_ASSERT_EQUAL(int(Hold::Min), int(ring.hold));
+    TEST_ASSERT_EQUAL_HEX32(0x00FF00, ring.holdColor);  // the widget's own colour by default
+    TEST_ASSERT_EQUAL(int(Hold::None), int(c.faces[0].widgets[2].hold));
+    TEST_ASSERT_EQUAL(0, ring.holdSeconds);
+    assertRejected(withWidget(R"({"type":"dial","channel":"rpm","min":0,"max":8000,"hold":"peak"})"), "hold");
+}
+
 void test_clock_text() {
     char buf[16];
     // 13:05:09 on some day.
@@ -654,5 +673,6 @@ int main(int, char**) {
     RUN_TEST(test_hub_adds_the_image_map);
     RUN_TEST(test_clock_widget);
     RUN_TEST(test_clock_text);
+    RUN_TEST(test_hold_on_dial_ring_bar);
     return UNITY_END();
 }

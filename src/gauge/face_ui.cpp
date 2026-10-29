@@ -13,6 +13,7 @@
 #include "ip_link.h"
 #include "proto.h"
 #include "quick_menu.h"
+#include "splash.h"
 
 using hg::cfg::Font;
 
@@ -53,6 +54,7 @@ enum class IntroState : uint8_t { Waiting, Delay, Playing, Done };
 const uint32_t kSoloAfterBootMs = 3000;  // no beacon at all: play alone
 const uint32_t kSoloAfterHubMs = 2000;   // beacons but no intro frame: play alone
 IntroState introState = IntroState::Waiting;
+bool handover = false;  // the splash was up when the intro started
 hg::proto::IntroStyle introStyle = hg::proto::IntroStyle::Sweep;
 uint32_t bootMs = 0;
 uint32_t introStartMs = 0;
@@ -81,6 +83,7 @@ void rebuild() {
     lv_obj_move_foreground(note);
     lv_obj_move_foreground(alertBand);
     lv_obj_move_foreground(identify);
+    splash::raise();
 }
 
 void showFace(int index) {
@@ -107,6 +110,7 @@ void menuScreenOff() {
     display::setBrightness(0);
 }
 void menuSendAll(uint8_t cmd, uint8_t arg) { can_task::requestAll(hg::proto::Cmd(cmd), arg); }
+void menuResetHold() { face_renderer::resetHold(); }
 
 // A touch on a dark screen wakes it and does nothing else.
 void onPressed(lv_event_t*) {
@@ -279,6 +283,7 @@ void runIntro(uint32_t now) {
         case IntroState::Delay:
             if (int32_t(now - introStartMs) >= 0) {
                 introState = IntroState::Playing;
+                handover = splash::active();
                 if (introStyle != hg::proto::IntroStyle::Fade) face_renderer::setIntro(introStyle, 0);
             }
             break;
@@ -287,12 +292,27 @@ void runIntro(uint32_t now) {
             if (phase >= 1) {
                 introState = IntroState::Done;
                 face_renderer::endIntro();
+                splash::end();
                 if (!screenOff) display::setBrightness(lastBrightness);
                 break;
             }
             if (introStyle != hg::proto::IntroStyle::Fade) face_renderer::setIntro(introStyle, phase);
             // The sweep styles light up over the first quarter; fade takes the whole duration.
-            const float ramp = introStyle == hg::proto::IntroStyle::Fade ? phase : (phase < 0.25f ? phase / 0.25f : 1.0f);
+            float ramp = introStyle == hg::proto::IntroStyle::Fade ? phase : (phase < 0.25f ? phase / 0.25f : 1.0f);
+            if (handover) {
+                // The splash fades into its black over the first half of that window,
+                // then the panel goes dark for the one redraw that removes it and the
+                // face comes up over the second half as it always has.
+                if (ramp < 0.5f) {
+                    splash::setFade(ramp * 2);
+                    break;
+                }
+                if (splash::active()) {
+                    display::setBrightness(0);
+                    splash::end();
+                }
+                ramp = (ramp - 0.5f) * 2;
+            }
             if (!screenOff) display::setBrightness(uint8_t(lastBrightness * ramp));
             break;
         }
@@ -321,9 +341,10 @@ void begin() {
         p.end();
     }
     makeOverlays();
-    quick_menu::begin(screen, {menuBrightness, menuScreenOff, menuSendAll}, lastBrightness);
-    // Dark until the intro: the hub's, or this gauge's own if no hub speaks up.
-    display::setBrightness(0);
+    quick_menu::begin(screen, {menuBrightness, menuScreenOff, menuSendAll, menuResetHold}, lastBrightness);
+    // Dark until the intro (the hub's, or this gauge's own if no hub speaks up),
+    // unless the splash is showing; rebuild() keeps it above the face.
+    if (!splash::active()) display::setBrightness(0);
     rebuild();
     startedMs = millis();
     bootMs = startedMs;
@@ -332,7 +353,10 @@ void begin() {
 void update() {
     const uint32_t now = millis();
 
-    if (face_store::takeChange()) rebuild();
+    if (face_store::takeChange()) {
+        face_renderer::resetHold();  // a new config starts with no peaks
+        rebuild();
+    }
 
     const int face = can_task::takeFaceRequest();
     if (face >= 0) showFace(face);
@@ -341,10 +365,11 @@ void update() {
     const int brightness = can_task::takeBrightnessRequest();
     if (brightness >= 0) {
         lastBrightness = uint8_t(brightness);
-        if (!screenOff && introDone()) display::setBrightness(lastBrightness);
+        if (!screenOff && (introDone() || splash::active())) display::setBrightness(lastBrightness);
         quick_menu::setBrightness(lastBrightness);
         saveBrightness();
     }
+    if (can_task::takeHoldReset()) face_renderer::resetHold();
     const int displayOn = can_task::takeDisplayRequest();
     if (displayOn == 0 && !screenOff) {
         screenOff = true;
@@ -352,12 +377,13 @@ void update() {
         quick_menu::close();
     } else if (displayOn == 1 && screenOff) {
         screenOff = false;
-        if (introDone()) display::setBrightness(lastBrightness);
+        if (introDone() || splash::active()) display::setBrightness(lastBrightness);
     }
 
     if (now - lastUpdateMs >= 33) {
         lastUpdateMs = now;
         runIntro(now);
+        splash::update(now);
         // A dark screen is not drawn; the overlays keep their state for when it wakes.
         if (!screenOff) face_renderer::update(now);
         quick_menu::poll(now);

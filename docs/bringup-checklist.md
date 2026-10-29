@@ -397,3 +397,19 @@ with `scripts/release_fw.ps1` and installed it from the card's Update button. Th
 watched from the hub with the simulator at 1400 frames a second: two status frames a
 second from the chain (one per gauge), 0 bus errors, TEC 0, REC 0, VBUS 4.60 V at the
 first gauge and 4.575 V at the second. The site serves gauge 0.1.7 and hub 0.3.17.
+
+Boot splash, 2026-10-29, both gauges on USB (gauge 0.1.9, with the peak-hold work of
+0.1.8): the first flash boot-looped, a LoadProhibited in the idle task on core 0 with the
+IDLE0 stack canary tripping while the panic printed. Cause: ThorVG keeps a 16 KB cell
+buffer on the stack of the task that draws a filled path (`tvgSwRle.cpp`, `rleRender`),
+and the loop task's whole stack was 16 KB, so the buffer landed below the stack, past
+the canary, and over the heap (the task watchdog's list, among others). No path widget
+had been drawn on a panel before; the splash was the first. `SET_LOOP_TASK_STACK_SIZE`
+is now 48 KB; internal heap free at run time went from 139 KB to about 100 KB. Then:
+lettering rasterised in 43 ms, entrance from 0.86 s after power, solo intro at 3.1 s,
+splash shown 3.2 s. The first hand-over, a cross-fade with the face showing through,
+dropped the intro from 25 to 6 frames a second (25 vector draws per strip, each with
+a 75 KB temporary ARGB buffer on this RGB565 panel), then 15 with the letters
+pre-rendered (two full redraws of the face under the splash); fading the lettering
+into the black and letting the brightness ramp bring the face up gives 22, against
+25 with no splash at all, on the built-in face.

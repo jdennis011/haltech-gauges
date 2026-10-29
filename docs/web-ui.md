@@ -93,11 +93,13 @@ All responses are JSON. Errors are `{"ok":false,"error":"..."}` with a 4xx statu
 | POST `/api/gauges/{node}/volume` `{"level":60}` | Speaker volume 0-100; the gauge keeps it. The roster's `volume` is what a gauge with a speaker reports |
 | POST `/api/gauges/{node}/sound` `{"sound":"beep"}` | `beep`, `chime`, `alarm` or `riff` on its speaker |
 | POST `/api/gauges/{node}/display` `{"on":false}` | Screen off or on |
+| POST `/api/gauges/{node}/reset_holds` | Clears its held peaks and minimums (widgets with `hold`) |
 | POST `/api/gauges/all/brightness` `{"level":200}` | Every gauge; remembered and re-applied to newcomers |
 | POST `/api/gauges/all/display` `{"on":false}` | Every screen off or on (not kept across a hub restart) |
 | POST `/api/gauges/all/identify` | |
 | POST `/api/gauges/all/volume` `{"level":60}` | Every gauge with a speaker |
 | POST `/api/gauges/all/sound` `{"sound":"beep"}` | |
+| POST `/api/gauges/all/reset_holds` | Every gauge's held peaks and minimums |
 | POST `/api/gauges/{node}/reboot` | |
 | POST `/api/gauges/{node}/try` (body: a config) | Show without storing |
 | POST `/api/gauges/{node}/endtry` | Back to the stored config |

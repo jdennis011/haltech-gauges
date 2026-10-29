@@ -70,6 +70,7 @@ enum class Cmd : uint8_t {
     InputRaw = 9,       // steering wheel: stream raw ladder readings for arg seconds (0 stops)
     PlaySound = 10,     // arg = a Sound: the gauge plays it on its speaker (docs/gauge-audio.md)
     SetVolume = 11,     // arg = speaker volume 0..100; the gauge keeps it
+    ResetHold = 12,     // clear the held peaks and minimums on the gauge (docs/gauge-quick-menu.md)
 };
 
 // What Cmd::PlaySound asks for, and what an alert rule names.

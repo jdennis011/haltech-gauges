@@ -1,5 +1,7 @@
 #include "face_renderer.h"
 
+#include "svg_path.h"
+
 #include <lvgl_private.h>  // lv_image_decoder_dsc_t, for decoding an image whole
 
 #include <Arduino.h>
@@ -8,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -39,6 +42,7 @@ struct Item {
     uint32_t drawnColour = 0;   // ring: the colour it was drawn in
     bool holdSet = false;
     float hold = 0;
+    uint32_t holdMs = 0;        // when the held value was last raised (or lowered)
     std::string text;           // number: the text drawn
     lv_obj_t* label = nullptr;  // rotated text, as an LVGL label
     std::vector<lv_obj_t*> chars;  // arched text, a label per character
@@ -58,6 +62,14 @@ Theme theme;
 float k = 1;  // panel pixels per design pixel
 uint32_t now = 0;
 bool everLive = false;
+// Held peaks and minimums, kept across face switches: (face index << 8 | widget
+// index) -> value. Cleared by resetHold(), which a new config and the hub call.
+struct Held {
+    float value;
+    uint32_t ms;
+};
+std::map<uint32_t, Held> held;
+size_t faceIndexNow = 0;
 // The key-on intro (setIntro()); introSlot counts the widgets through update().
 bool introOn = false;
 hg::proto::IntroStyle introStyle = hg::proto::IntroStyle::Sweep;
@@ -378,6 +390,18 @@ void drawDial(lv_layer_t* layer, Item& it) {
             drawText(layer, tickText(val).c_str(), lf, fg, cx + ca * lr, cy + sa * lr, Align::Center);
         }
     }
+    // The tell-tale: a thin needle, or a line in a marker's span, at the held value.
+    if (w.hold != Hold::None && it.holdSet) {
+        const float ha = rad(start + sweep * (clampf(it.hold, w.min, w.max) - w.min) / span);
+        const float hw = w.needleWidth > 4 ? float(w.needleWidth) / 2 : 2, hlen = float(w.needleLen);
+        const float hca = cosf(ha), hsa = sinf(ha);
+        const lv_color_t hc = col(w.holdColor);
+        if (w.needle == NeedleStyle::Marker || w.needle == NeedleStyle::MarkerOut || w.needle == NeedleStyle::None) {
+            drawLine(layer, cx + hca * (r - hlen), cy + hsa * (r - hlen), cx + hca * (r + 1), cy + hsa * (r + 1), hc, hw, true);
+        } else {
+            drawLine(layer, cx, cy, cx + hca * hlen, cy + hsa * hlen, hc, hw, true);
+        }
+    }
     if (w.needle == NeedleStyle::None) return;
     const float a = rad(start + sweep * (v - w.min) / span);
     const float len = float(w.needleLen), nw = float(w.needleWidth);
@@ -421,18 +445,26 @@ void drawRing(lv_layer_t* layer, Item& it) {
     if (!w.segments) {
         if (w.track) drawArc(layer, cx, cy, rr, start, start + sweep, thick, trackCol, w.rounded);
         if (frac > 0) drawArc(layer, cx, cy, rr, start, start + sweep * frac, thick, c, w.rounded);
-        return;
+    } else {
+        const float gap = float(w.gap), seg = (sweep - gap * float(w.segments - 1)) / float(w.segments);
+        for (int i = 0; i < int(w.segments); i++) {
+            const bool lit = (float(i) + 0.5f) / float(w.segments) <= frac;
+            if (!lit && !w.track) continue;
+            const float a0 = start + float(i) * (seg + gap);
+            drawArc(layer, cx, cy, rr, a0, a0 + seg, thick, lit ? c : trackCol, false);
+        }
     }
-    const float gap = float(w.gap), seg = (sweep - gap * float(w.segments - 1)) / float(w.segments);
-    for (int i = 0; i < int(w.segments); i++) {
-        const bool lit = (float(i) + 0.5f) / float(w.segments) <= frac;
-        if (!lit && !w.track) continue;
-        const float a0 = start + float(i) * (seg + gap);
-        drawArc(layer, cx, cy, rr, a0, a0 + seg, thick, lit ? c : trackCol, false);
+    // The tell-tale: a line across the arc at the held value.
+    if (w.hold != Hold::None && it.holdSet) {
+        const float hf = (clampf(it.hold, w.min, w.max) - w.min) / (w.max - w.min);
+        const float ha = rad(start + sweep * hf);
+        const float ca = cosf(ha), sa = sinf(ha);
+        drawLine(layer, cx + ca * (r - thick - 3), cy + sa * (r - thick - 3), cx + ca * (r + 3), cy + sa * (r + 3),
+                 col(w.holdColor), 3, false);
     }
 }
 
-void drawBar(lv_layer_t* layer, Item& it) {
+void drawBarBody(lv_layer_t* layer, Item& it) {
     const Widget& w = *it.w;
     const bool horiz = w.barStyle == BarStyle::Horizontal;
     const float W = float(w.w), H = float(w.h), cx = widgetX(w), cy = widgetY(w);
@@ -489,6 +521,32 @@ void drawBar(lv_layer_t* layer, Item& it) {
         drawLine(layer, sx + dx * p0, sy + dy * p0, sx + dx * (p0 + seg), sy + dy * (p0 + seg), lit ? c : trackCol, width,
                  false);
     }
+}
+
+// A bar's tell-tale: a line across it at the held value, over the bar itself.
+void drawBar(lv_layer_t* layer, Item& it) {
+    drawBarBody(layer, it);
+    const Widget& w = *it.w;
+    if (w.hold == Hold::None || !it.holdSet) return;
+    const bool horiz = w.barStyle == BarStyle::Horizontal;
+    const float W = float(w.w), H = float(w.h), cx = widgetX(w), cy = widgetY(w);
+    const float hf = (clampf(it.hold, w.min, w.max) - w.min) / (w.max - w.min);
+    const lv_color_t hc = col(w.holdColor);
+    if (!w.rotate) {
+        const float x0 = cx - W / 2, y0 = cy - H / 2;
+        if (horiz) {
+            drawLine(layer, x0 + W * hf, y0 - 3, x0 + W * hf, y0 + H + 3, hc, 3, false);
+        } else {
+            drawLine(layer, x0 - 3, y0 + H * (1 - hf), x0 + W + 3, y0 + H * (1 - hf), hc, 3, false);
+        }
+        return;
+    }
+    const float a = rad(float(w.rotate));
+    const float length = horiz ? W : H, width = horiz ? H : W;
+    const float dx = horiz ? cosf(a) : sinf(a), dy = horiz ? sinf(a) : -cosf(a);
+    const float px = cx - dx * length / 2 + dx * length * hf, py = cy - dy * length / 2 + dy * length * hf;
+    const float nx = -dy * (width / 2 + 3), ny = dx * (width / 2 + 3);
+    drawLine(layer, px + nx, py + ny, px - nx, py - ny, hc, 3, false);
 }
 
 // The unit symbol of a number, placed against the text it belongs to.
@@ -752,135 +810,9 @@ lv_obj_t* makeImage(const std::string& src, float cx, float cy, float boxW, floa
 }
 
 // ----------------------------------------------------------------- paths
-// SVG path data (the d attribute) parsed once into an LVGL vector path, in the
-// path's own coordinate box, and drawn by ThorVG with the widget's transform.
-
-struct PathReader {
-    const char* s;
-    bool numberAhead() {
-        while (*s == ' ' || *s == ',' || *s == '\t' || *s == '\n') s++;
-        return (*s >= '0' && *s <= '9') || *s == '-' || *s == '+' || *s == '.';
-    }
-    bool number(float& out) {
-        if (!numberAhead()) return false;
-        char* end = nullptr;
-        out = strtof(s, &end);
-        if (end == s) return false;
-        s = end;
-        return true;
-    }
-    bool flag(bool& out) {
-        while (*s == ' ' || *s == ',' || *s == '\t' || *s == '\n') s++;
-        if (*s != '0' && *s != '1') return false;
-        out = *s == '1';
-        s++;
-        return true;
-    }
-};
-
-// A path from SVG path data. Relative commands, shorthand curves and arcs are
-// turned into absolute moves, lines, quadratic and cubic curves and arcs.
-// Returns false, with the path as far as it got, on data it cannot read.
-bool parsePath(const std::string& d, lv_vector_path_t* path) {
-    PathReader r{d.c_str()};
-    lv_fpoint_t cur = {0, 0}, start = {0, 0}, lastCtrl = {0, 0};
-    char lastCmd = 0;
-    char cmd = 0;
-    for (;;) {
-        while (*r.s == ' ' || *r.s == ',' || *r.s == '\t' || *r.s == '\n') r.s++;
-        if (!*r.s) return true;
-        if (strchr("MmLlHhVvCcSsQqTtAaZz", *r.s)) {
-            cmd = *r.s++;
-        } else if (!cmd || !r.numberAhead()) {
-            return false;
-        } else if (cmd == 'M') {
-            cmd = 'L';  // further pairs after a move are lines
-        } else if (cmd == 'm') {
-            cmd = 'l';
-        }
-        const bool rel = cmd >= 'a' && cmd <= 'z';
-        const char C = char(rel ? cmd - 32 : cmd);
-        float x, y, x1, y1, x2, y2;
-        switch (C) {
-            case 'M':
-                if (!r.number(x) || !r.number(y)) return false;
-                if (rel) { x += cur.x; y += cur.y; }
-                cur = start = {x, y};
-                lv_vector_path_move_to(path, &cur);
-                break;
-            case 'L':
-                if (!r.number(x) || !r.number(y)) return false;
-                if (rel) { x += cur.x; y += cur.y; }
-                cur = {x, y};
-                lv_vector_path_line_to(path, &cur);
-                break;
-            case 'H':
-                if (!r.number(x)) return false;
-                cur.x = rel ? cur.x + x : x;
-                lv_vector_path_line_to(path, &cur);
-                break;
-            case 'V':
-                if (!r.number(y)) return false;
-                cur.y = rel ? cur.y + y : y;
-                lv_vector_path_line_to(path, &cur);
-                break;
-            case 'C': {
-                if (!r.number(x1) || !r.number(y1) || !r.number(x2) || !r.number(y2) || !r.number(x) || !r.number(y)) return false;
-                if (rel) { x1 += cur.x; y1 += cur.y; x2 += cur.x; y2 += cur.y; x += cur.x; y += cur.y; }
-                const lv_fpoint_t p1 = {x1, y1}, p2 = {x2, y2};
-                cur = {x, y};
-                lv_vector_path_cubic_to(path, &p1, &p2, &cur);
-                lastCtrl = p2;
-                break;
-            }
-            case 'S': {
-                if (!r.number(x2) || !r.number(y2) || !r.number(x) || !r.number(y)) return false;
-                if (rel) { x2 += cur.x; y2 += cur.y; x += cur.x; y += cur.y; }
-                // The first control point mirrors the previous curve's second one.
-                const bool chain = lastCmd == 'C' || lastCmd == 'S';
-                const lv_fpoint_t p1 = chain ? lv_fpoint_t{2 * cur.x - lastCtrl.x, 2 * cur.y - lastCtrl.y} : cur;
-                const lv_fpoint_t p2 = {x2, y2};
-                cur = {x, y};
-                lv_vector_path_cubic_to(path, &p1, &p2, &cur);
-                lastCtrl = p2;
-                break;
-            }
-            case 'Q': {
-                if (!r.number(x1) || !r.number(y1) || !r.number(x) || !r.number(y)) return false;
-                if (rel) { x1 += cur.x; y1 += cur.y; x += cur.x; y += cur.y; }
-                const lv_fpoint_t p1 = {x1, y1};
-                cur = {x, y};
-                lv_vector_path_quad_to(path, &p1, &cur);
-                lastCtrl = p1;
-                break;
-            }
-            case 'T': {
-                if (!r.number(x) || !r.number(y)) return false;
-                if (rel) { x += cur.x; y += cur.y; }
-                const bool chain = lastCmd == 'Q' || lastCmd == 'T';
-                const lv_fpoint_t p1 = chain ? lv_fpoint_t{2 * cur.x - lastCtrl.x, 2 * cur.y - lastCtrl.y} : cur;
-                cur = {x, y};
-                lv_vector_path_quad_to(path, &p1, &cur);
-                lastCtrl = p1;
-                break;
-            }
-            case 'A': {
-                float rx, ry, rot;
-                bool large, sweep;
-                if (!r.number(rx) || !r.number(ry) || !r.number(rot) || !r.flag(large) || !r.flag(sweep) || !r.number(x) || !r.number(y)) return false;
-                if (rel) { x += cur.x; y += cur.y; }
-                cur = {x, y};
-                lv_vector_path_arc_to(path, fabsf(rx), fabsf(ry), rot, large, sweep, &cur);
-                break;
-            }
-            case 'Z':
-                lv_vector_path_close(path);
-                cur = start;
-                break;
-        }
-        lastCmd = C;
-    }
-}
+// SVG path data (the d attribute) parsed once by svg_path::parse() into an LVGL
+// vector path, in the path's own coordinate box, and drawn by ThorVG with the
+// widget's transform.
 
 void drawPath(lv_layer_t* layer, Item& it) {
     const Widget& w = *it.w;
@@ -1227,6 +1159,10 @@ uint32_t lookKey(const Item& it) {
             key |= uint32_t(frac * 720) << 1;  // half a degree on a full dial
             const Color c = applyWarn(w, it.valid, v, zoneColor(w, v, w.color));
             key ^= (c & 0xFFFFFF) << 8;
+            if (w.hold != Hold::None && it.holdSet) {
+                const float hf = (clampf(it.hold, w.min, w.max) - w.min) / (w.max - w.min);
+                key ^= (uint32_t(hf * 720) + 1) * 2654435761u;
+            }
             break;
         }
         case WidgetType::Number: {
@@ -1272,6 +1208,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
     screen = parent;
     config = &cfg;
     face = faceIndex < cfg.faces.size() ? &cfg.faces[faceIndex] : &cfg.faces[0];
+    faceIndexNow = faceIndex < cfg.faces.size() ? faceIndex : 0;
     theme = cfg.theme;
     k = float(display::kSize) / 466.0f;
     fetchThemeColours();
@@ -1302,6 +1239,14 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         it.drawn = it.w->min;
         items.push_back(it);
     }
+    for (size_t i = 0; i < items.size(); i++) {
+        const auto h = held.find((uint32_t(faceIndexNow) << 8) | uint32_t(i));
+        if (h != held.end()) {
+            items[i].holdSet = true;
+            items[i].hold = h->second.value;
+            items[i].holdMs = h->second.ms;
+        }
+    }
     for (Item& it : items) {
         const Widget& w = *it.w;
         if (w.type == WidgetType::Label && w.arc > 0) {
@@ -1317,7 +1262,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
             }
         } else if (w.type == WidgetType::Path) {
             it.vpath = lv_vector_path_create(LV_VECTOR_PATH_QUALITY_MEDIUM);
-            if (!parsePath(w.path, it.vpath)) Serial.println("path widget: could not read all of its path data");
+            if (!svg_path::parse(w.path.c_str(), it.vpath)) Serial.println("path widget: could not read all of its path data");
         }
     }
     update(now);
@@ -1340,6 +1285,12 @@ void destroy() {
     items.clear();
     face = nullptr;
     config = nullptr;
+}
+
+void resetHold() {
+    held.clear();
+    for (Item& it : items) it.holdSet = false;
+    if (painter) lv_obj_invalidate(painter);
 }
 
 void update(uint32_t nowMs) {
@@ -1380,13 +1331,21 @@ void update(uint32_t nowMs) {
             valid = readValue(w, v);
         }
         introSlot++;
-        if (valid && w.type == WidgetType::Number && w.hold != Hold::None) {
+        const bool holds = w.hold != Hold::None &&
+                           (w.type == WidgetType::Number || w.type == WidgetType::Dial || w.type == WidgetType::Ring ||
+                            w.type == WidgetType::Bar);
+        // Only live readings are held: not the demo sweep, not the intro.
+        if (holds && valid && everLive && !introOn) {
+            // A timed hold rolls back to the live value once the peak is old enough.
+            if (it.holdSet && w.holdSeconds && uint32_t(now - it.holdMs) >= uint32_t(w.holdSeconds) * 1000u) it.holdSet = false;
             if (!it.holdSet || (w.hold == Hold::Max ? v > it.hold : v < it.hold)) {
                 it.hold = v;
                 it.holdSet = true;
+                it.holdMs = now;
+                held[(uint32_t(faceIndexNow) << 8) | uint32_t(&it - items.data())] = Held{v, now};
             }
-            v = it.hold;
         }
+        if (holds && it.holdSet && w.type == WidgetType::Number) v = it.hold;
         it.valid = valid;
         it.value = v;
         if (w.type == WidgetType::Number || (w.type == WidgetType::Clock && w.clockStyle == ClockStyle::Digital)) {

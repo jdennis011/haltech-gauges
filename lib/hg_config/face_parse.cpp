@@ -544,6 +544,9 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             if (ctx.ok() && !(w.labelScale > 0)) ctx.fail("'labelScale' must be greater than 0");
             w.needle = NeedleStyle(readEnum(obj, "needle", kNeedles, uint8_t(NeedleStyle::Tapered), ctx));
             w.needleColor = readColor(obj, "needleColor", t.accent, ctx);
+            w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
+            w.holdColor = readColor(obj, "holdColor", w.needleColor, ctx);
+            w.holdSeconds = uint16_t(readInt(obj, "holdSeconds", 0, 0, 3600, ctx));
             w.needleWidth = uint8_t(readInt(obj, "needleWidth", 6, 1, 20, ctx));
             // A marker is short by default: an arrow from the rim pointing at the value.
             w.needleLen = int16_t(readInt(obj, "needleLen",
@@ -563,6 +566,9 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.trackColor = readColor(obj, "trackColor", t.dim, ctx);
             w.segments = uint8_t(readInt(obj, "segments", 0, 0, 60, ctx));
             w.gap = uint8_t(readInt(obj, "gap", 3, 0, 20, ctx));
+            w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
+            w.holdColor = readColor(obj, "holdColor", w.color, ctx);
+            w.holdSeconds = uint16_t(readInt(obj, "holdSeconds", 0, 0, 3600, ctx));
             readZones(obj, w, ctx);
             break;
 
@@ -577,6 +583,9 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.gap = uint8_t(readInt(obj, "gap", 3, 0, 20, ctx));
             w.cornerRadius = uint8_t(readInt(obj, "cornerRadius", 4, 0, 60, ctx));
             w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
+            w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
+            w.holdColor = readColor(obj, "holdColor", w.color, ctx);
+            w.holdSeconds = uint16_t(readInt(obj, "holdSeconds", 0, 0, 3600, ctx));
             readZones(obj, w, ctx);
             break;
 
@@ -591,6 +600,7 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.unitDx = int16_t(readInt(obj, "unitDx", 0, -200, 200, ctx));
             w.unitDy = int16_t(readInt(obj, "unitDy", 0, -200, 200, ctx));
             w.hold = Hold(readEnum(obj, "hold", kHolds, uint8_t(Hold::None), ctx));
+            w.holdSeconds = uint16_t(readInt(obj, "holdSeconds", 0, 0, 3600, ctx));
             w.rotate = int16_t(readInt(obj, "rotate", 0, -180, 180, ctx));
             break;
 

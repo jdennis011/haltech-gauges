@@ -20,6 +20,12 @@ Swipe down from the top edge of any gauge and a small panel slides over the face
 - **Apply to**: *this gauge* changes only the one you are touching. *All gauges* sends
   the change to the hub, which applies it to every gauge on the bus and remembers the
   brightness, so a gauge that reconnects gets it too.
+- **Link icon**, top right: which link the live data is arriving on, a plug for the CAN
+  chain or a Wi-Fi fan for the IP link (docs/ip-link.md), with its name; "no data" when
+  neither has brought a Haltech frame in the last second. CAN wins when both are up.
+  The same icon appears near the top of the face for three seconds whenever the link
+  changes, including the first data after power-on, so a gauge that silently falls
+  back from the chain to Wi-Fi says so.
 - The panel closes with a swipe up, a tap outside it, or by itself after five seconds.
 - Night dimming from the headlight signal still applies on top of the chosen brightness.
 
@@ -50,4 +56,6 @@ five seconds after the last touch. A dark screen is not drawn, and the first tou
 only wakes it; a `SetDisplay` from the hub wakes it too. The gauge's own brightness is
 read from flash at start and after a hub command.
 
-Written with the renderer; not yet seen on a panel.
+The link icon is `src/gauge/link_icon.cpp`, drawn with LVGL arcs and rectangles (no image,
+nothing to rasterise); `can_task::liveLink()` decides which link from the time of the
+last Haltech frame off the wire and off the IP link.

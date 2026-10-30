@@ -4,6 +4,7 @@
 
 #include "display.h"
 #include "font_manager.h"
+#include "link_icon.h"
 #include "proto.h"
 
 using display::scaled;
@@ -21,6 +22,9 @@ lv_obj_t* panel = nullptr;
 lv_obj_t* slider = nullptr;
 lv_obj_t* thisButton = nullptr;
 lv_obj_t* allButton = nullptr;
+lv_obj_t* linkLabel = nullptr;
+link_icon::Icon linkIcon;
+bool linkSet = false;
 bool forAll = false;
 uint32_t activityMs = 0;
 bool openNow = false;
@@ -128,6 +132,15 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     lv_obj_set_style_text_color(title, lv_color_hex(0x8E8E93), 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
+    // The link in use, top right: the icon and its name.
+    linkIcon = link_icon::create(panel, scaled(26), lv_color_hex(0x8E8E93));
+    lv_obj_align(linkIcon.root, LV_ALIGN_TOP_RIGHT, 0, -scaled(2));
+    linkLabel = lv_label_create(panel);
+    lv_obj_set_style_text_font(linkLabel, fontGet(Font::Sans, fontPx(16)), 0);
+    lv_obj_set_style_text_color(linkLabel, lv_color_hex(0x8E8E93), 0);
+    lv_label_set_text(linkLabel, link_icon::name(can_task::LiveLink::None));
+    lv_obj_align_to(linkLabel, linkIcon.root, LV_ALIGN_OUT_LEFT_MID, -scaled(6), 0);
+
     slider = lv_slider_create(panel);
     lv_obj_set_size(slider, w - 2 * pad, scaled(30));
     lv_obj_align(slider, LV_ALIGN_TOP_LEFT, 0, scaled(46));
@@ -194,6 +207,14 @@ bool isOpen() { return openNow; }
 
 void setBrightness(uint8_t level) {
     if (slider) lv_slider_set_value(slider, level < kMinBrightness ? kMinBrightness : level, LV_ANIM_OFF);
+}
+
+void setLink(can_task::LiveLink link) {
+    if (!panel || (linkSet && link == linkIcon.shown)) return;
+    linkSet = true;
+    link_icon::set(linkIcon, link);
+    lv_label_set_text(linkLabel, link_icon::name(link));
+    lv_obj_align_to(linkLabel, linkIcon.root, LV_ALIGN_OUT_LEFT_MID, -scaled(6), 0);
 }
 
 void poll(uint32_t nowMs) {

@@ -97,6 +97,16 @@ public:
         return send(pack(rq, node_));
     }
 
+    // The Haltech frames this gauge's faces use, one part at a time (proto::Needs).
+    bool sendNeeds(uint8_t part, uint8_t tag, uint64_t bits) {
+        if (!hubPresent_) return false;
+        Needs n;
+        n.part = part;
+        n.tag = tag;
+        n.bits = bits;
+        return send(pack(n, node_));
+    }
+
     // A steering wheel module's buttons, and its raw ladder readings while
     // the hub asks for them (docs/steering-wheel.md). False with no hub or
     // no room on the bus.

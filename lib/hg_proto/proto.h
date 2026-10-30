@@ -71,6 +71,7 @@ enum class Cmd : uint8_t {
     PlaySound = 10,     // arg = a Sound: the gauge plays it on its speaker (docs/gauge-audio.md)
     SetVolume = 11,     // arg = speaker volume 0..100; the gauge keeps it
     ResetHold = 12,     // clear the held peaks and minimums on the gauge (docs/gauge-quick-menu.md)
+    Needs = 13,         // gauge to hub: the Haltech frames its faces use (a Needs frame, not a Request)
 };
 
 // What Cmd::PlaySound asks for, and what an alert rule names.
@@ -170,6 +171,21 @@ struct Request {
     Cmd cmd = Cmd::SetBrightness;
     uint8_t arg = 0;
     bool all = false;
+};
+
+// Which Haltech frames a gauge's faces use, so the hub forwards only those
+// (docs/frame-filter.md). Carried as Msg::Command,
+// gauge to hub, with Cmd::Needs in the first byte, in kNeedsParts frames: part,
+// the frame table's tag (hg::frameTableTag(); the hub forwards everything to a
+// gauge whose tag differs from its own), then 40 bits, bit i of part p standing
+// for the frame at position p * 40 + i in the table (hg::frameIndexOf). Sent
+// when the config changes, when the hub appears, and every few seconds.
+constexpr size_t kNeedsParts = 2;
+constexpr unsigned kNeedsPartBits = 40;
+struct Needs {
+    uint8_t part = 0;
+    uint8_t tag = 0;
+    uint64_t bits = 0;  // the low kNeedsPartBits
 };
 
 // The key-on intro (docs/startup-animation.md), hub to one gauge. Carried as
@@ -311,6 +327,7 @@ CanFrame pack(const Command& m, uint32_t node);
 CanFrame pack(const CommandAck& m, uint32_t node);
 CanFrame pack(const Intro& m, uint32_t node);
 CanFrame pack(const Request& m, uint32_t node);
+CanFrame pack(const Needs& m, uint32_t node);
 // Fills `out` with the frames of one alert and returns how many. `seq` (0..15)
 // tells one message from the next.
 size_t packAlert(const Alert& m, uint8_t seq, uint32_t node, CanFrame out[kAlertMaxFrames]);
@@ -335,6 +352,8 @@ CanFrame packXferData(Dir dir, uint32_t node, uint8_t seq, const uint8_t* payloa
 bool unpack(const CanFrame& f, Beacon& m);
 bool unpack(const CanFrame& f, Hello& m);
 bool unpack(const CanFrame& f, Request& m);
+// False for a frame that is not a Needs frame (a plain Request, say).
+bool unpack(const CanFrame& f, Needs& m);
 bool unpack(const CanFrame& f, Info& m);
 bool unpack(const CanFrame& f, Status& m);
 bool unpack(const CanFrame& f, Command& m);

@@ -136,8 +136,26 @@ CanFrame pack(const Request& m, uint32_t node) {
     return f;
 }
 
+CanFrame pack(const Needs& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Command, Dir::GaugeToHub, node, 8);
+    f.data[0] = uint8_t(Cmd::Needs);
+    f.data[1] = m.part;
+    f.data[2] = m.tag;
+    for (int i = 0; i < 5; i++) f.data[3 + i] = uint8_t(m.bits >> (8 * (4 - i)));
+    return f;
+}
+
+bool unpack(const CanFrame& f, Needs& m) {
+    if (f.len < 8 || f.data[0] != uint8_t(Cmd::Needs)) return false;
+    m.part = f.data[1];
+    m.tag = f.data[2];
+    m.bits = 0;
+    for (int i = 0; i < 5; i++) m.bits = (m.bits << 8) | f.data[3 + i];
+    return true;
+}
+
 bool unpack(const CanFrame& f, Request& m) {
-    if (f.len < 3) return false;
+    if (f.len < 3 || f.data[0] == uint8_t(Cmd::Needs)) return false;
     m.cmd = Cmd(f.data[0]);
     m.arg = f.data[1];
     m.all = f.data[2] != 0;

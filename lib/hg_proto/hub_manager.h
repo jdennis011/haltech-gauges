@@ -80,6 +80,27 @@ public:
         // Fetching over Wi-Fi: offered once per hello, the bus after that.
         bool wifiTried = false;
         uint32_t wifiUntilMs = 0;
+
+        // The Haltech frames its faces use (proto::Needs): haveNeeds once every
+        // part has arrived since its last hello. Firmware before 0.1.10 never
+        // sends them, and such a gauge gets every frame.
+        bool haveNeeds = false;
+        uint8_t needsParts = 0;  // bit p: part p received
+        uint8_t needsTag = 0;
+        uint64_t needs[kNeedsParts] = {};
+    };
+
+    // Which Haltech frames to put on the gauge bus: the union of what the online
+    // gauges asked for, or everything (`all`) while any online gauge has not said,
+    // or said against a different frame table than this hub's (`tag`).
+    struct FrameFilter {
+        bool all = true;
+        uint64_t parts[kNeedsParts] = {};
+        bool wants(size_t frameIndex) const {
+            if (all) return true;
+            const size_t p = frameIndex / kNeedsPartBits;
+            return p < kNeedsParts && ((parts[p] >> (frameIndex % kNeedsPartBits)) & 1u);
+        }
     };
 
     struct Desired {
@@ -138,6 +159,7 @@ public:
     // commands and theme colours are for. A steering wheel module
     // (Info.hwRevision == kBoardWheel) is a node on the bus but none of that.
     bool anyGaugeOnline() const;
+    FrameFilter frameFilter(uint8_t tag) const;
     static bool isWheel(const Gauge& gauge) { return gauge.haveInfo && gauge.info.hwRevision == kBoardWheel; }
     static ImageState imageState(const Gauge& gauge, uint32_t crc);
 

@@ -274,7 +274,7 @@ bool applyJson(JsonVariantConst in, std::string& error) {
 
 uint32_t framesGenerated() { return generated; }
 
-void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port) {
+void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port, bool (*wanted)(size_t)) {
     if (!active) return;
     const size_t count = frameCount() < kMaxFrames ? frameCount() : kMaxFrames;
 
@@ -299,7 +299,7 @@ void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port) {
             encodeChannel(id, valueFor(id, simMs), frame);
         }
         store.onFrame(frame, nowMs);
-        if (port) port->write(frame);
+        if (port && (!wanted || wanted(i))) port->write(frame);
         generated++;
         nextDueMs[i] = nowMs + 1000u / def.rateHz;
     }

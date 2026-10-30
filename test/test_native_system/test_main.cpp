@@ -20,6 +20,7 @@
 #include "crc32.h"
 #include "face_model.h"
 #include "gauge_node.h"
+#include "haltech.h"
 #include "hub_manager.h"
 
 using namespace hg;
@@ -1645,6 +1646,79 @@ void test_lossy_bus_keeps_the_horn_up() {
     TEST_ASSERT_TRUE(w.hub.wheel.state().seqGaps > 0);
 }
 
+// The hub puts only the frames the online gauges asked for on the bus, and
+// everything while any of them has not said (docs/frame-filter.md).
+void test_hub_forwards_only_the_frames_in_use() {
+    World w;
+    w.run(2000);
+    TEST_ASSERT_EQUAL(2, w.hub.onlineCount());
+    const uint8_t tag = hg::frameTableTag();
+    TEST_ASSERT_TRUE(w.hub.mgr.frameFilter(tag).all);
+
+    // One gauge says: frames 0 and 3. The other has not: still everything.
+    TEST_ASSERT_TRUE(w.g1.node.sendNeeds(0, tag, 0x9));
+    TEST_ASSERT_TRUE(w.g1.node.sendNeeds(1, tag, 0));
+    w.run(100);
+    TEST_ASSERT_TRUE(w.hub.mgr.frameFilter(tag).all);
+    const HubManager::Gauge* g1 = w.hub.byMac(w.g1.mac);
+    TEST_ASSERT_NOT_NULL(g1);
+    TEST_ASSERT_TRUE(g1->haveNeeds);
+
+    // The other says: frames 3 and 45. The union goes, nothing else.
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(0, tag, 0x8));
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(1, tag, uint64_t(1) << 5));
+    w.run(100);
+    HubManager::FrameFilter f = w.hub.mgr.frameFilter(tag);
+    TEST_ASSERT_FALSE(f.all);
+    TEST_ASSERT_TRUE(f.wants(0));
+    TEST_ASSERT_TRUE(f.wants(3));
+    TEST_ASSERT_TRUE(f.wants(45));
+    TEST_ASSERT_FALSE(f.wants(1));
+    TEST_ASSERT_FALSE(f.wants(44));
+    TEST_ASSERT_FALSE(f.wants(79));
+    TEST_ASSERT_FALSE(f.wants(200));
+
+    // A gauge built against another frame table gets everything.
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(0, uint8_t(tag + 1), 0x8));
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(1, uint8_t(tag + 1), uint64_t(1) << 5));
+    w.run(100);
+    TEST_ASSERT_TRUE(w.hub.mgr.frameFilter(tag).all);
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(0, tag, 0x8));
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(1, tag, uint64_t(1) << 5));
+    w.run(100);
+    TEST_ASSERT_FALSE(w.hub.mgr.frameFilter(tag).all);
+
+    // A wheel on the bus asks for nothing and changes nothing.
+    w.addWheel();
+    w.run(2000);
+    f = w.hub.mgr.frameFilter(tag);
+    TEST_ASSERT_FALSE(f.all);
+    TEST_ASSERT_TRUE(f.wants(45));
+
+    // A gauge that goes away takes its frames with it.
+    w.g2.port.connected = false;
+    w.run(4000);
+    f = w.hub.mgr.frameFilter(tag);
+    TEST_ASSERT_FALSE(f.all);
+    TEST_ASSERT_TRUE(f.wants(0));
+    TEST_ASSERT_TRUE(f.wants(3));
+    TEST_ASSERT_FALSE(f.wants(45));
+
+    // Back, it is heard again before it has said: everything until it does.
+    w.g2.port.connected = true;
+    w.run(2000);
+    const HubManager::Gauge* g2 = w.hub.byMac(w.g2.mac);
+    TEST_ASSERT_NOT_NULL(g2);
+    TEST_ASSERT_TRUE(g2->online);
+    if (!g2->haveNeeds) TEST_ASSERT_TRUE(w.hub.mgr.frameFilter(tag).all);
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(0, tag, 0));
+    TEST_ASSERT_TRUE(w.g2.node.sendNeeds(1, tag, uint64_t(1) << 5));
+    w.run(100);
+    f = w.hub.mgr.frameFilter(tag);
+    TEST_ASSERT_FALSE(f.all);
+    TEST_ASSERT_TRUE(f.wants(45));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_gauges_are_silent_without_a_hub);
@@ -1689,5 +1763,6 @@ int main(int, char**) {
     RUN_TEST(test_images_converge_on_a_lossy_bus);
     RUN_TEST(test_big_images_go_over_wifi);
     RUN_TEST(test_wifi_falls_back_to_the_bus);
+    RUN_TEST(test_hub_forwards_only_the_frames_in_use);
     return UNITY_END();
 }

@@ -58,6 +58,30 @@ std::atomic<uint32_t> onlineCount{0};
 std::atomic<uint32_t> ecuFrames{0};
 std::atomic<uint32_t> forwarded{0};
 std::atomic<uint32_t> forwardDropped{0};
+
+// Which Haltech frames the online gauges asked for (docs/frame-filter.md):
+// written by the gauge-bus task from the roster, read by the bridge task.
+std::atomic<bool> filterAll{true};
+std::atomic<uint64_t> filterParts[proto::kNeedsParts];
+std::atomic<uint32_t> framesWanted{0};
+
+bool frameWanted(size_t frameIndex) {
+    if (filterAll) return true;
+    const size_t p = frameIndex / proto::kNeedsPartBits;
+    return p < proto::kNeedsParts && ((filterParts[p].load() >> (frameIndex % proto::kNeedsPartBits)) & 1u);
+}
+
+void updateFrameFilter(const HubManager& m) {
+    const HubManager::FrameFilter f = m.frameFilter(frameTableTag());
+    bool changed = f.all != filterAll;
+    for (size_t p = 0; p < proto::kNeedsParts; p++) changed = changed || f.parts[p] != filterParts[p].load();
+    if (!changed) return;
+    filterAll = f.all;
+    for (size_t p = 0; p < proto::kNeedsParts; p++) filterParts[p] = f.parts[p];
+    uint32_t wanted = 0;
+    for (size_t i = 0; i < frameCount(); i++) wanted += f.wants(i) ? 1 : 0;
+    framesWanted = wanted;
+}
 std::atomic<uint32_t> rosterChanges{0};
 
 // The CAN library also defines a global CanFrame, so the shared type is always
@@ -94,7 +118,7 @@ void bridgeTask(void*) {
         if (frame.extended || !findFrame(frame.id)) continue;
         if (simulator::enabled()) continue;  // the simulator owns the live data and the bus
         liveStore.onFrame(frame, millis());
-        if (!gaugesOnline) continue;
+        if (!gaugesOnline || !frameWanted(frameIndexOf(frame.id))) continue;
         if (gaugePort.write(frame)) {
             forwarded++;
         } else {
@@ -138,7 +162,8 @@ void gaugeBusTask(void*) {
         }
         onlineCount = online;
         gaugesOnline = online > 0;
-        simulator::poll(now, liveStore, gaugesOnline ? &gaugePort : nullptr);
+        updateFrameFilter(hubManager);
+        simulator::poll(now, liveStore, gaugesOnline ? &gaugePort : nullptr, frameWanted);
         alert_monitor::poll(now, liveStore);
         theme_colours::poll(now);
         wheel::poll(now);  // the horn's fail-safe wants this every millisecond
@@ -263,6 +288,8 @@ HubStats stats() {
 #endif
     s.forwarded = forwarded;
     s.forwardDropped = forwardDropped;
+    s.framesWanted = filterAll ? uint32_t(frameCount()) : framesWanted.load();
+    s.framesTotal = uint32_t(frameCount());
     s.simulated = simulator::framesGenerated();
     s.bus = gaugePort.stats();
     s.busFrames = gaugeRxFrames;

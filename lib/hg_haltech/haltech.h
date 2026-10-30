@@ -71,6 +71,13 @@ int findChannel(const char* name);
 const char* unitSymbol(Unit unit);
 
 size_t frameCount();
+// The frame table is sorted by CAN id; this is a frame's position in it, or
+// frameCount() for an id not in the table. A gauge tells the hub which frames
+// it uses by these positions (proto::Needs), so the order is part of the protocol:
+// frameTableTag() changes whenever the table does, and a hub and a gauge with
+// different tags fall back to forwarding everything.
+size_t frameIndexOf(uint32_t canId);
+uint8_t frameTableTag();
 const FrameDef& frameDef(size_t index);
 // Returns nullptr if the ID is not a decoded Haltech frame.
 const FrameDef* findFrame(uint32_t canId);

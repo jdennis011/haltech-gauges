@@ -47,9 +47,9 @@ void overridesJson(JsonArray out);
 bool applyJson(JsonVariantConst in, std::string& error);
 
 // Generates whatever frames are due. Every frame is decoded into `store`, so
-// the web UI sees the data, and sent on the bus when `port` is given. Call
-// about once a millisecond.
-void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port);
+// the web UI sees the data, and sent on the bus when `port` is given and
+// `wanted` (a frame table index) says yes, or is null. Call about once a millisecond.
+void poll(uint32_t nowMs, hg::ChannelStore& store, GaugePort* port, bool (*wanted)(size_t frameIndex) = nullptr);
 
 // Frames generated so far, whether or not a gauge was there to receive them.
 uint32_t framesGenerated();

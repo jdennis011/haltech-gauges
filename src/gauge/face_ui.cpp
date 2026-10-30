@@ -7,10 +7,12 @@
 
 #include "can_task.h"
 #include "display.h"
+#include "face_needs.h"
 #include "face_renderer.h"
 #include "face_store.h"
 #include "font_manager.h"
 #include "ip_link.h"
+#include "link_icon.h"
 #include "proto.h"
 #include "quick_menu.h"
 #include "splash.h"
@@ -28,6 +30,11 @@ lv_obj_t* identify = nullptr;
 lv_obj_t* alertBand = nullptr;
 lv_obj_t* alertText = nullptr;
 lv_obj_t* note = nullptr;  // "NO DATA" and the like, small, at the bottom
+// The link the live data arrives on, shown near the top for a few seconds
+// whenever it changes (the pull-down menu shows it all the time).
+link_icon::Icon faceLink;
+uint32_t faceLinkUntilMs = 0;
+can_task::LiveLink lastLink = can_task::LiveLink::None;
 
 uint32_t lastUpdateMs = 0;
 uint32_t lastReportMs = 0;
@@ -79,8 +86,13 @@ void rebuild() {
     const hg::cfg::Config* cfg = face_store::current();
     if (!cfg || cfg->faces.empty()) return;
     face_renderer::build(screen, *cfg, face_store::activeFace());
+    // The hub forwards only the frames these faces use (docs/frame-filter.md).
+    uint64_t needs[hg::proto::kNeedsParts];
+    hg::cfg::framesUsed(*cfg, needs, hg::proto::kNeedsParts, hg::proto::kNeedsPartBits);
+    can_task::setNeeds(needs);
     // The overlays stay above the face.
     lv_obj_move_foreground(note);
+    lv_obj_move_foreground(faceLink.root);
     lv_obj_move_foreground(alertBand);
     lv_obj_move_foreground(identify);
     splash::raise();
@@ -174,6 +186,10 @@ void makeOverlays() {
     lv_obj_center(alertText);
     lv_obj_add_flag(alertBand, LV_OBJ_FLAG_HIDDEN);
 
+    faceLink = link_icon::create(screen, scaled(40), lv_color_hex(0x8E8E93));
+    lv_obj_align(faceLink.root, LV_ALIGN_TOP_MID, 0, scaled(34));
+    lv_obj_add_flag(faceLink.root, LV_OBJ_FLAG_HIDDEN);
+
     identify = lv_label_create(screen);
     lv_obj_set_style_text_font(identify, fontGet(Font::Display, fontPx(56)), 0);
     lv_obj_set_style_text_color(identify, lv_color_black(), 0);
@@ -226,6 +242,25 @@ void updateOverlays(uint32_t now) {
             alertShown[0] = 0;
             lv_obj_add_flag(alertBand, LV_OBJ_FLAG_HIDDEN);
         }
+    }
+
+    // The link icon: on the menu always, on the face for three seconds after a change.
+    const can_task::LiveLink link = can_task::liveLink(now);
+    quick_menu::setLink(link);
+    if (link != lastLink) {
+        lastLink = link;
+        if (link != can_task::LiveLink::None) {
+            link_icon::set(faceLink, link);
+            lv_obj_remove_flag(faceLink.root, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(faceLink.root);
+            faceLinkUntilMs = now + 3000;
+        } else {
+            lv_obj_add_flag(faceLink.root, LV_OBJ_FLAG_HIDDEN);  // the NO DATA note says so
+            faceLinkUntilMs = 0;
+        }
+    } else if (faceLinkUntilMs && int32_t(now - faceLinkUntilMs) >= 0) {
+        lv_obj_add_flag(faceLink.root, LV_OBJ_FLAG_HIDDEN);
+        faceLinkUntilMs = 0;
     }
 
     const char* status = face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "");

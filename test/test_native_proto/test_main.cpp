@@ -270,6 +270,27 @@ void test_request_round_trip() {
     TEST_ASSERT_FALSE(unpack(pack(c, 0x040506), rq2));
 }
 
+void test_needs_round_trip() {
+    Needs n;
+    n.part = 1;
+    n.tag = 0xA7;
+    n.bits = 0x8000000005ull;  // the first, third and fortieth frames of the part
+    const CanFrame f = pack(n, 0x040506);
+    TEST_ASSERT_EQUAL(int(Dir::GaugeToHub), int(idDir(f.id)));
+    TEST_ASSERT_EQUAL(int(Msg::Command), int(idMsg(f.id)));
+    TEST_ASSERT_EQUAL(8, f.len);
+    Needs n2;
+    TEST_ASSERT_TRUE(unpack(f, n2));
+    TEST_ASSERT_EQUAL(1, n2.part);
+    TEST_ASSERT_EQUAL_HEX8(0xA7, n2.tag);
+    TEST_ASSERT_TRUE(n2.bits == n.bits);
+    // A Needs frame is not a Request, and a Request is not a Needs frame.
+    Request rq;
+    TEST_ASSERT_FALSE(unpack(f, rq));
+    rq.cmd = Cmd::SetBrightness;
+    TEST_ASSERT_FALSE(unpack(pack(rq, 0x040506), n2));
+}
+
 void test_alert_round_trip() {
     Alert a;
     a.show = true;
@@ -805,6 +826,7 @@ int main(int, char**) {
     RUN_TEST(test_intro_round_trip);
     RUN_TEST(test_ip_frames_round_trip);
     RUN_TEST(test_xfer_streams_from_storage);
+    RUN_TEST(test_needs_round_trip);
     RUN_TEST(test_xfer_streams_with_loss);
     RUN_TEST(test_xfer_read_failure_stops_the_transfer);
     RUN_TEST(test_xfer_image_speed_on_a_clean_link);

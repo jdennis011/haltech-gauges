@@ -3,6 +3,8 @@
 #include <lvgl.h>
 #include <stdint.h>
 
+#include "can_task.h"
+
 // The pull-down menu (docs/gauge-quick-menu.md): swipe down from the top of
 // any face and a panel slides over it with a brightness slider, screen-off and
 // reset-peaks buttons, and whether the change is for this gauge or for all of them (which
@@ -29,6 +31,8 @@ void close();
 bool isOpen();
 // The brightness changed elsewhere (the hub): keep the slider in step.
 void setBrightness(uint8_t level);
+// The link the live data is arriving on, shown in the panel's corner.
+void setLink(can_task::LiveLink link);
 // Closes it after a while without a touch.
 void poll(uint32_t nowMs);
 

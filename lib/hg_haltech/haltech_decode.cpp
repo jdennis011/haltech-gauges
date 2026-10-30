@@ -28,6 +28,7 @@ constexpr size_t kFrameCount = sizeof(kFrameRates) / sizeof(kFrameRates[0]);
 
 struct FrameIndex {
     FrameDef frames[kFrameCount];
+    uint8_t tag = 0;
 
     FrameIndex() {
         size_t ch = 0;
@@ -39,6 +40,13 @@ struct FrameIndex {
             while (ch < CH_COUNT && kChannels[ch].canId == f.canId) ch++;
             f.channelCount = uint16_t(ch - f.firstChannel);
         }
+        // FNV-1a over the ids in order, folded to a byte.
+        uint32_t h = 2166136261u;
+        for (size_t i = 0; i < kFrameCount; i++) {
+            h = (h ^ (frames[i].canId & 0xFF)) * 16777619u;
+            h = (h ^ (frames[i].canId >> 8)) * 16777619u;
+        }
+        tag = uint8_t(h ^ (h >> 8) ^ (h >> 16) ^ (h >> 24));
     }
 };
 
@@ -111,6 +119,13 @@ const char* unitSymbol(Unit unit) {
 size_t frameCount() { return kFrameCount; }
 
 const FrameDef& frameDef(size_t index) { return frameIndex().frames[index]; }
+
+uint8_t frameTableTag() { return frameIndex().tag; }
+
+size_t frameIndexOf(uint32_t canId) {
+    const FrameDef* def = findFrame(canId);
+    return def ? size_t(def - frameIndex().frames) : kFrameCount;
+}
 
 const FrameDef* findFrame(uint32_t canId) {
     const FrameDef* frames = frameIndex().frames;

@@ -2442,7 +2442,7 @@ function renderSettings() {
     ['Firmware', s.fw], ['Board', s.board], ['Last restart', s.reset || ''],
     ['Uptime', Math.floor(up / 3600) + 'h ' + Math.floor(up % 3600 / 60) + 'm ' + (up % 60) + 's'],
     ['Free memory', Math.round(s.heap_free / 1024) + ' KB (lowest ' + Math.round(s.heap_min / 1024) + ' KB)'],
-    ['Gauge bus', busState(s.bus.state) + ', ' + (s.bus.frames || 0) + ' received, ' + s.bus.simulated + ' simulated, ' + s.bus.forwarded + ' forwarded, ' + s.bus.missed + ' missed, ' + (s.bus.errors || 0) + ' errors, TEC ' + (s.bus.tec || 0) + ', REC ' + (s.bus.rec || 0) + ', ' + (s.bus.tx_pending || 0) + ' waiting to send'],
+    ['Gauge bus', busState(s.bus.state) + ', ' + (s.bus.frames || 0) + ' received, ' + s.bus.simulated + ' simulated, ' + s.bus.forwarded + ' forwarded, ' + (s.bus.kinds ? (s.bus.wanted + ' of ' + s.bus.kinds + ' frame kinds wanted, ') : '') + s.bus.missed + ' missed, ' + (s.bus.errors || 0) + ' errors, TEC ' + (s.bus.tec || 0) + ', REC ' + (s.bus.rec || 0) + ', ' + (s.bus.tx_pending || 0) + ' waiting to send'],
     ['ECU bus', s.ecu.present ? busState(s.ecu.state) + ', ' + s.ecu.frames + ' frames, ' + s.ecu.missed + ' missed, ' + (s.ecu.errors || 0) + ' errors, TEC ' + (s.ecu.tec || 0) + ', REC ' + (s.ecu.rec || 0) : 'not on this board'],
   ]);
   rows($('#ap-info'), [['Network', s.ap.ssid], ['Password', s.ap.password], ['Address', s.ap.ip + ' (http://' + s.hostname + '.local/)'], ['Connected devices', s.ap.clients]]);
@@ -4429,7 +4429,7 @@ const mock = {
     return { t: 'status', uptime_s: t, fw: '0.2.0 (demo)', board: ONLINE ? 'online demo, no hub behind this page' : 'browser mock', reset: 'power on', heap_free: 150000, heap_min: 120000, simulator: this.sim,
       sim: { paused: this.simState.paused, speed: this.simState.speed, overrides: this.simState.overrides.length }, displays: this.displays,
       recording: { active: false }, playback: this.playbackStatus(), gauges_online: 1,
-      ecu: { present: false, frames: 0, missed: 0, errors: 0, tec: 0, rec: 0, state: 1 }, bus: { frames: 0, forwarded: 0, dropped: 0, simulated: t * 1300, missed: 0, errors: 0, rejected: 0, tec: 0, rec: 0, state: 1, tx_pending: 0 }, push: { active: false },
+      ecu: { present: false, frames: 0, missed: 0, errors: 0, tec: 0, rec: 0, state: 1 }, bus: { frames: 0, forwarded: 0, dropped: 0, wanted: 9, kinds: 62, simulated: t * 1300, missed: 0, errors: 0, rejected: 0, tec: 0, rec: 0, state: 1, tx_pending: 0 }, push: { active: false },
       ap: { ssid: 'HaltechGauges', password: 'haltech123', ip: '192.168.4.1', clients: 1 }, sta: { ssid: '', connected: false, ip: '', rssi: 0 }, hostname: 'haltech-hub',
       cloud: { url: 'https://oagauge.online', hub_id: '000000000000', name: 'haltech-hub', linked: false, email: '', state: 'not linked', error: '', last_sync_s: -1, rev: 0, pending: 0 },
       update: { current: '0.2.0', board: 'esp32c6', slot: true, state: 'idle', progress: 0, error: '', last: '', checked_s: -1, available: null },

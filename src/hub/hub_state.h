@@ -18,6 +18,8 @@ struct HubStats {
     CanPortStats ecu;
     uint32_t forwarded;
     uint32_t forwardDropped;
+    uint32_t framesWanted;  // frame kinds going to the gauge bus (docs/frame-filter.md)
+    uint32_t framesTotal;   // of this many in the Haltech table
     uint32_t simulated;
     CanPortStats bus;
     uint32_t busFrames;   // frames received on the wire

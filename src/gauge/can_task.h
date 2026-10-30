@@ -29,6 +29,16 @@ BusCounters busCounters();
 bool hubPresent();
 uint32_t nodeId();
 
+// Which link the live data is arriving on: CAN when Haltech frames came on the
+// wire in the last second, else Wi-Fi when the IP link brought some, else none.
+enum class LiveLink : uint8_t { None, Can, Wifi };
+LiveLink liveLink(uint32_t nowMs);
+
+// The Haltech frames the faces use (hg::cfg::framesUsed), told to the hub as
+// proto::Needs so that it forwards only those (docs/frame-filter.md). Sent when
+// it changes, when the hub appears, and every few seconds.
+void setNeeds(const uint64_t parts[hg::proto::kNeedsParts]);
+
 // Reported to the hub in the status message.
 void setVbusMillivolts(uint16_t millivolts);
 

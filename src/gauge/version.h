@@ -2,4 +2,4 @@
 
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 1
-#define FW_VERSION_PATCH 9
+#define FW_VERSION_PATCH 10

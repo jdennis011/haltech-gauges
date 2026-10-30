@@ -4,6 +4,7 @@
 #include <string>
 
 #include "face_model.h"
+#include "face_needs.h"
 #include "haltech.h"
 #include "clock_text.h"
 #include "image_format.h"
@@ -651,6 +652,32 @@ void test_clock_text() {
     TEST_ASSERT_EQUAL_FLOAT(180.0f, minuteHandDegrees(q));
 }
 
+void test_frames_used() {
+    Config c;
+    TEST_ASSERT_TRUE(parse(R"({"schema":1,"faces":[
+        {"widgets":[{"type":"dial","channel":"rpm","min":0,"max":8000},{"type":"label","text":"x"}]},
+        {"widgets":[{"type":"number","channel":"coolant_temp"},{"type":"number","channel":"vehicle_speed"}]}
+    ]})", c).ok);
+    uint64_t parts[2];
+    framesUsed(c, parts, 2, 40);
+    const size_t rpm = frameIndexOf(0x360), coolant = frameIndexOf(0x3E0), speed = frameIndexOf(0x370);
+    TEST_ASSERT_TRUE(rpm < frameCount() && coolant < frameCount() && speed < frameCount());
+    int set = 0;
+    for (size_t i = 0; i < 80; i++) {
+        const bool on = (parts[i / 40] >> (i % 40)) & 1u;
+        if (on) set++;
+        TEST_ASSERT_EQUAL_MESSAGE(i == rpm || i == coolant || i == speed, on, "frame bit");
+    }
+    TEST_ASSERT_EQUAL(3, set);
+    // No channels, no frames; a label-only face asks for nothing.
+    Config empty;
+    TEST_ASSERT_TRUE(parse(withWidget(R"({"type":"label","text":"hi"})"), empty).ok);
+    framesUsed(empty, parts, 2, 40);
+    TEST_ASSERT_EQUAL(0, parts[0] | parts[1]);
+    // The table tag is stable and non-zero.
+    TEST_ASSERT_EQUAL(frameTableTag(), frameTableTag());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_full_config_parses);
@@ -674,5 +701,6 @@ int main(int, char**) {
     RUN_TEST(test_clock_widget);
     RUN_TEST(test_clock_text);
     RUN_TEST(test_hold_on_dial_ring_bar);
+    RUN_TEST(test_frames_used);
     return UNITY_END();
 }

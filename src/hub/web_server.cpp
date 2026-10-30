@@ -291,6 +291,8 @@ void buildStatus(JsonObject o) {
     JsonObject bus = o["bus"].to<JsonObject>();
     bus["forwarded"] = s.forwarded;
     bus["dropped"] = s.forwardDropped;
+    bus["wanted"] = s.framesWanted;  // frame kinds going to the bus, of
+    bus["kinds"] = s.framesTotal;    // this many (docs/frame-filter.md)
     bus["simulated"] = s.simulated;
     bus["missed"] = s.bus.rxMissed;
     bus["frames"] = s.busFrames;

@@ -57,5 +57,9 @@ gauges under `ip_bus`: `{port, peers: [{ip, node, age_s}], rx_frames, tx_packets
 - Images and firmware over Wi-Fi (docs/images.md) are a separate mechanism: a linked gauge
   that is already on the hub's access point stays on it for those; one on the home network
   would be asked to switch to the hub's access point and back.
+- The hub sends a linked gauge only the frames the gauges asked for, as on the bus
+  (docs/frame-filter.md). The gauge's pull-down menu shows which link is feeding it, CAN
+  or Wi-Fi, and the face shows the icon for a few seconds when that changes
+  (docs/gauge-quick-menu.md).
 - This is for the bench and the odd remote gauge. The chain stays the design for the dash:
   it carries power, needs no joining, and is deterministic.

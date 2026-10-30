@@ -28,6 +28,8 @@ ChannelStore store;
 proto::GaugeNode node;
 
 std::atomic<uint32_t> frames{0};
+std::atomic<uint32_t> lastWireLiveMs{0};  // the last Haltech frame off the wire
+std::atomic<uint32_t> lastIpLiveMs{0};    // and off the IP link
 std::atomic<bool> hub{false};
 std::atomic<uint32_t> currentNode{0};
 std::atomic<uint16_t> vbus{0};
@@ -49,6 +51,12 @@ portMUX_TYPE requestMux = portMUX_INITIALIZER_UNLOCKED;
 proto::Request requestRing[4];
 uint8_t requestHead = 0;
 uint8_t requestTail = 0;
+
+// The frames the faces use, for the hub (proto::Needs).
+portMUX_TYPE needsMux = portMUX_INITIALIZER_UNLOCKED;
+uint64_t needsParts[proto::kNeedsParts] = {};
+bool needsKnown = false;
+std::atomic<bool> needsDirty{false};
 
 // Images fetched over Wi-Fi, to be reported to the hub from this task.
 portMUX_TYPE reportMux = portMUX_INITIALIZER_UNLOCKED;
@@ -229,6 +237,8 @@ void serviceBus() {
 void task(void*) {
     ::CanFrame rx;
     uint32_t lastServiceMs = 0;
+    uint32_t lastNeedsMs = 0;
+    bool hubWas = false;
     for (;;) {
         bool got = ESP32Can.readFrame(rx, 5);
         while (got) {
@@ -244,6 +254,7 @@ void task(void*) {
                 node.onFrame(f, now);
             } else {
                 store.onFrame(f, now);
+                lastWireLiveMs = now;
             }
             got = ESP32Can.readFrame(rx, 0);
         }
@@ -258,10 +269,31 @@ void task(void*) {
                 node.onFrame(linked, now);
             } else {
                 store.onFrame(linked, now);
+                lastIpLiveMs = now;
             }
         }
         node.poll(now);
         hub = node.hubPresent();
+
+        // What the faces need from the bus: on a change, when the hub appears,
+        // and every few seconds in case a frame was lost (docs/frame-filter.md).
+        const bool hubNow = node.hubPresent();
+        if (hubNow && (needsDirty || !hubWas || uint32_t(now - lastNeedsMs) >= 3000)) {
+            uint64_t parts[proto::kNeedsParts];
+            portENTER_CRITICAL(&needsMux);
+            const bool known = needsKnown;
+            memcpy(parts, needsParts, sizeof(parts));
+            portEXIT_CRITICAL(&needsMux);
+            if (known) {
+                bool ok = true;
+                for (size_t p = 0; p < proto::kNeedsParts; p++) ok = node.sendNeeds(uint8_t(p), frameTableTag(), parts[p]) && ok;
+                if (ok) {
+                    needsDirty = false;
+                    lastNeedsMs = now;
+                }
+            }
+        }
+        hubWas = hubNow;
 
         // The menu's "all gauges" requests.
         for (;;) {
@@ -377,6 +409,22 @@ BusCounters busCounters() {
     return c;
 }
 bool hubPresent() { return hub; }
+
+LiveLink liveLink(uint32_t nowMs) {
+    const uint32_t wire = lastWireLiveMs, ip = lastIpLiveMs;
+    if (wire && uint32_t(nowMs - wire) < 1000) return LiveLink::Can;
+    if (ip && uint32_t(nowMs - ip) < 1000) return LiveLink::Wifi;
+    return LiveLink::None;
+}
+
+void setNeeds(const uint64_t parts[proto::kNeedsParts]) {
+    portENTER_CRITICAL(&needsMux);
+    const bool same = needsKnown && memcmp(parts, needsParts, sizeof(needsParts)) == 0;
+    memcpy(needsParts, parts, sizeof(needsParts));
+    needsKnown = true;
+    portEXIT_CRITICAL(&needsMux);
+    if (!same) needsDirty = true;
+}
 
 bool localTime(uint32_t& seconds) { return node.localTime(millis(), seconds); }
 

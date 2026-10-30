@@ -91,6 +91,20 @@ bool HubManager::anyOnline() const {
     return false;
 }
 
+HubManager::FrameFilter HubManager::frameFilter(uint8_t tag) const {
+    FrameFilter f;
+    f.all = false;
+    for (const Gauge& g : gauges_) {
+        if (!g.used || !g.online || isWheel(g)) continue;
+        if (!g.haveNeeds || g.needsTag != tag) {
+            f.all = true;
+            return f;
+        }
+        for (size_t p = 0; p < kNeedsParts; p++) f.parts[p] |= g.needs[p];
+    }
+    return f;
+}
+
 bool HubManager::anyGaugeOnline() const {
     for (const Gauge& g : gauges_) {
         if (g.used && g.online && !isWheel(g)) return true;
@@ -240,6 +254,8 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
             g->pushFailed = false;
             g->nextPushMs = nowMs;
             g->imageCount = 0;
+            g->haveNeeds = false;
+            g->needsParts = 0;
             g->wifiTried = false;
             g->wifiUntilMs = 0;
             if (queryActive_ && queryNode_ == node) queryActive_ = false;
@@ -271,6 +287,19 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
             break;
         }
         case Msg::Command: {
+            Needs n;
+            if (unpack(frame, n)) {
+                if (n.part >= kNeedsParts) break;
+                const bool had = g->haveNeeds;
+                if (!had || n.tag != g->needsTag || g->needs[n.part] != n.bits) {
+                    g->needs[n.part] = n.bits;
+                    g->needsTag = n.tag;
+                    g->needsParts |= uint8_t(1u << n.part);
+                    g->haveNeeds = g->needsParts == uint8_t((1u << kNeedsParts) - 1);
+                    if (g->haveNeeds) notify();
+                }
+                break;
+            }
             Request rq;
             if (unpack(frame, rq) && handler_.request) handler_.request(*g, rq, handler_.ctx);
             break;

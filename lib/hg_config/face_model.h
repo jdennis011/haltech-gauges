@@ -66,7 +66,7 @@ struct ThemeColours {
     ThemeColours();  // the eight defaults: white, orange, red, yellow, green, blue, grey, black
 };
 
-enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path, Image, Clock };
+enum class WidgetType : uint8_t { Dial, Ring, Bar, Number, Label, Light, Rim, Shape, Path, Image, Clock, GMeter, DragTimer };
 enum class ClockStyle : uint8_t { Digital, Analogue };
 enum class Font : uint8_t { Sans, Condensed, Digital, Mono, Display, Carter, Racing, Trade };
 // Marker: arrow at radius r pointing inward; MarkerOut: arrow inside r pointing outward.
@@ -214,6 +214,25 @@ struct Widget {
     ClockStyle clockStyle = ClockStyle::Digital;
     bool clockSeconds = false;
     bool hour12 = false;
+
+    // gmeter (docs/motion.md): the gauge's own accelerometer as a dot on
+    // crosshair rings out to `range` g, with r the outer radius, a fading trail,
+    // the furthest point each way as peak marks, and the live numbers in the
+    // text style. trackColor draws the rings, color the dot (and numbers),
+    // peakColor the marks. No channel.
+    float range = 1.5f;
+    bool trail = true;
+    bool peaks = true;
+    bool numbers = true;
+    Color peakColor = 0xFFCC00;
+
+    // dragtimer (docs/motion.md): one run type (hg::motion::Run), timed from
+    // vehicle_speed, which the parser binds as the channel; rollout starts the
+    // clock a foot on, as a strip does. The text style sizes the big time;
+    // doneColor is the colour of a finished run's time.
+    uint8_t run = 0;
+    bool rollout = false;
+    Color doneColor = 0x34C759;
 
     std::vector<Zone> zones;
     Warn warn;

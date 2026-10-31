@@ -29,6 +29,11 @@ bool active();
 // Asks the task to try mounting the card now (the page's Mount).
 void requestMount();
 
+// Appends one line to another file in the log directory (runs.csv), from any
+// task: queued for the card's task, which writes `header` first when the
+// file is new. Dropped without a card.
+void appendLine(const char* fileName, const std::string& line, const char* header);
+
 bool validName(const char* name);
 // The file's path on the card for a name like "2026-10-17_09-15-30.csv".
 std::string path(const char* name);

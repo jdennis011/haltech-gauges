@@ -291,6 +291,37 @@ void test_needs_round_trip() {
     TEST_ASSERT_FALSE(unpack(pack(rq, 0x040506), n2));
 }
 
+void test_run_result_round_trip() {
+    RunResult r;
+    r.run = 1;
+    r.seq = 9;
+    r.index = 3;
+    r.count = 4;
+    r.aborted = true;
+    r.ms = 12345;
+    r.speed10 = 1783;
+    const CanFrame f = pack(r, 0x040506);
+    TEST_ASSERT_EQUAL(int(Dir::GaugeToHub), int(idDir(f.id)));
+    TEST_ASSERT_EQUAL(int(Msg::Command), int(idMsg(f.id)));
+    TEST_ASSERT_EQUAL(8, f.len);
+    RunResult r2;
+    TEST_ASSERT_TRUE(unpack(f, r2));
+    TEST_ASSERT_EQUAL(1, r2.run);
+    TEST_ASSERT_EQUAL(9, r2.seq);
+    TEST_ASSERT_EQUAL(3, r2.index);
+    TEST_ASSERT_EQUAL(4, r2.count);
+    TEST_ASSERT_TRUE(r2.aborted);
+    TEST_ASSERT_EQUAL_UINT32(12345, r2.ms);
+    TEST_ASSERT_EQUAL_UINT16(1783, r2.speed10);
+    // Neither a Request nor a Needs frame.
+    Request rq;
+    TEST_ASSERT_FALSE(unpack(f, rq));
+    Needs n;
+    TEST_ASSERT_FALSE(unpack(f, n));
+    rq.cmd = Cmd::SetBrightness;
+    TEST_ASSERT_FALSE(unpack(pack(rq, 0x040506), r2));
+}
+
 void test_alert_round_trip() {
     Alert a;
     a.show = true;
@@ -827,6 +858,7 @@ int main(int, char**) {
     RUN_TEST(test_ip_frames_round_trip);
     RUN_TEST(test_xfer_streams_from_storage);
     RUN_TEST(test_needs_round_trip);
+    RUN_TEST(test_run_result_round_trip);
     RUN_TEST(test_xfer_streams_with_loss);
     RUN_TEST(test_xfer_read_failure_stops_the_transfer);
     RUN_TEST(test_xfer_image_speed_on_a_clean_link);

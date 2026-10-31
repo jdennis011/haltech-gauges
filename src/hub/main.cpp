@@ -23,6 +23,7 @@
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
+#include "runs.h"
 #include "sd_card.h"
 #include "simulator.h"
 #include "theme_colours.h"
@@ -378,6 +379,7 @@ void setup() {
     handler.wifiJoin = wifi_xfer::offerImages;
     handler.input = wheel::onInput;
     handler.inputRaw = wheel::onInputRaw;
+    handler.run = runs::onRun;
     hubManager.init({managementSend, nullptr}, handler, millis());
     // The simulator as it was left: on, paused, speed and overrides.
     simulator::load();

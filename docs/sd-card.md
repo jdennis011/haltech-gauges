@@ -30,6 +30,8 @@ spreadsheet or a log viewer.
   second may be missing.
 - At about 100 channels a row is some 500 bytes: roughly 20 MB an hour.
 - Logging stops when the card has less than 16 MB free; nothing is deleted on its own.
+- `/logs/runs.csv` collects the drag timer runs the gauges report, a row per run
+  (`docs/motion.md`), whatever the logging switch says.
 
 **Logging** can be switched off on the page; the setting is kept in the hub's preferences.
 

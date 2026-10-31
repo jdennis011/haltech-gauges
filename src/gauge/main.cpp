@@ -1,10 +1,12 @@
 #include <Arduino.h>
+#include <esp_system.h>
 
 #include "audio.h"
 #include "board.h"
 #include "can_task.h"
 #include "display.h"
 #include "face_ui.h"
+#include "imu.h"
 #include "serial_console.h"
 #include "splash.h"
 #include "touch.h"
@@ -26,11 +28,12 @@ void setup() {
     Serial.setTxTimeoutMs(0);  // never block on USB CDC when no host is attached
 
     board::begin();
-    Serial.printf("Gauge firmware on %s, %d px\n", board::name(), display::kSize);
+    Serial.printf("Gauge firmware on %s, %d px, reset reason %d\n", board::name(), display::kSize, int(esp_reset_reason()));
 
     if (!display::begin()) Serial.println("Display start failed");
     if (!touch::begin()) Serial.println("Touch start failed");
     audio::begin();
+    imu::begin();
     splash::begin();  // the panel shows oaGauge while the rest starts
 
     can_task::begin();

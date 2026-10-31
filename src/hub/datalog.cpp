@@ -61,6 +61,13 @@ struct Entry {
     uint32_t bytes;
 };
 std::vector<Entry> listing;
+// Lines for other files (appendLine), waiting for the task.
+struct Pending {
+    std::string file;
+    std::string line;
+    const char* header;
+};
+std::vector<Pending> pending;
 
 struct Guard {
     Guard() { xSemaphoreTake(mtx, portMAX_DELAY); }
@@ -224,6 +231,34 @@ void writeRow(uint32_t nowMs) {
     }
 }
 
+// Writes the queued lines of other files, each opened for append and closed again.
+void writePending() {
+    std::vector<Pending> batch;
+    {
+        Guard g;
+        batch.swap(pending);
+    }
+    fs::FS* fs = sd_card::fs();
+    if (!fs || batch.empty()) return;
+    if (!fs->exists(kDir)) fs->mkdir(kDir);
+    for (const Pending& p : batch) {
+        const std::string path = std::string(kDir) + "/" + p.file;
+        const bool fresh = !fs->exists(path.c_str());
+        File f = fs->open(path.c_str(), FILE_APPEND);
+        if (!f) {
+            Serial.printf("datalog: could not open %s\n", p.file.c_str());
+            continue;
+        }
+        if (fresh && p.header) {
+            f.print(p.header);
+            f.print('\n');
+        }
+        f.print(p.line.c_str());
+        f.print('\n');
+        f.close();
+    }
+}
+
 void step(uint32_t nowMs) {
     if (mountWanted.exchange(false)) {
         mounting = true;
@@ -235,6 +270,7 @@ void step(uint32_t nowMs) {
         setError("");
         refreshListing();
     }
+    if (sd_card::mounted() && !paused) writePending();
     if (!on || !sd_card::mounted() || paused) {
         if (file) closeFile();
         return;
@@ -319,6 +355,12 @@ void setEnabled(bool enable) {
 bool active() { return writing; }
 
 void requestMount() { mountWanted = true; }
+
+void appendLine(const char* fileName, const std::string& line, const char* header) {
+    if (!mtx || !sd_card::mounted()) return;
+    Guard g;
+    if (pending.size() < 32) pending.push_back({fileName, line, header});
+}
 
 bool validName(const char* name) {
     if (!name || !name[0] || strlen(name) > 40) return false;

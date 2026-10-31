@@ -583,6 +583,45 @@ void test_hub_adds_the_image_map() {
     TEST_ASSERT_EQUAL(16, c.images.size());
 }
 
+void test_gmeter_and_dragtimer_widgets() {
+    Config c;
+    ParseResult r = parse(withWidget(R"({"type":"gmeter","r":150,"range":2,"trail":false,"dotColor":"#FF0000","size":20})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    const Widget& g = c.faces[0].widgets[0];
+    TEST_ASSERT_EQUAL(int(WidgetType::GMeter), int(g.type));
+    TEST_ASSERT_EQUAL(-1, g.channel);
+    TEST_ASSERT_EQUAL(150, g.r);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2, g.range);
+    TEST_ASSERT_FALSE(g.trail);
+    TEST_ASSERT_TRUE(g.peaks);
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, g.needleColor);
+    TEST_ASSERT_EQUAL(20, g.size);
+    // Defaults.
+    r = parse(withWidget(R"({"type":"gmeter"})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL(180, c.faces[0].widgets[0].r);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 1.5f, c.faces[0].widgets[0].range);
+    assertRejected(withWidget(R"({"type":"gmeter","range":9})"), "range");
+
+    r = parse(withWidget(R"({"type":"dragtimer","run":"strip","rollout":true,"y":260})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    const Widget& d = c.faces[0].widgets[0];
+    TEST_ASSERT_EQUAL(int(WidgetType::DragTimer), int(d.type));
+    TEST_ASSERT_EQUAL(1, d.run);
+    TEST_ASSERT_TRUE(d.rollout);
+    TEST_ASSERT_EQUAL(64, d.size);
+    // Bound to the vehicle speed without being asked, so the hub forwards 0x370.
+    TEST_ASSERT_EQUAL(findChannel("vehicle_speed"), d.channel);
+    uint64_t parts[2];
+    framesUsed(c, parts, 2, 40);
+    const size_t speed = frameIndexOf(0x370);
+    TEST_ASSERT_TRUE((parts[speed / 40] >> (speed % 40)) & 1u);
+    r = parse(withWidget(R"({"type":"dragtimer"})"), c);
+    TEST_ASSERT_TRUE_MESSAGE(r.ok, r.error.c_str());
+    TEST_ASSERT_EQUAL(0, c.faces[0].widgets[0].run);
+    assertRejected(withWidget(R"({"type":"dragtimer","run":"0-60"})"), "run");
+}
+
 void test_clock_widget() {
     Config c;
     ParseResult r = parse(withWidget(R"({"type":"clock","y":233,"size":56,"seconds":true,"format":"12h"})"), c);
@@ -702,5 +741,6 @@ int main(int, char**) {
     RUN_TEST(test_clock_text);
     RUN_TEST(test_hold_on_dial_ring_bar);
     RUN_TEST(test_frames_used);
+    RUN_TEST(test_gmeter_and_dragtimer_widgets);
     return UNITY_END();
 }

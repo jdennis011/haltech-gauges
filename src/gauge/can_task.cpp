@@ -53,6 +53,9 @@ uint8_t requestHead = 0;
 uint8_t requestTail = 0;
 
 // The frames the faces use, for the hub (proto::Needs).
+portMUX_TYPE runMux = portMUX_INITIALIZER_UNLOCKED;
+proto::RunResult runRing[8];
+uint8_t runHead = 0, runTail = 0;
 portMUX_TYPE needsMux = portMUX_INITIALIZER_UNLOCKED;
 uint64_t needsParts[proto::kNeedsParts] = {};
 bool needsKnown = false;
@@ -311,6 +314,29 @@ void task(void*) {
             portEXIT_CRITICAL(&requestMux);
         }
 
+        // Finished drag timer runs, a split per frame.
+        for (;;) {
+            proto::RunResult rr;
+            bool any = false;
+            portENTER_CRITICAL(&runMux);
+            if (runHead != runTail) {
+                rr = runRing[runTail];
+                any = true;
+            }
+            portEXIT_CRITICAL(&runMux);
+            if (!any) break;
+            if (!hubNow) {
+                portENTER_CRITICAL(&runMux);
+                runTail = runHead;  // no hub: nothing to tell
+                portEXIT_CRITICAL(&runMux);
+                break;
+            }
+            if (!node.sendRunResult(rr)) break;
+            portENTER_CRITICAL(&runMux);
+            runTail = uint8_t((runTail + 1) % 8);
+            portEXIT_CRITICAL(&runMux);
+        }
+
         // Images that arrived over Wi-Fi: the hub hears of each at once.
         for (;;) {
             uint32_t crc = 0;
@@ -427,6 +453,25 @@ void setNeeds(const uint64_t parts[proto::kNeedsParts]) {
 }
 
 bool localTime(uint32_t& seconds) { return node.localTime(millis(), seconds); }
+
+void sendRun(const hg::motion::Result& result) {
+    const uint8_t frames = result.count ? result.count : 1;
+    portENTER_CRITICAL(&runMux);
+    for (uint8_t i = 0; i < frames; i++) {
+        const uint8_t next = uint8_t((runHead + 1) % 8);
+        if (next == runTail) break;
+        proto::RunResult& rr = runRing[runHead];
+        rr.run = uint8_t(result.run);
+        rr.seq = result.seq & 0x0F;
+        rr.index = i;
+        rr.count = result.count;
+        rr.aborted = result.aborted;
+        rr.ms = result.count ? result.ms[i] : 0;
+        rr.speed10 = result.count ? result.speed10[i] : 0;
+        runHead = next;
+    }
+    portEXIT_CRITICAL(&runMux);
+}
 
 void requestAll(proto::Cmd cmd, uint8_t arg) {
     proto::Request rq;

@@ -107,6 +107,12 @@ public:
         return send(pack(n, node_));
     }
 
+    // One split of a finished drag timer run (proto::RunResult, docs/motion.md).
+    bool sendRunResult(const RunResult& r) {
+        if (!hubPresent_) return false;
+        return send(pack(r, node_));
+    }
+
     // A steering wheel module's buttons, and its raw ladder readings while
     // the hub asks for them (docs/steering-wheel.md). False with no hub or
     // no room on the bus.

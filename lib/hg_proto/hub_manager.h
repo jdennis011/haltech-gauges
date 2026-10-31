@@ -88,6 +88,11 @@ public:
         uint8_t needsParts = 0;  // bit p: part p received
         uint8_t needsTag = 0;
         uint64_t needs[kNeedsParts] = {};
+
+        // A drag timer run arriving a split at a time (proto::RunResult): the
+        // frames seen so far, handed on as one RunReport when the last comes.
+        RunReport runPending;
+        uint8_t runSeen = 0;  // bit i: split i received
     };
 
     // Which Haltech frames to put on the gauge bus: the union of what the online
@@ -140,6 +145,8 @@ public:
         void (*input)(const Gauge& gauge, const Input& input, void* ctx);
         // Its raw ladder readings, while it streams them for calibration. May be null.
         void (*inputRaw)(const Gauge& gauge, const InputRaw& raw, void* ctx);
+        // A gauge's drag timer finished a run (docs/motion.md). May be null.
+        void (*run)(const Gauge& gauge, const RunReport& report, void* ctx);
         void* ctx;
     };
 

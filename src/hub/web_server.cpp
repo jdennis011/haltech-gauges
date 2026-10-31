@@ -29,6 +29,7 @@
 #include "library_store.h"
 #include "playback.h"
 #include "recorder.h"
+#include "runs.h"
 #include "sd_card.h"
 #include "simulator.h"
 #include "theme_colours.h"
@@ -74,6 +75,8 @@ uint32_t lastAlertsMs = 0;
 uint32_t sentAlertVersion = 0;
 uint32_t lastWheelMs = 0;
 uint32_t sentWheelVersion = 0;
+uint32_t lastRunsMs = 0;
+uint32_t sentRunsVersion = 0;
 uint32_t sentThemeVersion = 0;
 uint32_t skippedPushes = 0;
 
@@ -496,6 +499,17 @@ void wheelMessage(String& out) {
     {
         hub::Lock lock;
         wheel::statusJson(doc.as<JsonObject>());
+    }
+    serializeJson(doc, out);
+}
+
+// The drag timer runs, as {"t":"runs","runs":[...runs::listJson]} (docs/motion.md).
+void runsMessage(String& out) {
+    JsonDocument doc;
+    doc["t"] = "runs";
+    {
+        hub::Lock lock;
+        runs::listJson(doc["runs"].to<JsonArray>());
     }
     serializeJson(doc, out);
 }
@@ -1141,6 +1155,20 @@ void handleSimPresets(AsyncWebServerRequest* r) {
 
 // The steering wheel module (docs/steering-wheel.md): GET its state; PUT
 // settings or calibration; POST test, raw or fg.
+void handleRuns(AsyncWebServerRequest* r) {
+    if (r->method() == HTTP_DELETE) {
+        hub::Lock lock;
+        runs::clear();
+        return sendOk(r);
+    }
+    JsonDocument doc;
+    {
+        hub::Lock lock;
+        runs::listJson(doc["runs"].to<JsonArray>());
+    }
+    return sendJson(r, doc);
+}
+
 void handleWheel(AsyncWebServerRequest* r) {
     const String action = segment(r->url(), 2);
     std::string error;
@@ -1490,6 +1518,9 @@ void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType type,
     s = String();
     wheelMessage(s);
     client->text(s);
+    s = String();
+    runsMessage(s);
+    client->text(s);
 }
 
 // Pushes to every client unless a client is backed up or memory is short;
@@ -1546,6 +1577,7 @@ void begin() {
     server.on("/api/alerts", HTTP_GET | HTTP_PUT, handleAlerts, nullptr, collectBody);
     server.on("/api/wheel/*", HTTP_PUT | HTTP_POST, handleWheel, nullptr, collectBody);
     server.on("/api/wheel", HTTP_GET, handleWheel);
+    server.on("/api/runs", HTTP_GET | HTTP_DELETE, handleRuns);
     server.on("/api/wifi", HTTP_GET | HTTP_PUT | HTTP_DELETE, handleWifi, nullptr, collectBody);
     server.on("/api/cloud/*", HTTP_POST, handleCloud, nullptr, collectBody);
     server.on("/api/cloud", HTTP_GET, handleCloud);
@@ -1603,6 +1635,14 @@ void loop() {
         String s;
         wheelMessage(s);
         if (pushAll(s)) sentWheelVersion = wheelVersion;
+    }
+    // A finished run: at once.
+    const uint32_t runsVersion = runs::version();
+    if (runsVersion != sentRunsVersion && now - lastRunsMs >= 100) {
+        lastRunsMs = now;
+        String s;
+        runsMessage(s);
+        if (pushAll(s)) sentRunsVersion = runsVersion;
     }
     const uint32_t version = hub::rosterVersion();
     if ((version != sentRosterVersion && now - lastGaugesMs >= 250) || now - lastGaugesMs >= 3000) {

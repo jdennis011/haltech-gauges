@@ -31,7 +31,15 @@ const Name kWidgetTypes[] = {
     {"label", uint8_t(WidgetType::Label)},   {"light", uint8_t(WidgetType::Light)},
     {"rim", uint8_t(WidgetType::Rim)},       {"shape", uint8_t(WidgetType::Shape)},
     {"path", uint8_t(WidgetType::Path)},     {"image", uint8_t(WidgetType::Image)},
-    {"clock", uint8_t(WidgetType::Clock)},
+    {"clock", uint8_t(WidgetType::Clock)},   {"gmeter", uint8_t(WidgetType::GMeter)},
+    {"dragtimer", uint8_t(WidgetType::DragTimer)},
+};
+// The drag timer's runs, as hg::motion::Run (lib/hg_motion/drag_timer.h).
+const Name kRuns[] = {
+    {"0-100", 0},
+    {"strip", 1},
+    {"80-120", 2},
+    {"100-200", 3},
 };
 const Name kClockStyles[] = {
     {"digital", uint8_t(ClockStyle::Digital)},
@@ -521,7 +529,8 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
     // A shape, path or image is plain decoration unless it names a channel.
     const bool decoration =
         w.type == WidgetType::Shape || w.type == WidgetType::Path || w.type == WidgetType::Image;
-    const bool noChannel = w.type == WidgetType::Label || w.type == WidgetType::Clock;
+    const bool noChannel = w.type == WidgetType::Label || w.type == WidgetType::Clock || w.type == WidgetType::GMeter ||
+                           w.type == WidgetType::DragTimer;
     if (!noChannel && !(decoration && obj["channel"].isNull())) readChannel(obj, w, ctx);
     if (!ctx.ok()) return;
 
@@ -627,6 +636,31 @@ void parseWidget(JsonObjectConst obj, Widget& w, Ctx& ctx) {
             w.trackColor = readColor(obj, "tickColor", t.dim, ctx);
             w.needleColor = readColor(obj, "secondColor", t.accent, ctx);
             break;
+
+        case WidgetType::GMeter:
+            w.r = int16_t(readInt(obj, "r", 180, 40, kScreenSize / 2, ctx));
+            w.range = readFloat(obj, "range", 1.5f, ctx);
+            if (ctx.ok() && !(w.range >= 0.5f && w.range <= 4.0f)) ctx.fail("'range' must be between 0.5 and 4 g");
+            w.trail = readBool(obj, "trail", true, ctx);
+            w.peaks = readBool(obj, "peaks", true, ctx);
+            w.numbers = readBool(obj, "numbers", true, ctx);
+            readTextStyle(obj, w, 22, ctx);
+            w.trackColor = readColor(obj, "trackColor", t.dim, ctx);
+            w.needleColor = readColor(obj, "dotColor", t.accent, ctx);
+            w.peakColor = readColor(obj, "peakColor", t.warn, ctx);
+            break;
+
+        case WidgetType::DragTimer: {
+            w.run = readEnum(obj, "run", kRuns, 0, ctx);
+            w.rollout = readBool(obj, "rollout", false, ctx);
+            readTextStyle(obj, w, 64, ctx);
+            w.doneColor = readColor(obj, "doneColor", 0x34C759, ctx);
+            w.trackColor = readColor(obj, "dimColor", t.dim, ctx);
+            // Timed from the vehicle speed, so the hub keeps sending it (face_needs).
+            const int speed = findChannel("vehicle_speed");
+            w.channel = int16_t(speed);
+            break;
+        }
 
         case WidgetType::Light:
             readTextStyle(obj, w, 18, ctx);

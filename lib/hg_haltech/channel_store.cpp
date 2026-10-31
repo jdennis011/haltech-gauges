@@ -46,6 +46,14 @@ bool ChannelStore::get(ChannelId id, uint32_t nowMs, float& value) const {
     return true;
 }
 
+bool ChannelStore::latest(ChannelId id, float& value, uint32_t& stampMs) const {
+    const uint8_t flags = flags_[id];
+    if (!(flags & kSeen) || !(flags & kValid)) return false;
+    stampMs = stamp_[id];
+    value = value_[id];
+    return true;
+}
+
 void ChannelStore::clear() { memset(flags_, 0, sizeof(flags_)); }
 
 }  // namespace hg

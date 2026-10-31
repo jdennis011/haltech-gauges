@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "channel_store.h"
+#include "drag_timer.h"
 #include "proto.h"
 
 // Owns the CAN controller. A dedicated task receives frames, decodes Haltech
@@ -38,6 +39,10 @@ LiveLink liveLink(uint32_t nowMs);
 // proto::Needs so that it forwards only those (docs/frame-filter.md). Sent when
 // it changes, when the hub appears, and every few seconds.
 void setNeeds(const uint64_t parts[hg::proto::kNeedsParts]);
+
+// A finished drag timer run (docs/motion.md): sent to the hub as RunResult
+// frames, one per split reached. Dropped if the hub is away.
+void sendRun(const hg::motion::Result& result);
 
 // Reported to the hub in the status message.
 void setVbusMillivolts(uint16_t millivolts);

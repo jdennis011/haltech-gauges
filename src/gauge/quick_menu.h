@@ -20,6 +20,10 @@ struct Handlers {
     void (*sendAll)(uint8_t cmd, uint8_t arg);
     // Reset peaks: clear the held peaks and minimums on this gauge.
     void (*resetHold)();
+    // The accelerometer's mounting captures (docs/motion.md); only shown
+    // on a board with one.
+    void (*setLevel)();
+    void (*setForward)();
 };
 
 // Builds the panel, hidden, on the screen.

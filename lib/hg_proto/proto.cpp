@@ -154,8 +154,33 @@ bool unpack(const CanFrame& f, Needs& m) {
     return true;
 }
 
+CanFrame pack(const RunResult& m, uint32_t node) {
+    CanFrame f = makeFrame(Msg::Command, Dir::GaugeToHub, node, 8);
+    f.data[0] = uint8_t(Cmd::RunResult);
+    f.data[1] = uint8_t((m.run & 0x0F) << 4) | uint8_t(m.seq & 0x0F);
+    f.data[2] = uint8_t(m.aborted ? 0x80 : 0) | uint8_t((m.count & 0x07) << 3) | uint8_t(m.index & 0x07);
+    f.data[3] = uint8_t(m.ms >> 16);
+    f.data[4] = uint8_t(m.ms >> 8);
+    f.data[5] = uint8_t(m.ms);
+    f.data[6] = uint8_t(m.speed10 >> 8);
+    f.data[7] = uint8_t(m.speed10);
+    return f;
+}
+
+bool unpack(const CanFrame& f, RunResult& m) {
+    if (f.len < 8 || f.data[0] != uint8_t(Cmd::RunResult)) return false;
+    m.run = f.data[1] >> 4;
+    m.seq = f.data[1] & 0x0F;
+    m.aborted = (f.data[2] & 0x80) != 0;
+    m.count = (f.data[2] >> 3) & 0x07;
+    m.index = f.data[2] & 0x07;
+    m.ms = (uint32_t(f.data[3]) << 16) | (uint32_t(f.data[4]) << 8) | f.data[5];
+    m.speed10 = uint16_t((uint16_t(f.data[6]) << 8) | f.data[7]);
+    return true;
+}
+
 bool unpack(const CanFrame& f, Request& m) {
-    if (f.len < 3 || f.data[0] == uint8_t(Cmd::Needs)) return false;
+    if (f.len < 3 || f.data[0] == uint8_t(Cmd::Needs) || f.data[0] == uint8_t(Cmd::RunResult)) return false;
     m.cmd = Cmd(f.data[0]);
     m.arg = f.data[1];
     m.all = f.data[2] != 0;

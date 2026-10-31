@@ -3,14 +3,17 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <lvgl.h>
 
 #include "can_task.h"
 #include "display.h"
+#include "drag_runs.h"
 #include "face_needs.h"
 #include "face_renderer.h"
 #include "face_store.h"
 #include "font_manager.h"
+#include "imu.h"
 #include "ip_link.h"
 #include "link_icon.h"
 #include "proto.h"
@@ -53,6 +56,14 @@ void saveBrightness() {
     p.end();
 }
 char alertShown[33] = {};
+// A short message in the note at the bottom (the result of a capture).
+std::string noteMessage;
+uint32_t noteUntilMs = 0;
+
+void say(const char* text) {
+    noteMessage = text;
+    noteUntilMs = millis() + 2500;
+}
 uint32_t alertColour = 0;
 
 // The key-on intro (docs/startup-animation.md): dark until the hub's intro
@@ -123,6 +134,15 @@ void menuScreenOff() {
 }
 void menuSendAll(uint8_t cmd, uint8_t arg) { can_task::requestAll(hg::proto::Cmd(cmd), arg); }
 void menuResetHold() { face_renderer::resetHold(); }
+// The accelerometer's captures (docs/motion.md): with the car at rest, then braking.
+void menuSetLevel() { say(imu::setLevel() ? "LEVEL SET" : "NOT LEVEL: STOP THE CAR FIRST"); }
+void menuSetForward() {
+    if (!imu::levelSet()) {
+        say("SET LEVEL FIRST");
+        return;
+    }
+    say(imu::setForward() ? "FORWARD SET" : "BRAKE HARDER WHILE PRESSING");
+}
 
 // A touch on a dark screen wakes it and does nothing else.
 void onPressed(lv_event_t*) {
@@ -268,6 +288,7 @@ void updateOverlays(uint32_t now) {
     std::string next = status;
     if (face_store::trial()) next += next.empty() ? "TRIAL" : "  TRIAL";
     if (face_store::fallback()) next += next.empty() ? "BUILT-IN FACE" : "  BUILT-IN FACE";
+    if (noteUntilMs && int32_t(now - noteUntilMs) < 0) next = noteMessage;
     if (next != lastStatus) {
         lastStatus = next;
         lv_label_set_text(note, next.c_str());
@@ -376,7 +397,8 @@ void begin() {
         p.end();
     }
     makeOverlays();
-    quick_menu::begin(screen, {menuBrightness, menuScreenOff, menuSendAll, menuResetHold}, lastBrightness);
+    quick_menu::begin(screen, {menuBrightness, menuScreenOff, menuSendAll, menuResetHold, menuSetLevel, menuSetForward},
+                      lastBrightness);
     // Dark until the intro (the hub's, or this gauge's own if no hub speaks up),
     // unless the splash is showing; rebuild() keeps it above the face.
     if (!splash::active()) display::setBrightness(0);
@@ -415,6 +437,10 @@ void update() {
         if (introDone() || splash::active()) display::setBrightness(lastBrightness);
     }
 
+    // The accelerometer and the drag timers run whatever is on the screen.
+    imu::poll(now);
+    drag_runs::poll(now, face_renderer::demo());
+
     if (now - lastUpdateMs >= 33) {
         lastUpdateMs = now;
         runIntro(now);
@@ -435,9 +461,9 @@ void update() {
 
     if (now - lastReportMs >= 5000) {
         lastReportMs = now;
-        Serial.printf("fps %u (flush %u ms/s, lvgl %u ms/s), face %u/%u, %s, hub %d, frames %u, link %s, internal heap %u (min %u), psram %u\n",
+        Serial.printf("fps %u (flush %u ms/s, lvgl %u ms/s, imu %u ms/5s), reset %d, face %u/%u, %s, hub %d, frames %u, link %s, internal heap %u (min %u), psram %u\n",
                       unsigned(display::framesPerSecond()), unsigned(display::flushMsPerSecond()),
-                      unsigned(display::lvglMsPerSecond()), unsigned(face_store::activeFace() + 1),
+                      unsigned(display::lvglMsPerSecond()), unsigned(imu::msPerSecond()), int(esp_reset_reason()), unsigned(face_store::activeFace() + 1),
                       unsigned(face_store::faceCount()),
                       face_renderer::stale() ? "NO DATA" : (face_renderer::demo() ? "DEMO" : "LIVE"),
                       int(can_task::hubPresent()), unsigned(can_task::framesReceived()), ip_link::status(),

@@ -274,6 +274,8 @@ struct SimHub {
     uint16_t mediaMask = 0;
     int inputFrames = 0;
     int rawFrames = 0;
+    // Drag timer runs the gauges reported (docs/motion.md).
+    std::vector<std::pair<uint32_t, RunReport>> runs;  // (node, report)
     bool hornOn() const { return wheel.state().hornOn; }
 
     static void onHorn(bool on, void* ctx) {
@@ -286,6 +288,9 @@ struct SimHub {
         SimHub* h = static_cast<SimHub*>(ctx);
         h->inputFrames++;
         h->wheel.onInput(g.node, in, *h->now);
+    }
+    static void onRun(const HubManager::Gauge& g, const RunReport& r, void* ctx) {
+        static_cast<SimHub*>(ctx)->runs.push_back({g.node, r});
     }
     static void onInputRaw(const HubManager::Gauge& g, const InputRaw& raw, void* ctx) {
         SimHub* h = static_cast<SimHub*>(ctx);
@@ -379,6 +384,7 @@ struct SimHub {
         h.wifiJoin = onWifiJoin;
         h.input = onInput;
         h.inputRaw = onInputRaw;
+        h.run = onRun;
         h.ctx = this;
         openImages = 0;
         mgr.init(port.link(), h, *now);
@@ -1648,6 +1654,62 @@ void test_lossy_bus_keeps_the_horn_up() {
 
 // The hub puts only the frames the online gauges asked for on the bus, and
 // everything while any of them has not said (docs/frame-filter.md).
+void test_drag_runs_reach_the_hub_a_split_at_a_time() {
+    World w;
+    w.run(2000);
+    // A quarter mile: four splits, the last with the trap speed.
+    const uint32_t ms[4] = {1950, 5400, 8310, 12900};
+    for (uint8_t i = 0; i < 4; i++) {
+        RunResult r;
+        r.run = 1;
+        r.seq = 3;
+        r.index = i;
+        r.count = 4;
+        r.ms = ms[i];
+        r.speed10 = i == 3 ? 1780 : 0;
+        TEST_ASSERT_TRUE(w.g1.node.sendRunResult(r));
+        w.run(10);
+        TEST_ASSERT_EQUAL(i == 3 ? 1 : 0, int(w.hub.runs.size()));
+    }
+    const HubManager::Gauge* g1 = w.hub.byMac(w.g1.mac);
+    TEST_ASSERT_NOT_NULL(g1);
+    TEST_ASSERT_EQUAL_UINT32(g1->node, w.hub.runs[0].first);
+    const RunReport& rp = w.hub.runs[0].second;
+    TEST_ASSERT_EQUAL(1, rp.run);
+    TEST_ASSERT_EQUAL(3, rp.seq);
+    TEST_ASSERT_EQUAL(4, rp.count);
+    TEST_ASSERT_FALSE(rp.aborted);
+    TEST_ASSERT_EQUAL_UINT32(12900, rp.ms[3]);
+    TEST_ASSERT_EQUAL_UINT16(1780, rp.speed10[3]);
+    TEST_ASSERT_EQUAL_UINT32(1950, rp.ms[0]);
+    // An abandoned run that reached nothing is one frame.
+    RunResult none;
+    none.run = 0;
+    none.seq = 4;
+    none.count = 0;
+    none.aborted = true;
+    TEST_ASSERT_TRUE(w.g2.node.sendRunResult(none));
+    w.run(10);
+    TEST_ASSERT_EQUAL(2, int(w.hub.runs.size()));
+    TEST_ASSERT_TRUE(w.hub.runs[1].second.aborted);
+    TEST_ASSERT_EQUAL(0, w.hub.runs[1].second.count);
+    // The frames of two runs from two gauges interleaved still sort out.
+    RunResult a, b;
+    a.run = b.run = 0;
+    a.seq = 5;
+    b.seq = 6;
+    a.count = b.count = 1;
+    a.ms = 4600;
+    b.ms = 4700;
+    TEST_ASSERT_TRUE(w.g1.node.sendRunResult(a));
+    TEST_ASSERT_TRUE(w.g2.node.sendRunResult(b));
+    w.run(10);
+    TEST_ASSERT_EQUAL(4, int(w.hub.runs.size()));
+    // A Request still gets through beside them.
+    TEST_ASSERT_TRUE(w.g1.node.request(Cmd::SetBrightness, 100, true));
+    w.run(10);
+}
+
 void test_hub_forwards_only_the_frames_in_use() {
     World w;
     w.run(2000);
@@ -1764,5 +1826,6 @@ int main(int, char**) {
     RUN_TEST(test_big_images_go_over_wifi);
     RUN_TEST(test_wifi_falls_back_to_the_bus);
     RUN_TEST(test_hub_forwards_only_the_frames_in_use);
+    RUN_TEST(test_drag_runs_reach_the_hub_a_split_at_a_time);
     return UNITY_END();
 }

@@ -6,6 +6,7 @@ Swipe down from the top edge of any gauge and a small panel slides over the face
    +------------------------------+
    |  Brightness  [=======----]   |
    |  [ Screen off ] [ Reset peaks ]|
+   |  [ Set level ] [ Set forward ] |
    |  Apply to    ( this ) ( all )|
    +------------------------------+
 ```
@@ -17,6 +18,11 @@ Swipe down from the top edge of any gauge and a small panel slides over the face
 - **Reset peaks**: clears every held peak and minimum on the faces (widgets with `hold`,
   `docs/config-schema.md`): the tell-tale needles and marks go, and a number showing its
   held value shows the live one again until a new peak arrives.
+- **Set level** and **Set forward** (boards with an accelerometer): the two captures
+  that tell the G meter and drag timer which way is up and forward (`docs/motion.md`):
+  the first with the car at rest, the second while braking firmly on a straight road.
+  The result shows at the bottom of the face for a moment. Reset peaks also clears the
+  G meter's marks and the drag timer's results.
 - **Apply to**: *this gauge* changes only the one you are touching. *All gauges* sends
   the change to the hub, which applies it to every gauge on the bus and remembers the
   brightness, so a gauge that reconnects gets it too.

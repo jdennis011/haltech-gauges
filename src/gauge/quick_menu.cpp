@@ -4,6 +4,7 @@
 
 #include "display.h"
 #include "font_manager.h"
+#include "imu.h"
 #include "link_icon.h"
 #include "proto.h"
 
@@ -43,7 +44,7 @@ lv_obj_t* makeButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb) {
     lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(b, scaled(12), 0);
     lv_obj_set_style_pad_hor(b, scaled(18), 0);
-    lv_obj_set_style_pad_ver(b, scaled(10), 0);
+    lv_obj_set_style_pad_ver(b, scaled(8), 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, text);
@@ -91,6 +92,18 @@ void onResetHold(lv_event_t*) {
     close();
 }
 
+void onSetLevel(lv_event_t*) {
+    touched();
+    close();
+    if (handlers.setLevel) handlers.setLevel();
+}
+
+void onSetForward(lv_event_t*) {
+    touched();
+    close();
+    if (handlers.setForward) handlers.setForward();
+}
+
 void onThis(lv_event_t*) {
     touched();
     setScope(false);
@@ -107,7 +120,9 @@ void onPanelTouched(lv_event_t*) { touched(); }
 
 void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     handlers = h;
-    const int w = display::kSize * 78 / 100, hgt = display::kSize * 50 / 100, pad = scaled(16);
+    // A board with an accelerometer gets a row for its two captures.
+    const bool motion = imu::present();
+    const int w = display::kSize * 78 / 100, hgt = display::kSize * (motion ? 56 : 50) / 100, pad = scaled(16);
     panel = lv_obj_create(screen);
     lv_obj_remove_style_all(panel);
     lv_obj_set_size(panel, w, hgt);
@@ -161,6 +176,12 @@ void begin(lv_obj_t* screen, const Handlers& h, uint8_t brightness) {
     lv_obj_align(off, LV_ALIGN_TOP_LEFT, 0, scaled(100));
     lv_obj_t* reset = makeButton(panel, "Reset peaks", onResetHold);
     lv_obj_align_to(reset, off, LV_ALIGN_OUT_RIGHT_MID, scaled(10), 0);
+    if (motion) {
+        lv_obj_t* level = makeButton(panel, "Set level", onSetLevel);
+        lv_obj_align(level, LV_ALIGN_TOP_LEFT, 0, scaled(142));
+        lv_obj_t* fwd = makeButton(panel, "Set forward", onSetForward);
+        lv_obj_align_to(fwd, level, LV_ALIGN_OUT_RIGHT_MID, scaled(10), 0);
+    }
 
     lv_obj_t* scope = lv_label_create(panel);
     lv_label_set_text(scope, "Apply to");

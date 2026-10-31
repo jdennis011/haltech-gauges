@@ -256,6 +256,7 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
             g->imageCount = 0;
             g->haveNeeds = false;
             g->needsParts = 0;
+            g->runSeen = 0;
             g->wifiTried = false;
             g->wifiUntilMs = 0;
             if (queryActive_ && queryNode_ == node) queryActive_ = false;
@@ -297,6 +298,30 @@ void HubManager::onFrame(const CanFrame& frame, uint32_t nowMs) {
                     g->needsParts |= uint8_t(1u << n.part);
                     g->haveNeeds = g->needsParts == uint8_t((1u << kNeedsParts) - 1);
                     if (g->haveNeeds) notify();
+                }
+                break;
+            }
+            RunResult rr;
+            if (unpack(frame, rr)) {
+                if (rr.index >= kRunSplits || rr.count > kRunSplits) break;
+                RunReport& rp = g->runPending;
+                if (g->runSeen == 0 || rp.seq != rr.seq || rp.run != rr.run) {
+                    rp = RunReport();
+                    rp.run = rr.run;
+                    rp.seq = rr.seq;
+                    g->runSeen = 0;
+                }
+                rp.count = rr.count;
+                rp.aborted = rr.aborted;
+                if (rr.count) {
+                    rp.ms[rr.index] = rr.ms;
+                    rp.speed10[rr.index] = rr.speed10;
+                }
+                g->runSeen |= uint8_t(1u << rr.index);
+                const uint8_t all = rr.count ? uint8_t((1u << rr.count) - 1) : 1;
+                if ((g->runSeen & all) == all) {
+                    if (handler_.run) handler_.run(*g, rp, handler_.ctx);
+                    g->runSeen = 0;
                 }
                 break;
             }

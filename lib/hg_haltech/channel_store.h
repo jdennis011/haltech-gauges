@@ -21,6 +21,10 @@ public:
     // or it has gone stale (no update for several of its broadcast periods).
     bool get(ChannelId id, uint32_t nowMs, float& value) const;
 
+    // The last value that arrived and when, stale or not; false if none ever
+    // did or the ECU flagged it. For a reader that wants each sample once.
+    bool latest(ChannelId id, float& value, uint32_t& stampMs) const;
+
     // How long a channel may go without an update before it counts as stale.
     static uint32_t staleAfterMs(ChannelId id);
 

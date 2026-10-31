@@ -11,6 +11,7 @@
 #include "display.h"
 #include "face_model.h"
 #include "face_store.h"
+#include "imu.h"
 #include "ip_link.h"
 #include "proto.h"
 
@@ -52,6 +53,8 @@ void help() {
     Serial.println("  volume N              speaker volume 0..100, kept");
     Serial.println("  info                  faces, hub, heap, audio");
     Serial.println("  can                   the CAN controller: state, frames received, TEC, REC, errors");
+    Serial.println("  imu                   the accelerometer: raw axes, lateral/longitudinal g, calibration");
+    Serial.println("  imu level|forward|clear   the mounting captures (docs/motion.md)");
     Serial.println("  link SSID PASSWORD [HUB]  reach the hub over Wi-Fi: its access point (hub 192.168.4.1), or a network with its address");
     Serial.println("  link                  the link's state;  link off  drops it");
 }
@@ -160,6 +163,17 @@ void run(const std::string& cmd) {
                       unsigned(c.busErrors), unsigned(c.rxMissed), unsigned(c.txFailed),
                       can_task::hubPresent() ? "heard" : "not heard", ip_link::status());
         Serial.println();
+    } else if (cmd == "imu") {
+        char line[160];
+        imu::status(line, sizeof(line));
+        Serial.println(line);
+    } else if (cmd == "imu level") {
+        Serial.println(imu::setLevel() ? "level set" : "level not set (no sensor, or not at rest)");
+    } else if (cmd == "imu forward") {
+        Serial.println(imu::setForward() ? "forward set" : "forward not set (brake harder, or set level first)");
+    } else if (cmd == "imu clear") {
+        imu::clearCalibration();
+        Serial.println("calibration cleared");
     } else if (cmd == "info") {
         Serial.printf("faces %u, on face %u, hub %d, trying %d, heap %u, audio %s\n", unsigned(face_store::faceCount()),
                       unsigned(face_store::activeFace() + 1), int(can_task::hubPresent()), int(face_store::trying()),

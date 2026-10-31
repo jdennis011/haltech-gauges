@@ -220,6 +220,11 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
       <table class="list" id="sw-fg-capture"></table>
     </details>
   </div>
+  <div class="card" id="runs-card" style="display:none">
+    <div class="row"><strong>Runs</strong><span class="muted">the drag timers on the gauges report each finished run here, and to runs.csv on the SD card (docs/motion.md)</span><span class="spacer"></span>
+      <button class="btn small" id="runs-clear" title="Forgets the list; the file on the card stays">Clear</button></div>
+    <table class="list" id="runs-table"></table>
+  </div>
   <div id="gauges" class="grid"></div>
 </section>
 
@@ -542,7 +547,7 @@ function showTab(name) {
   if (name === 'live') { loadSim(); loadRecordings(); }
   if (name === 'alerts') loadAlerts();
   if (name === 'settings') { loadHubs(); loadIntro(); loadSd(); }
-  if (name === 'gauges') loadSteering();
+  if (name === 'gauges') { loadSteering(); loadRuns(); }
 }
 $$('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -596,6 +601,7 @@ function onMessage(m) {
   else if (m.t === 'live') { state.live = m.v || {}; renderLive(); }
   else if (m.t === 'alerts') { state.alertStates = m.states || []; renderAlertStates(); }
   else if (m.t === 'wheel') renderSteering(m);
+  else if (m.t === 'runs') renderRuns(m.runs || []);
   else if (m.t === 'themeColours' && themeListOk(m.colours)) {
     if (Date.now() < wheel.busyUntil) return;  // the wheel is ahead of what the hub last saved
     state.themeColours = m.colours;
@@ -1284,8 +1290,8 @@ $('#btn-endtry').addEventListener('click', async () => {
 // A table of the widgets on the selected face with their font and size, the
 // first piece of the builder. Edits rewrite the JSON in the editor.
 
-const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], clock: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
-const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22, path: 48 };
+const FONT_FIELDS = { number: ['font', 'size'], label: ['font', 'size'], light: ['font', 'size'], clock: ['font', 'size'], gmeter: ['font', 'size'], dragtimer: ['font', 'size'], dial: ['labelFont', 'labelSize'] };
+const DEFAULT_SIZES = { number: 72, label: 24, light: 18, dial: 22, path: 48, clock: 56, gmeter: 22, dragtimer: 64 };
 const FONT_SAMPLE = '0123456789 RPM 14.7 \u00b0C km/h';
 
 function widgetName(w) {
@@ -1380,6 +1386,15 @@ const PANEL_FIELDS = {
   clock:  [['style', 'select', 'Style', ['digital', 'analogue'], 'The hub\'s time of day: digits, or hands'], ['seconds', 'bool', 'Seconds', false],
            ['format', 'select', 'Hours', ['24h', '12h'], 'Digital only'], ['color', 'color', 'Colour', 'fg'], ['align', 'select', 'Align', ALIGNS],
            ['rotate', 'int', 'Rotate', [-180, 180, 0]], ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  gmeter: [['range', 'number', 'Range', null, 'The outer ring, in g (0.5 to 4); rings every half g inside it'],
+           ['trail', 'bool', 'Trail', true, 'The last two seconds of the dot, fading'], ['peaks', 'bool', 'Peak marks', true, 'The furthest point each way, until Reset peaks'],
+           ['numbers', 'bool', 'Numbers', true, 'Lateral and longitudinal g as text'],
+           ['color', 'color', 'Colour', 'fg', 'The numbers'], ['dotColor', 'color', 'Dot', 'accent'], ['trackColor', 'color', 'Rings', 'dim'], ['peakColor', 'color', 'Peaks', 'warn'],
+           ['font', 'font', 'Font'], ['size', 'size', 'Size']],
+  dragtimer: [['run', 'select', 'Run', ['0-100', 'strip', '80-120', '100-200'], 'Standing start to 100 km/h; the strip\'s 60 ft, 330 ft, 1/8 and 1/4 mile with the trap speed; or a rolling run between two speeds'],
+           ['rollout', 'bool', 'Rollout', false, 'Standing starts only: the clock starts a foot on, as a strip\'s beams do'],
+           ['color', 'color', 'Colour', 'fg'], ['doneColor', 'color', 'Done', '#34C759', 'The time of a complete run'], ['dimColor', 'color', 'Dim', 'dim', 'The run name, state and best'],
+           ['font', 'font', 'Font'], ['size', 'size', 'Size']],
 };
 const XY = [['x', 'int', 'X', [0, 466, 233], 'Centre, pixels from the left'], ['y', 'int', 'Y', [0, 466, 233], 'Centre, pixels from the top']];
 const CONDITION = [['channel', 'channelOpt', 'Channel', null, 'Optional. ' + COND_HINT], ['on', 'cond', 'Lit when', null, COND_HINT],
@@ -1412,6 +1427,8 @@ const MORE_FIELDS = {
            ['opacity', 'int', 'Opacity', [0, 100, 100]], ...CONDITION],
   clock:  [...XY, ['r', 'int', 'Radius', [20, 233, 120], 'Analogue'], ['thickness', 'int', 'Hand w', [1, 20, 6], 'Analogue: the hour hand; the others are thinner'],
            ['ticks', 'bool', 'Marks', true], ['tickColor', 'color', 'Marks', 'dim'], ['secondColor', 'color', 'Second hand', 'accent']],
+  gmeter: [...XY, ['r', 'int', 'Radius', [40, 233, 180]]],
+  dragtimer: [...XY],
 };
 
 const ROLES = ['fg', 'accent', 'dim', 'warn', 'alert', 'bg'];
@@ -1606,6 +1623,8 @@ const WIDGET_DEFAULTS = {
   path: { type: 'path', d: ICONS.engine, size: 72, y: 380, color: 'warn', channel: 'check_engine_light', offColor: 'dim' },
   image: { type: 'image', w: 160, h: 160 },
   clock: { type: 'clock', y: 233, size: 56 },
+  gmeter: { type: 'gmeter', r: 180, range: 1.5 },
+  dragtimer: { type: 'dragtimer', run: '0-100', size: 64, y: 233 },
 };
 const MAX_WIDGETS = 16;  // the parser's limit per face
 $('#add-type').append(...Object.keys(WIDGET_DEFAULTS).map(k => el('option', { value: k }, k)));
@@ -2483,6 +2502,35 @@ async function loadSteering() {
   if (ONLINE) return;
   try { renderSteering(await api.get('/api/wheel')); } catch (e) { /* the push will come */ }
 }
+
+// The Runs card (docs/motion.md): every drag timer run the gauges reported, newest first.
+async function loadRuns() {
+  if (ONLINE) return;
+  try { renderRuns((await api.get('/api/runs')).runs || []); } catch (e) { /* the push will come */ }
+}
+function gaugeLabelFor(node) {
+  const g = (state.gauges || []).find(x => x.node === node);
+  return g && (g.label || g.name) ? g.label || g.name : node;
+}
+function renderRuns(list) {
+  state.runs = list;
+  const card = $('#runs-card');
+  if (ONLINE || !list.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const fmt = ms => (ms / 1000).toFixed(2) + ' s';
+  const tbl = $('#runs-table');
+  tbl.innerHTML = '';
+  tbl.append(el('tr', {}, el('th', {}, 'When'), el('th', {}, 'Gauge'), el('th', {}, 'Run'), el('th', {}, 'Time'), el('th', {}, 'Splits')));
+  for (const r of list) {
+    const when = r.time || (r.at_s + ' s after start');
+    const time = r.complete ? fmt(r.total_ms) : (r.total_ms ? fmt(r.total_ms) + ' (abandoned)' : 'abandoned');
+    const splits = (r.splits || []).map(s => s.name + ' ' + fmt(s.ms) + (s.kmh ? ' @ ' + Math.round(s.kmh) + ' km/h' : '')).join(', ');
+    tbl.append(el('tr', { class: r.complete ? '' : 'muted' }, el('td', {}, when), el('td', {}, gaugeLabelFor(r.node)), el('td', {}, r.name), el('td', { class: 'mono' }, time), el('td', {}, splits)));
+  }
+}
+$('#runs-clear').addEventListener('click', async () => {
+  try { await api.del('/api/runs'); renderRuns([]); } catch (e) { setMsg(e.message, 'bad'); }
+});
 
 function swTable(w) {
   if (swCal && swCalDirty) return swCal;
@@ -3763,7 +3811,90 @@ function drawImageWidget(ctx, w, th, t) {
   ctx.drawImage(img, -d.dw / 2, -d.dh / 2, d.dw, d.dh);
 }
 
-const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath, image: drawImageWidget, clock: drawClock };
+// The G meter (docs/motion.md): rings every half g, a crosshair, a fading
+// trail, peak marks, the dot and the numbers. The preview plays a figure of
+// eight, as a gauge with no live data does.
+function gmeterPoint(w, t) {
+  const range = +w.range || 1.5, ph = (t % 6000) / 6000 * 2 * Math.PI;
+  return { lat: 0.6 * range * Math.sin(ph), lon: 0.45 * range * Math.sin(2 * ph) };
+}
+function drawGmeter(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, r = w.r == null ? 180 : w.r;
+  const range = +w.range || 1.5, perG = r / range;
+  const track = color(w.trackColor, th, th.dim), dot = color(w.dotColor, th, th.accent);
+  ctx.lineCap = 'round';
+  for (let g = 0.5; g <= range + 0.01; g += 0.5) {
+    const outer = g + 0.49 > range;
+    ctx.strokeStyle = track; ctx.globalAlpha = outer ? 1 : 0.6; ctx.lineWidth = outer ? 2 : 1;
+    ctx.beginPath(); ctx.arc(cx, cy, g * perG, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 0.6; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+  ctx.globalAlpha = 1;
+  const px = lat => cx + clamp(lat, -range, range) * perG, py = lon => cy - clamp(lon, -range, range) * perG;
+  if (w.trail == null || w.trail) {
+    for (let i = 1; i <= 30; i++) {
+      const p = gmeterPoint(w, t - (30 - i) * 66);
+      ctx.globalAlpha = (20 + 160 * i / 31) / 255; ctx.fillStyle = dot;
+      ctx.beginPath(); ctx.arc(px(p.lat), py(p.lon), 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (w.peaks == null || w.peaks) {
+    ctx.strokeStyle = color(w.peakColor, th, th.warn); ctx.lineWidth = 2;
+    const latMax = 0.6 * range, lonMax = 0.45 * range, tk = 7;
+    for (const [x1, y1, x2, y2] of [[px(latMax), cy - tk, px(latMax), cy + tk], [px(-latMax), cy - tk, px(-latMax), cy + tk], [cx - tk, py(lonMax), cx + tk, py(lonMax)], [cx - tk, py(-lonMax), cx + tk, py(-lonMax)]]) {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+  }
+  const p = gmeterPoint(w, t);
+  ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(px(p.lat), py(p.lon), 9, 0, Math.PI * 2); ctx.fill();
+  if (w.numbers == null || w.numbers) {
+    ctx.font = (w.size || 22) + 'px ' + fontStack(w.font); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color(w.color, th, th.fg);
+    ctx.fillText((p.lat < 0 ? 'L ' : 'R ') + Math.abs(p.lat).toFixed(2), cx - r * 0.5, cy + r * 0.78);
+    ctx.fillText((p.lon < 0 ? '-' : '+') + Math.abs(p.lon).toFixed(2), cx + r * 0.5, cy + r * 0.78);
+  }
+}
+
+// The drag timer (docs/motion.md). The preview replays a run on a 24 second
+// cycle: three seconds at rest, the run, the stop, rest again.
+const RUN_NAMES = { '0-100': '0-100 km/h', strip: '1/4 mile', '80-120': '80-120 km/h', '100-200': '100-200 km/h' };
+const RUN_SPLITS = {
+  '0-100': [['100 km/h', 4600, 100]],
+  strip: [['60 ft', 1950, 56], ['330 ft', 5350, 112], ['1/8 mi', 8200, 132], ['1/4 mi', 12750, 178]],
+  '80-120': [['120 km/h', 3900, 120]],
+  '100-200': [['200 km/h', 9800, 200]],
+};
+function dragtimerText(w, t) {
+  const run = RUN_NAMES[w.run] ? w.run : '0-100', splits = RUN_SPLITS[run], total = splits[splits.length - 1][1];
+  const s = (t % 24000) / 1000, fmt = ms => (ms / 1000).toFixed(2);
+  let state, time, done = 0, complete = false;
+  if (s < 1) { state = 'STOP TO ARM'; time = '0.00'; }
+  else if (s < 3) { state = 'READY'; time = '0.00'; }
+  else if (s < 3 + total / 1000) { state = w.rollout && s < 3.35 ? 'ROLLOUT' : 'RUNNING'; const ms = (s - 3) * 1000; time = fmt(ms); done = splits.filter(sp => sp[1] <= ms).length; }
+  else { state = 'DONE'; time = fmt(total); done = splits.length; complete = true; }
+  const lines = [RUN_NAMES[run] + '  ' + state];
+  if (run === 'strip') for (let i = 0; i < splits.length; i++) lines.push(splits[i][0] + ' ' + (i < done ? fmt(splits[i][1]) + (i === 3 ? ' @ ' + splits[i][2] : '') : '--.--'));
+  lines.push('best ' + fmt(total));
+  return { time, lines, complete };
+}
+function drawDragtimer(ctx, w, th, t) {
+  const cx = w.x == null ? 233 : w.x, cy = w.y == null ? 233 : w.y, s = w.size || 64;
+  const { time, lines, complete } = dragtimerText(w, t);
+  const dim = color(w.dimColor, th, th.dim), fg = color(w.color, th, th.fg);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = Math.round(s * 0.3) + 'px ' + fontStack(w.font);
+  lines.forEach((ln, i) => {
+    ctx.fillStyle = i === 0 || ln.startsWith('best') ? dim : fg;
+    ctx.fillText(ln, cx, i === 0 ? cy - s * 0.75 : cy + s * 0.65 + (i - 1) * s * 0.4);
+  });
+  ctx.font = s + 'px ' + fontStack(w.font);
+  ctx.fillStyle = complete ? color(w.doneColor, th, '#34C759') : fg;
+  ctx.fillText(time, cx, cy);
+}
+
+const DRAW = { dial: drawDial, ring: drawRing, bar: drawBar, number: drawNumber, label: drawLabel, light: drawLight, rim: drawRim, shape: drawShape, path: drawPath, image: drawImageWidget, clock: drawClock, gmeter: drawGmeter, dragtimer: drawDragtimer };
 
 function drawFace(canvas, cfg, faceIdx, t) {
   loadFonts();
@@ -3956,6 +4087,8 @@ function widgetBounds(ctx, w, t) {
   if (w.type === 'path') { const s = w.size || 48; return rotated({ kind: 'rect', cx, cy, w: s, h: s }, w.rotate || 0, cx, cy); }
   if (w.type === 'image') return rotated({ kind: 'rect', cx, cy, w: w.w == null ? 160 : w.w, h: w.h == null ? 160 : w.h }, w.rotate || 0, cx, cy);
   if (w.type === 'clock' && w.style === 'analogue') { const r = w.r == null ? 120 : w.r; return { kind: 'ring', cx, cy, r, inner: 0 }; }
+  if (w.type === 'gmeter') { const r = w.r == null ? 180 : w.r; return { kind: 'ring', cx, cy, r, inner: 0 }; }
+  if (w.type === 'dragtimer') { const s = w.size || 64, top = s * 0.95, bottom = w.run === 'strip' ? s * 2.75 : s * 1.15; return { kind: 'rect', cx, cy: cy + (bottom - top) / 2, w: s * 5.2, h: top + bottom }; }
   // Text: number, label, light caption, digital clock.
   const size = w.type === 'number' ? (w.size || 72) : w.type === 'light' ? (w.size || 18) : w.type === 'clock' ? (w.size || 56) : (w.size || 24);
   const text = w.type === 'number' ? numberText(w, valueOf(w, t)) : w.type === 'clock' ? clockText(w, new Date()) : (w.text || '');
@@ -4013,14 +4146,17 @@ function startResize(w, b, p) {
   const px = b.px == null ? b.cx : b.px, py = b.py == null ? b.cy : b.py;
   const d0 = Math.max(4, Math.hypot(p.x - px, p.y - py));
   drag = { resize: true, px, py, d0, moved: false, keys: [],
-    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : w.type === 'path' ? 48 : w.type === 'clock' ? 56 : 24), r0: w.r == null ? (w.type === 'clock' ? 120 : 14) : w.r, rotate: 0,
+    size0: w.size || (w.type === 'number' ? 72 : w.type === 'light' ? 18 : w.type === 'path' ? 48 : w.type === 'clock' ? 56 : w.type === 'dragtimer' ? 64 : 24), r0: w.r == null ? (w.type === 'clock' ? 120 : w.type === 'gmeter' ? 180 : 14) : w.r, rotate: 0,
     points0: Array.isArray(w.points) ? w.points.slice() : null };
 }
 
 function applyResize(w, p) {
   const d = Math.hypot(p.x - drag.px, p.y - drag.py);
   const lim = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
-  if (w.type === 'clock' && w.style === 'analogue') {
+  if (w.type === 'gmeter') {
+    w.r = lim(d, 40, 233);
+    drag.keys = ['r'];
+  } else if (w.type === 'clock' && w.style === 'analogue') {
     w.r = lim(d, 20, 233);
     drag.keys = ['r'];
   } else if (w.type === 'dial' || w.type === 'ring' || w.type === 'rim') {
@@ -4587,6 +4723,14 @@ const mock = {
     }
     if (path === '/api/intro/play') return { ok: true, gauges: 1 };
     if (path === '/api/wheel' || path.startsWith('/api/wheel/')) return { present: false };
+    if (path === '/api/runs') {
+      if (method === 'DELETE') { this.runs = []; return { ok: true }; }
+      if (!this.runs) this.runs = [
+        { seq: 2, at_s: 812, time: '', node: 'D029F0', run: 'strip', name: '1/4 mile', aborted: false, complete: true, total_ms: 12750, splits: [{ name: '60 ft', ms: 1950, kmh: 56 }, { name: '330 ft', ms: 5350, kmh: 112 }, { name: '1/8 mi', ms: 8200, kmh: 132 }, { name: '1/4 mi', ms: 12750, kmh: 178 }] },
+        { seq: 1, at_s: 640, time: '', node: 'D029F0', run: '0-100', name: '0-100 km/h', aborted: false, complete: true, total_ms: 4600, splits: [{ name: '100 km/h', ms: 4600, kmh: 100 }] },
+        { seq: 1, at_s: 300, time: '', node: 'D02424', run: '0-100', name: '0-100 km/h', aborted: true, complete: false, total_ms: 0, splits: [] }];
+      return { runs: this.runs };
+    }
     if (path === '/api/sd' || path.startsWith('/api/sd/')) return { card: { slot: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, file: '', rows: 0, bytes: 0, seconds: 0 }, logs: [] };
     if (path === '/api/time') return { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 };
     if (path === '/api/gauge-firmware' || path.startsWith('/api/gauge-firmware/')) return { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 };

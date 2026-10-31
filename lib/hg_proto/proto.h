@@ -72,6 +72,7 @@ enum class Cmd : uint8_t {
     SetVolume = 11,     // arg = speaker volume 0..100; the gauge keeps it
     ResetHold = 12,     // clear the held peaks and minimums on the gauge (docs/gauge-quick-menu.md)
     Needs = 13,         // gauge to hub: the Haltech frames its faces use (a Needs frame, not a Request)
+    RunResult = 14,     // gauge to hub: one split of a drag timer run (a RunResult frame, docs/motion.md)
 };
 
 // What Cmd::PlaySound asks for, and what an alert rule names.
@@ -186,6 +187,31 @@ struct Needs {
     uint8_t part = 0;
     uint8_t tag = 0;
     uint64_t bits = 0;  // the low kNeedsPartBits
+};
+
+// A finished drag timer run (docs/motion.md), gauge to hub as Msg::Command
+// with Cmd::RunResult in the first byte, one frame per split reached (a
+// single frame with count 0 when none was): the run type (hg::motion::Run),
+// the run's sequence number, which split of how many, whether the run was
+// abandoned, the split's time from the start and the speed as it was
+// reached. The hub puts the frames of one run together as a RunReport.
+constexpr size_t kRunSplits = 4;
+struct RunResult {
+    uint8_t run = 0;
+    uint8_t seq = 0;       // 0..15
+    uint8_t index = 0;     // 0..kRunSplits-1
+    uint8_t count = 0;     // splits reached, 0..kRunSplits
+    bool aborted = false;
+    uint32_t ms = 0;       // 24 bits
+    uint16_t speed10 = 0;  // 0.1 km/h
+};
+struct RunReport {
+    uint8_t run = 0;
+    uint8_t seq = 0;
+    uint8_t count = 0;
+    bool aborted = false;
+    uint32_t ms[kRunSplits] = {};
+    uint16_t speed10[kRunSplits] = {};
 };
 
 // The key-on intro (docs/startup-animation.md), hub to one gauge. Carried as
@@ -328,6 +354,7 @@ CanFrame pack(const CommandAck& m, uint32_t node);
 CanFrame pack(const Intro& m, uint32_t node);
 CanFrame pack(const Request& m, uint32_t node);
 CanFrame pack(const Needs& m, uint32_t node);
+CanFrame pack(const RunResult& m, uint32_t node);
 // Fills `out` with the frames of one alert and returns how many. `seq` (0..15)
 // tells one message from the next.
 size_t packAlert(const Alert& m, uint8_t seq, uint32_t node, CanFrame out[kAlertMaxFrames]);
@@ -354,6 +381,8 @@ bool unpack(const CanFrame& f, Hello& m);
 bool unpack(const CanFrame& f, Request& m);
 // False for a frame that is not a Needs frame (a plain Request, say).
 bool unpack(const CanFrame& f, Needs& m);
+// False for a frame that is not a RunResult frame.
+bool unpack(const CanFrame& f, RunResult& m);
 bool unpack(const CanFrame& f, Info& m);
 bool unpack(const CanFrame& f, Status& m);
 bool unpack(const CanFrame& f, Command& m);

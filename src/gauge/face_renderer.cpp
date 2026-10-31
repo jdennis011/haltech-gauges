@@ -18,7 +18,9 @@
 #include "clock_text.h"
 #include "channel_store.h"
 #include "display.h"
+#include "drag_runs.h"
 #include "font_manager.h"
+#include "imu.h"
 #include "image_store.h"
 #include "units.h"
 
@@ -37,6 +39,13 @@ struct Item {
     lv_area_t area = {};        // where it was last drawn, panel pixels
     bool valid = false;         // the value below is usable
     float value = 0;            // in display units
+    float value2 = 0;           // gmeter: longitudinal g (value is lateral)
+    float drawn2 = 0;           // gmeter: the lon drawn (drawn holds the lat); both move only past a dead band
+    std::vector<float> trail;   // gmeter: lat, lon pairs, oldest first
+    uint32_t trailMs = 0;
+    lv_area_t dyn = {};         // gmeter: where the dot, trail and numbers were last drawn
+    uint32_t peaksKey = 0;      // gmeter: the peak marks drawn
+    std::string text2;          // dragtimer: the title and the lines under the time
     uint32_t key = 0;           // the look last drawn, quantised
     float drawn = 0;            // dial, ring: the value the last redraw covered
     uint32_t drawnColour = 0;   // ring: the colour it was drawn in
@@ -69,6 +78,12 @@ struct Held {
     uint32_t ms;
 };
 std::map<uint32_t, Held> held;
+// The gmeter's peak marks, kept across face switches like the holds: the
+// furthest left, right, forward and back seen, in g. Cleared with them.
+struct GPeaks {
+    float latMin = 0, latMax = 0, lonMin = 0, lonMax = 0;
+};
+std::map<uint32_t, GPeaks> gpeaks;
 size_t faceIndexNow = 0;
 // The key-on intro (setIntro()); introSlot counts the widgets through update().
 bool introOn = false;
@@ -77,6 +92,7 @@ float introPhase = 0;
 size_t introSlot = 0;
 size_t introSlots = 1;
 bool anyLive = false;
+bool anyChannel = false;  // some widget on the face reads the bus
 uint32_t themeCols[kMaxThemeColours];
 uint32_t lastThemeCheckMs = 0;
 
@@ -233,8 +249,16 @@ std::string tickText(float val) {
 
 // ------------------------------------------------------- draw primitives
 
+void drawArc(lv_layer_t* layer, float cx, float cy, float r, float startDeg, float endDeg, float width, lv_color_t c,
+             bool rounded, lv_opa_t opa);
+
 void drawLine(lv_layer_t* layer, float x1, float y1, float x2, float y2, lv_color_t c, float width, bool round,
               lv_opa_t opa = LV_OPA_COVER) {
+    // A line with its ends together is a dot, or nothing: the renderer must not see it.
+    if (fabsf(x2 - x1) < 0.01f && fabsf(y2 - y1) < 0.01f) {
+        if (round && width >= 2) drawArc(layer, x1, y1, width / 2, 0, 360, width / 2 + 1, c, false, opa);
+        return;
+    }
     lv_draw_line_dsc_t d;
     lv_draw_line_dsc_init(&d);
     d.p1.x = Sf(x1);
@@ -890,6 +914,99 @@ void drawClock(lv_layer_t* layer, Item& it) {
     drawDisc(layer, cx, cy, hw * 0.9f, hc);
 }
 
+// The G meter (docs/motion.md): rings every half g out to the range, a
+// crosshair, the trail, the peak marks, the dot, and the numbers. Lateral
+// runs across (right is a right turn), longitudinal up (up is accelerating).
+void drawGMeter(lv_layer_t* layer, Item& it) {
+    const Widget& w = *it.w;
+    const float cx = widgetX(w), cy = widgetY(w), r = float(w.r);
+    const float perG = r / w.range;
+    const lv_color_t track = col(w.trackColor), fg = col(w.color), dot = col(w.needleColor);
+    for (float g = 0.5f; g <= w.range + 0.01f; g += 0.5f) {
+        // A circle as a round-cornered square's border: cheaper than an arc.
+        const bool outer = g + 0.49f > w.range;
+        const float rr = g * perG, lw = outer ? 2 : 1;
+        drawRectXY(layer, cx - rr, cy - rr, 2 * rr, 2 * rr, rr, track, false, track, lw, outer ? LV_OPA_COVER : LV_OPA_60);
+    }
+    drawLine(layer, cx - r, cy, cx + r, cy, track, 1, false, LV_OPA_60);
+    drawLine(layer, cx, cy - r, cx, cy + r, track, 1, false, LV_OPA_60);
+    auto px = [&](float lat) { return cx + clampf(lat, -w.range, w.range) * perG; };
+    auto py = [&](float lon) { return cy - clampf(lon, -w.range, w.range) * perG; };
+    if (w.trail) {
+        // A line through the last two seconds, fading toward the old end.
+        const size_t n = it.trail.size() / 2;
+        for (size_t i = 1; i < n; i++) {
+            const lv_opa_t opa = lv_opa_t(30 + 170 * i / n);
+            drawLine(layer, px(it.trail[2 * i - 2]), py(it.trail[2 * i - 1]), px(it.trail[2 * i]), py(it.trail[2 * i + 1]), dot, 4, true, opa);
+        }
+    }
+    if (w.peaks) {
+        const auto p = gpeaks.find((uint32_t(faceIndexNow) << 8) | uint32_t(&it - items.data()));
+        if (p != gpeaks.end()) {
+            const lv_color_t pc = col(w.peakColor);
+            const float tk = 7;
+            drawLine(layer, px(p->second.latMax), cy - tk, px(p->second.latMax), cy + tk, pc, 2, true);
+            drawLine(layer, px(p->second.latMin), cy - tk, px(p->second.latMin), cy + tk, pc, 2, true);
+            drawLine(layer, cx - tk, py(p->second.lonMax), cx + tk, py(p->second.lonMax), pc, 2, true);
+            drawLine(layer, cx - tk, py(p->second.lonMin), cx + tk, py(p->second.lonMin), pc, 2, true);
+        }
+    }
+    drawDisc(layer, px(it.value), py(it.value2), 9, dot);
+    if (w.numbers) {
+        const lv_font_t* f = font(w.font, float(w.size));
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%c %.2f", it.value < 0 ? 'L' : 'R', fabsf(it.value));
+        drawText(layer, buf, f, fg, cx - r * 0.5f, cy + r * 0.78f, Align::Center);
+        snprintf(buf, sizeof(buf), "%+.2f", it.value2);
+        drawText(layer, buf, f, fg, cx + r * 0.5f, cy + r * 0.78f, Align::Center);
+    }
+}
+
+// Where the gmeter's dot, trail and numbers are: the only part redrawn as it moves.
+lv_area_t gmeterDynamicArea(const Item& it) {
+    const Widget& w = *it.w;
+    const float cx = widgetX(w), cy = widgetY(w), r = float(w.r), perG = r / w.range;
+    auto px = [&](float lat) { return cx + clampf(lat, -w.range, w.range) * perG; };
+    auto py = [&](float lon) { return cy - clampf(lon, -w.range, w.range) * perG; };
+    lv_area_t a = boxAround(px(it.value), py(it.value2), 12, 12);
+    if (w.trail) {
+        for (size_t i = 0; i + 1 < it.trail.size(); i += 2) unionArea(a, boxAround(px(it.trail[i]), py(it.trail[i + 1]), 5, 5));
+    }
+    if (w.numbers) {
+        const float hw = float(w.size) * 0.4f * 4, hh = float(w.size) * 0.7f;
+        unionArea(a, boxAround(cx - r * 0.5f, cy + r * 0.78f, hw, hh));
+        unionArea(a, boxAround(cx + r * 0.5f, cy + r * 0.78f, hw, hh));
+    }
+    return a;
+}
+
+// The drag timer (docs/motion.md): the run and its state above, the time
+// large, the strip's splits and the best of the session under it. The text
+// is composed in update(); it.valid marks a complete run (the done colour).
+void drawDragTimer(lv_layer_t* layer, Item& it) {
+    const Widget& w = *it.w;
+    const float cx = widgetX(w), cy = widgetY(w), s = float(w.size);
+    const lv_font_t* big = font(w.font, s);
+    const lv_font_t* small = font(w.font, s * 0.3f);
+    const lv_color_t dim = col(w.trackColor), fg = col(w.color);
+    size_t at = 0;
+    int line = 0;
+    while (at <= it.text2.size()) {
+        size_t nl = it.text2.find('\n', at);
+        if (nl == std::string::npos) nl = it.text2.size();
+        const std::string ln = it.text2.substr(at, nl - at);
+        if (line == 0) {
+            drawText(layer, ln.c_str(), small, dim, cx, cy - s * 0.75f, Align::Center);
+        } else if (!ln.empty()) {
+            const bool best = ln.compare(0, 4, "best") == 0;
+            drawText(layer, ln.c_str(), small, best ? dim : fg, cx, cy + s * 0.65f + float(line - 1) * s * 0.4f, Align::Center);
+        }
+        line++;
+        at = nl + 1;
+    }
+    drawText(layer, it.text.c_str(), big, it.valid ? col(w.doneColor) : fg, cx, cy, Align::Center);
+}
+
 void drawItem(lv_layer_t* layer, Item& it) {
     switch (it.w->type) {
         case WidgetType::Dial: drawDial(layer, it); break;
@@ -903,6 +1020,8 @@ void drawItem(lv_layer_t* layer, Item& it) {
         case WidgetType::Path: drawPath(layer, it); break;
         case WidgetType::Image: drawImage(layer, it); break;
         case WidgetType::Clock: drawClock(layer, it); break;
+        case WidgetType::GMeter: drawGMeter(layer, it); break;
+        case WidgetType::DragTimer: drawDragTimer(layer, it); break;
     }
 }
 
@@ -948,6 +1067,13 @@ lv_area_t areaOf(const Item& it) {
         case WidgetType::Label: {
             const float hw = float(w.text.size()) * float(w.size) * 0.4f + 4;
             return boxAround(cx, cy, hw, float(w.size) * 0.7f);
+        }
+        case WidgetType::GMeter:
+            return boxAround(cx, cy, float(w.r) + 4, float(w.r) + 4);
+        case WidgetType::DragTimer: {
+            const float s = float(w.size);
+            const float top = s * 0.95f, bottom = w.run == 1 ? s * 2.75f : s * 1.15f;
+            return boxAround(cx, cy + (bottom - top) / 2, s * 2.6f, (top + bottom) / 2);
         }
         case WidgetType::Clock:
             if (w.clockStyle == ClockStyle::Analogue) return boxAround(cx, cy, float(w.r) + 2, float(w.r) + 2);
@@ -1195,6 +1321,18 @@ uint32_t lookKey(const Item& it) {
                 key ^= h;
             }
             break;
+        case WidgetType::GMeter:
+            key ^= uint32_t(int32_t(lroundf(it.value * 50))) * 2654435761u;
+            key ^= uint32_t(int32_t(lroundf(it.value2 * 50))) * 40503u;
+            key ^= uint32_t(it.trail.size()) << 20;
+            break;
+        case WidgetType::DragTimer: {
+            uint32_t h = 2166136261u;
+            for (char ch : it.text) h = (h ^ uint8_t(ch)) * 16777619u;
+            for (char ch : it.text2) h = (h ^ uint8_t(ch)) * 16777619u;
+            key ^= h;
+            break;
+        }
         case WidgetType::Label:
             break;
     }
@@ -1236,6 +1374,7 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
         Item it;
         it.w = &w;
         it.area = areaOf(it);
+        it.dyn = it.area;
         it.drawn = it.w->min;
         items.push_back(it);
     }
@@ -1265,6 +1404,17 @@ void build(lv_obj_t* parent, const Config& cfg, size_t faceIndex) {
             if (!svg_path::parse(w.path.c_str(), it.vpath)) Serial.println("path widget: could not read all of its path data");
         }
     }
+    // The drag timers run for every run type the whole config uses.
+    uint8_t runMask = 0;
+    bool rollout[drag_runs::kRunCount] = {};
+    for (const Face& f : cfg.faces) {
+        for (const Widget& w : f.widgets) {
+            if (w.type != WidgetType::DragTimer || w.run >= drag_runs::kRunCount) continue;
+            if (!((runMask >> w.run) & 1u)) rollout[w.run] = w.rollout;
+            runMask |= uint8_t(1u << w.run);
+        }
+    }
+    drag_runs::setRuns(runMask, rollout);
     update(now);
 }
 
@@ -1289,6 +1439,8 @@ void destroy() {
 
 void resetHold() {
     held.clear();
+    gpeaks.clear();
+    drag_runs::reset();
     for (Item& it : items) it.holdSet = false;
     if (painter) lv_obj_invalidate(painter);
 }
@@ -1315,11 +1467,149 @@ void update(uint32_t nowMs) {
 
     const bool wasLive = anyLive;
     anyLive = false;
+    anyChannel = false;
     introSlots = items.size();
     introSlot = 0;
     for (Item& it : items) {
         const Widget& w = *it.w;
         if (w.type == WidgetType::Label) continue;
+        if (w.type == WidgetType::GMeter) {
+            // The accelerometer; a figure of eight while no live data has ever
+            // arrived; a sweep to the right and back in the intro.
+            float lat = 0, lon = 0;
+            if (introOn) {
+                lat = w.range * introSweep();
+            } else if (!everLive) {
+                const float ph = float(now % 6000) * (2.0f * kPi / 6000.0f);
+                lat = 0.6f * w.range * sinf(ph);
+                lon = 0.45f * w.range * sinf(2 * ph);
+            } else {
+                const imu::Reading rd = imu::reading();
+                if (rd.valid) {
+                    lat = rd.lat;
+                    lon = rd.lon;
+                }
+            }
+            introSlot++;
+            it.valid = true;
+            // Sensor noise at rest must not redraw anything: the dot and the
+            // numbers follow the reading only once it has moved a little.
+            if (fabsf(lat - it.drawn) > 0.015f || fabsf(lon - it.drawn2) > 0.015f || introOn || !everLive) {
+                it.drawn = lat;
+                it.drawn2 = lon;
+            }
+            lat = it.drawn;
+            lon = it.drawn2;
+            it.value = lat;
+            it.value2 = lon;
+            if (w.trail && uint32_t(now - it.trailMs) >= 100) {
+                it.trailMs = now;
+                const size_t n = it.trail.size();
+                const bool moved = n < 2 || fabsf(it.trail[n - 2] - lat) > 0.01f || fabsf(it.trail[n - 1] - lon) > 0.01f;
+                if (moved) {
+                    it.trail.push_back(lat);
+                    it.trail.push_back(lon);
+                } else if (n > 2) {
+                    it.trail.erase(it.trail.begin(), it.trail.begin() + 2);  // at rest the trail fades to the last point
+                }
+                if (it.trail.size() > 40) it.trail.erase(it.trail.begin(), it.trail.begin() + 2);
+            }
+            uint32_t peaksKey = 0;
+            if (w.peaks) {
+                GPeaks& p = gpeaks[(uint32_t(faceIndexNow) << 8) | uint32_t(&it - items.data())];
+                if (everLive && !introOn) {
+                    if (lat > p.latMax + 0.03f) p.latMax = lat;
+                    if (lat < p.latMin - 0.03f) p.latMin = lat;
+                    if (lon > p.lonMax + 0.03f) p.lonMax = lon;
+                    if (lon < p.lonMin - 0.03f) p.lonMin = lon;
+                }
+                peaksKey = uint32_t(int32_t(lroundf(p.latMax * 50))) ^ (uint32_t(int32_t(lroundf(p.latMin * 50))) << 8) ^
+                           (uint32_t(int32_t(lroundf(p.lonMax * 50))) << 16) ^ (uint32_t(int32_t(lroundf(p.lonMin * 50))) << 24);
+            }
+            const uint32_t key = lookKey(it);
+            if (peaksKey != it.peaksKey) {
+                // The marks moved: the whole widget, once in a while.
+                it.peaksKey = peaksKey;
+                it.key = key;
+                it.dyn = gmeterDynamicArea(it);
+                lv_obj_invalidate_area(painter, &it.area);
+            } else if (key != it.key) {
+                // Only where the dot, trail and numbers were and are.
+                it.key = key;
+                const lv_area_t next = gmeterDynamicArea(it);
+                lv_area_t both = it.dyn;
+                unionArea(both, next);
+                it.dyn = next;
+                invalidateWithin(both, it.area);
+            }
+            continue;
+        }
+        if (w.type == WidgetType::DragTimer) {
+            using S = hg::motion::DragTimer::State;
+            const hg::motion::Run run = hg::motion::Run(w.run);
+            const hg::motion::DragTimer* tm = drag_runs::timer(run);
+            const drag_runs::Memory mem = drag_runs::memory(run);
+            char buf[48];
+            auto fmt = [&](uint32_t ms) {
+                snprintf(buf, sizeof(buf), "%lu.%02lu", (unsigned long)(ms / 1000), (unsigned long)(ms % 1000 / 10));
+                return std::string(buf);
+            };
+            std::string text, text2 = hg::motion::runName(run);
+            bool complete = false;
+            const S st = tm ? tm->state() : S::Idle;
+            const hg::motion::Result* res = nullptr;
+            if (introOn) {
+                text = fmt(uint32_t(introSweep() * 12900));
+            } else if (!tm) {
+                text = "--.--";
+            } else {
+                switch (st) {
+                    case S::Idle: text2 += mem.haveLast ? "  LAST" : "  STOP TO ARM"; break;
+                    case S::Armed: text2 += "  READY"; break;
+                    case S::Running: text2 += tm->elapsedMs(now) || !w.rollout ? "  RUNNING" : "  ROLLOUT"; break;
+                    case S::Done: text2 += "  DONE"; break;
+                    case S::Aborted: text2 += "  ABORTED"; break;
+                }
+                if (st == S::Running || st == S::Done || st == S::Aborted) res = &tm->result();
+                else if (st == S::Idle && mem.haveLast) res = &mem.last;
+                if (st == S::Running || st == S::Done || st == S::Aborted) text = fmt(tm->elapsedMs(now));
+                else if (res) text = fmt(res->totalMs());
+                else text = "0.00";
+                complete = st == S::Done && res && res->complete();
+            }
+            if (w.run == 1) {
+                size_t n = 0;
+                const hg::motion::Split* sp = hg::motion::splits(run, n);
+                for (size_t i = 0; i < n; i++) {
+                    text2 += '\n';
+                    text2 += sp[i].name;
+                    text2 += ' ';
+                    if (res && i < res->count) {
+                        text2 += fmt(res->ms[i]);
+                        if (i + 1 == n) {
+                            snprintf(buf, sizeof(buf), " @ %u", unsigned((res->speed10[i] + 5) / 10));
+                            text2 += buf;
+                        }
+                    } else {
+                        text2 += "--.--";
+                    }
+                }
+            }
+            if (mem.haveBest) {
+                text2 += '\n';
+                text2 += "best " + fmt(mem.bestMs);
+            }
+            introSlot++;
+            it.valid = complete;
+            it.text = text;
+            it.text2 = text2;
+            const uint32_t key = lookKey(it);
+            if (key != it.key) {
+                it.key = key;
+                lv_obj_invalidate_area(painter, &it.area);
+            }
+            continue;
+        }
         float v = 0;
         bool valid;
         if (w.type == WidgetType::Clock) {
@@ -1328,6 +1618,7 @@ void update(uint32_t nowMs) {
             valid = can_task::localTime(seconds);
             v = float(seconds % 86400u);
         } else {
+            if (w.channel >= 0) anyChannel = true;
             valid = readValue(w, v);
         }
         introSlot++;
@@ -1409,6 +1700,6 @@ void setIntro(hg::proto::IntroStyle style, float phase) {
 void endIntro() { introOn = false; }
 
 bool demo() { return !everLive; }
-bool stale() { return everLive && !anyLive; }
+bool stale() { return everLive && anyChannel && !anyLive; }
 
 }  // namespace face_renderer

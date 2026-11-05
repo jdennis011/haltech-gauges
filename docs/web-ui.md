@@ -173,7 +173,14 @@ it is for.
 ## Working on the page
 
 `web/index.html` is the whole UI. Open it straight from disk in a browser and
-it runs against built-in mock data, so layout work needs no hub. The build
+it runs against built-in mock data, so layout work needs no hub.
+`scripts/shot_page.mjs` screenshots it that way in headless Chrome at a chosen
+viewport (`#gauges-demo` and `#configs-demo` on the address fill in demo data).
+The look is the stylesheet at the top of the page: design tokens in `:root`
+(colours, radii, control height, fonts), then a section per part of the page. The
+script builds its markup from a fixed set of ids and class names, so restyle in
+the stylesheet rather than renaming those. On phones the tabs move to a bar along
+the bottom and the status pills scroll sideways in the header. The build
 script gzips it into `src/hub/web_assets.h` (about 14 KB) along with the
 templates in `assets/templates/` and the fonts in `assets/fonts/`.
 

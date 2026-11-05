@@ -3,150 +3,248 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Haltech Gauges</title>
+<title>oaGauge</title>
 <style>
-:root{--bg:#111;--panel:#1c1c1e;--line:#2c2c2e;--fg:#f2f2f7;--dim:#8e8e93;--ok:#30d158;--bad:#ff453a;--blue:#0a84ff}
+/* Design tokens. Dark, automotive: near-black ground, cool panels, the oaGauge blue
+   and orange from the boot splash as the accents. Every id and class the script uses
+   is kept; the look is all in here. */
+:root{
+  --bg:#0a0c10;--bg2:#0e1116;--panel:#13171d;--panel2:#191e26;--ctl:#1c222b;--ctl-hi:#232a35;
+  --line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--ctl-line:rgba(255,255,255,.1);
+  --fg:#eef1f6;--fg2:#c7ccd6;--dim:#8b94a5;
+  --ok:#36d479;--bad:#ff5e5e;--warn:#ff9f0a;--blue:#0a84ff;--blue2:#5aaeff;
+  --r:16px;--r2:10px;--ctl-h:36px;
+  --shadow:inset 0 1px 0 rgba(255,255,255,.035),0 14px 34px -18px rgba(0,0,0,.75);
+  --ring:0 0 0 3px rgba(10,132,255,.28);
+  --font:"Inter","SF Pro Text",-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,system-ui,sans-serif;
+  --mono:"JetBrains Mono","Cascadia Code",ui-monospace,Consolas,monospace;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
-header h1{font-size:18px;margin:0 10px 0 0}
-.chip{padding:3px 10px;border-radius:999px;background:#2c2c2e;font-size:13px;color:var(--dim);border:0;font-family:inherit}
-.chip.on{background:#1f3b2a;color:var(--ok)}
-.chip.bad{background:#3b1f1f;color:var(--bad)}
-.chip.plan{background:#1f2a3b;color:#6cb2ff}
-button.chip{cursor:pointer}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(1100px 520px at 50% -180px,rgba(10,132,255,.16),transparent 62%),
+             radial-gradient(700px 380px at 100% 0,rgba(255,159,10,.07),transparent 60%),var(--bg)}
+a{color:var(--blue2);text-decoration:none}a:hover{text-decoration:underline}
+::selection{background:rgba(10,132,255,.35)}
+*{scrollbar-width:thin;scrollbar-color:#2b323d transparent}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#2b323d;border-radius:8px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-track{background:transparent}
+
+/* ---- top bar: brand, status pills, account; then the tabs ---- */
+.top{position:sticky;top:0;z-index:40;background:rgba(10,12,16,.74);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);border-bottom:1px solid var(--line)}
+header{display:flex;align-items:center;gap:14px;padding:10px 20px 8px;max-width:1240px;margin:0 auto}
+header h1{margin:0;line-height:0;flex:none}
+header h1 svg{height:22px;width:auto;display:block;filter:drop-shadow(0 2px 10px rgba(10,132,255,.25))}
+.status{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid transparent;color:var(--dim);font:500 12.5px/1 var(--font);letter-spacing:.01em;white-space:nowrap;vertical-align:middle}
+.chip.on::before,.chip.bad::before,.chip.plan::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.chip.on{background:rgba(54,212,121,.12);color:var(--ok)}
+.chip.on::before{box-shadow:0 0 8px currentColor}
+.chip.bad{background:rgba(255,94,94,.12);color:var(--bad)}
+.chip.plan{background:rgba(10,132,255,.14);color:var(--blue2)}
+button.chip{cursor:pointer;transition:background .15s,color .15s}button.chip:hover{background:rgba(255,255,255,.1);color:var(--fg)}
 #auth{cursor:pointer}
 #gsi{min-height:32px}
-nav{display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
-nav button{background:none;border:0;color:var(--dim);padding:8px 14px;border-radius:8px;font-size:15px;cursor:pointer;white-space:nowrap}
-nav button.active{background:#2c2c2e;color:var(--fg)}
-main{padding:16px;max-width:1100px;margin:0 auto}
+nav{display:flex;gap:2px;padding:0 20px 8px;max-width:1240px;margin:0 auto;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{display:inline-flex;align-items:center;gap:7px;background:none;border:0;color:var(--dim);padding:7px 13px;border-radius:999px;font:500 14px/1 var(--font);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+nav button svg{width:16px;height:16px;flex:none;opacity:.8}
+nav button:hover{color:var(--fg);background:rgba(255,255,255,.05)}
+nav button.active{background:rgba(255,255,255,.09);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2)}
+nav button.active svg{opacity:1;color:var(--blue2)}
+
+/* ---- layout and cards ---- */
+main{padding:18px 20px 40px;max-width:1240px;margin:0 auto}
 section{display:none}
 section.active{display:block}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
-.card h3{margin:0 0 8px;font-size:16px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent 38%),var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:650;letter-spacing:-.01em}
+.card h4{font-size:14px;font-weight:600}
+.card>.row>strong:first-child,.card>details>summary>strong:first-child{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.card>p.muted{margin:0 0 10px;font-size:13.5px;line-height:1.5}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.btn,select,input[type=text],input[type=password],input[type=number],textarea{background:#2c2c2e;color:var(--fg);border:1px solid #3a3a3c;border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit}
-.btn{cursor:pointer}
-.btn.primary{background:var(--blue);border-color:var(--blue)}
-.btn.danger{background:#5a1f1f;border-color:#7a2a2a}
-.btn.small{padding:4px 9px;font-size:13px}
-.btn:disabled{opacity:.45;cursor:default}
-table{width:100%;border-collapse:collapse}
-td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:14px;vertical-align:top}
-th{color:var(--dim);font-weight:500}
-.mono{font-family:ui-monospace,Consolas,monospace}
+.spacer{flex:1}
+.mono{font-family:var(--mono);font-size:.94em}
 .muted{color:var(--dim)}
 .ok{color:var(--ok)}
 .bad{color:var(--bad)}
-.editor{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.wrow.sel2{outline:1px dashed #0a84ff}
-#sw-buttons .chip{opacity:.45}#sw-buttons .chip.on{opacity:1;background:var(--blue);color:#fff}
-.swbar{display:inline-block;width:120px;height:10px;background:var(--line);border-radius:5px;overflow:hidden;vertical-align:middle}
-.swbar i{display:block;height:100%;background:var(--blue)}
-#help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
-#help-overlay .card{max-width:520px;margin:16px}
-#help-overlay table td{padding:3px 10px 3px 0;vertical-align:top}
-#help-overlay td.k{white-space:nowrap;font-family:ui-monospace,Consolas,monospace;color:#6cb2ff}
-@media (max-width:820px){.editor{grid-template-columns:1fr}}
-textarea{width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical;line-height:1.35}
+.msg{min-height:22px;font-size:13.5px;margin:8px 0 0}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.sub{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.banner{background:linear-gradient(90deg,#8d1f1f,#5c1414);color:#fff;padding:9px 20px;font-size:14px;font-family:var(--mono)}
+
+/* ---- controls ---- */
+.btn,select,input[type=text],input[type=password],input[type=number],textarea{background:var(--ctl);color:var(--fg);border:1px solid var(--ctl-line);border-radius:var(--r2);padding:0 12px;height:var(--ctl-h);font-size:14px;font-family:inherit;outline:0;transition:border-color .15s,box-shadow .15s,background .15s}
+select:focus-visible,input:focus-visible,textarea:focus-visible{border-color:var(--blue);box-shadow:var(--ring)}
+input::placeholder,textarea::placeholder{color:#5f6878}
+select{appearance:none;-webkit-appearance:none;padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b94a5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;cursor:pointer}
+select option{background:var(--panel2);color:var(--fg)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:500;cursor:pointer;white-space:nowrap;padding:0 14px;transition:background .15s,border-color .15s,transform .06s,box-shadow .15s;user-select:none}
+.btn:hover{background:var(--ctl-hi);border-color:var(--line2)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{box-shadow:var(--ring);border-color:var(--blue)}
+.btn.primary{background:linear-gradient(180deg,#2d94ff,#0a7cf0);border-color:rgba(10,132,255,.7);color:#fff;box-shadow:0 6px 16px -6px rgba(10,132,255,.7),inset 0 1px 0 rgba(255,255,255,.18)}
+.btn.primary:hover{background:linear-gradient(180deg,#3d9dff,#1a86f5)}
+.btn.danger{background:rgba(255,94,94,.1);border-color:rgba(255,94,94,.32);color:#ff8080}
+.btn.danger:hover{background:rgba(255,94,94,.18)}
+.btn.small{height:28px;padding:0 10px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.4;cursor:default;transform:none}
+label.btn{line-height:1}
+input[type=checkbox],input[type=radio]{accent-color:var(--blue);width:16px;height:16px;margin:0 4px 0 0;vertical-align:-3px}
+input[type=range]{accent-color:var(--blue);width:110px;height:20px;margin:0;vertical-align:middle;cursor:pointer}
+input[type=color]{background:var(--ctl);border:1px solid var(--ctl-line);border-radius:8px;padding:2px;cursor:pointer}
+label{color:var(--fg2);font-size:14px}
+label.inline{display:inline-flex;gap:6px;align-items:center}
+textarea{width:100%;min-height:440px;height:auto;padding:12px 14px;font:13px/1.45 var(--mono);color:#dbe1ea;background:var(--bg2);resize:vertical;border-radius:12px;tab-size:2}
+
+/* ---- tables ---- */
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:14px;vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,255,255,.02)}
+.live-val{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--fg)}
+.stale{color:var(--dim)}
+
+/* ---- gauge cards ---- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.gcard{margin:0;display:flex;flex-direction:column;gap:10px}
+.gcard .title{font-size:17px;font-weight:650;letter-spacing:-.01em}
+.gcard .gpreview{position:relative;display:flex;justify-content:center;margin:2px 0}
+.gcard .gpreview::before{content:'';position:absolute;top:50%;left:50%;width:250px;height:250px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(10,132,255,.22),transparent 70%);filter:blur(22px);pointer-events:none}
 canvas{width:100%;max-width:466px;aspect-ratio:1;display:block;margin:0 auto;border-radius:50%;background:#000}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
-.gcard{margin:0;display:flex;flex-direction:column;gap:8px}
-.gcard .gpreview{display:flex;justify-content:center;margin:4px 0}
-.gcard canvas{width:240px;max-width:100%;flex:none;margin:0}
-.gcard .nocfg{width:240px;max-width:100%;aspect-ratio:1;flex:none;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
-.gcard .title{font-size:16px;font-weight:600}
+.gcard canvas{position:relative;width:240px;max-width:100%;flex:none;margin:0;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 24px 40px -22px rgba(0,0,0,.9)}
+.gcard .nocfg{position:relative;width:240px;max-width:100%;aspect-ratio:1;flex:none;border-radius:50%;background:var(--bg2);border:1px dashed var(--line2);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px}
 .gfields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center}
 .gfields select,.gfields input[type=range]{width:100%}
 .gcard select{max-width:100%}
-.msg{min-height:22px;font-size:14px;margin:6px 0}
-label.inline{display:inline-flex;gap:6px;align-items:center}
-input[type=range]{width:110px}
-.sub{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
-.fontrow{padding:8px 0;border-bottom:1px solid var(--line)}
-.fontrow .sample{display:block;font-size:30px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fontrow .about{display:block;font-size:13px;margin-top:4px}
-.fontrow .fam{font-weight:600;font-size:14px}
-.fontrow .key{font-family:ui-monospace,Consolas,monospace;color:var(--dim)}
-.wrow{padding:8px 0 8px 6px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
-.wrow.sel{border-left-color:var(--blue);background:#17222f}
-.wrow .wtitle{cursor:grab}
-.wrow .wtitle .grip{color:var(--dim);font-size:16px;margin-right:2px}
-.wrow.dragging{opacity:.45}
-.wrow.dropTarget{border-top:2px solid var(--blue)}
+
+/* ---- theme colour wheel and swatches ---- */
+.wheelcard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wheelcard summary::-webkit-details-marker{display:none}
+.wheelcard summary::before{content:'';width:7px;height:7px;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(-45deg);margin:0 4px 0 2px;transition:transform .15s;flex:none}
+.wheelcard[open] summary::before{transform:rotate(45deg)}
+.wheelrow{display:flex;flex-wrap:wrap;gap:24px;align-items:center;margin-top:14px}
+canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-action:none;cursor:crosshair;border-radius:0}
+.wheelside{display:flex;flex-direction:column;gap:12px;min-width:200px}
+.wheelside input[type=range]{width:160px}
+.swatch{width:36px;height:36px;border-radius:10px;border:1px solid var(--line2);display:inline-block;box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.tcol{display:flex;flex-wrap:wrap;gap:8px 16px}
+.tcol .tc{display:inline-flex;gap:6px;align-items:center}
+.tcol input[type=text]{width:100px;height:28px;padding:0 8px;font-size:13px}
+.tcol input[type=color]{width:36px;height:28px}
+
+/* ---- the face editor ---- */
+.editor{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.editor>div{min-width:0}
+@media (max-width:820px){.editor{grid-template-columns:1fr}}
 /* The editor's preview is a square: the face draws itself round, and the
    selection handles of a widget at the rim land in the corners, where they
    must stay visible and clickable (a round clip hid them and ate the clicks). */
-#preview{touch-action:none;border-radius:0;background:var(--panel)}
-.wrow .wtitle{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+#preview{touch-action:none;border-radius:0;background:var(--panel);box-shadow:0 0 0 1px var(--line)}
+.wrow{padding:10px 12px;margin-bottom:4px;border:1px solid transparent;border-left:3px solid transparent;border-radius:10px;transition:background .12s,border-color .12s}
+.wrow:hover{background:rgba(255,255,255,.025)}
+.wrow.sel{border-color:rgba(10,132,255,.35);border-left-color:var(--blue);background:rgba(10,132,255,.09)}
+.wrow.sel2{border-color:rgba(10,132,255,.35);border-left-color:rgba(10,132,255,.5);outline:0}
+.wrow .wtitle{font-weight:600;margin-bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;cursor:grab}
+.wrow .wtitle .grip{color:var(--dim);font-size:16px;margin-right:2px}
+.wrow.dragging{opacity:.45}
+.wrow.dropTarget{border-top:2px solid var(--blue)}
 .wrow .ctl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .wrow label{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--dim)}
-.wrow select,.wrow input{padding:4px 8px;font-size:13px;color:var(--fg)}
+.wrow select,.wrow input{height:28px;padding:0 8px;font-size:13px;color:var(--fg);border-radius:8px;max-width:100%}
+.wrow select{padding-right:26px;background-position:right 8px center}
 .wrow input[type=number]{width:74px}
 .wrow input[type=text]{width:150px}
 .wrow select.chan{max-width:230px}
 .colorctl{display:inline-flex;gap:4px;align-items:center}
-.tcol{display:flex;flex-wrap:wrap;gap:8px 16px}
-.wheelcard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.wheelcard summary::-webkit-details-marker{display:none}
-.wheelcard summary::before{content:'\25B8';color:var(--dim);display:inline-block;transition:transform .15s}
-.wheelcard[open] summary::before{transform:rotate(90deg)}
-.wheelrow{display:flex;flex-wrap:wrap;gap:20px;align-items:center;margin-top:12px}
-canvas#wheel{width:220px;max-width:100%;margin:0;background:transparent;touch-action:none;cursor:crosshair}
-.wheelside{display:flex;flex-direction:column;gap:12px;min-width:200px}
-.wheelside input[type=range]{width:160px}
-.swatch{width:36px;height:36px;border-radius:8px;border:1px solid #3a3a3c;display:inline-block}
-.tcol .tc{display:inline-flex;gap:5px;align-items:center}
-.tcol input[type=text]{width:100px;padding:4px 8px;font-size:13px}
-.tcol input[type=color]{width:36px;height:28px;padding:1px 2px;border-radius:6px}
-.wrow details.more{margin-top:6px}
+.wrow details.more{margin-top:8px}
 .wrow details.more summary{cursor:pointer;color:var(--dim);font-size:13px;margin-bottom:6px}
 .wrow .zones{display:inline-flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .wrow .zone input[type=number]{width:64px}
-.wrow input.long{width:260px;font-family:ui-monospace,Consolas,monospace}
+.wrow input.long{width:260px;font-family:var(--mono)}
 .wrow input[type=color]{width:36px;height:26px;padding:1px 2px;border-radius:6px}
 .wrow input[type=checkbox]{width:16px;height:16px;margin:0}
-.wrow.firing{border-left-color:var(--bad);background:#2a1717}
+.wrow.firing{border-left-color:var(--bad);background:rgba(255,94,94,.09)}
 .wrow input.aname{width:200px;font-weight:600}
 .wrow input.amsg{width:250px}
-.live-val{font-family:ui-monospace,Consolas,monospace;text-align:right}
-.stale{color:var(--dim)}
-.spacer{flex:1}
-.banner{background:#7a1f1f;color:#fff;padding:8px 16px;font-size:14px}
-.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:8px}
-.imgcard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px;min-width:0}
+.fontrow{padding:10px 0;border-bottom:1px solid var(--line)}
+.fontrow:last-child{border-bottom:0}
+.fontrow .sample{display:block;font-size:30px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fontrow .about{display:block;font-size:13px;margin-top:4px}
+.fontrow .fam{font-weight:600;font-size:14px}
+.fontrow .key{font-family:var(--mono);color:var(--dim)}
+
+/* ---- steering wheel card ---- */
+#sw-buttons .chip{opacity:.45}#sw-buttons .chip.on{opacity:1;background:var(--blue);color:#fff}
+.swbar{display:inline-block;width:120px;height:8px;background:var(--line2);border-radius:5px;overflow:hidden;vertical-align:middle}
+.swbar i{display:block;height:100%;background:var(--blue)}
+
+/* ---- images ---- */
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:10px}
+.imgcard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:8px;min-width:0;background:var(--bg2)}
 .imgmeta{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
 .imgmeta .mono{font-size:14px;overflow-wrap:anywhere}
-.thumb,canvas#up-preview{background:repeating-conic-gradient(#2c2c2e 0 25%,#1c1c1e 0 50%) 0 0/16px 16px}
+.thumb,canvas#up-preview{background:repeating-conic-gradient(#262c36 0 25%,#1a1f27 0 50%) 0 0/16px 16px}
 .thumb{width:96px;height:96px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px}
 .thumb img{max-width:100%;max-height:100%;object-fit:contain}
-.upload{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px}
+.upload{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;background:var(--bg2)}
 canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex:none;margin:0}
 .upfields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;min-width:0;flex:1 1 240px}
 .upfields input[type=text],.upfields select{width:100%}
 .upfields input[type=range]{width:100%}
+
+/* ---- keys overlay ---- */
+#help-overlay{position:fixed;inset:0;background:rgba(5,7,10,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:50}
+#help-overlay .card{max-width:540px;margin:16px;animation:pop .18s ease-out;box-shadow:0 30px 80px -20px rgba(0,0,0,.9)}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+#help-overlay table td{padding:4px 10px 4px 0;vertical-align:top;border:0}
+#help-overlay td.k{white-space:nowrap;font-family:var(--mono);color:var(--blue2)}
+
+/* ---- phones: status pills in one scrolling row, tabs along the bottom ---- */
+@media (max-width:720px){
+  /* The wrapper's blur would pin a fixed child to itself, so on phones the header
+     carries the blur and the tab bar fixes to the viewport. */
+  .top{position:static;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;border:0}
+  header{position:sticky;top:0;z-index:40;padding:10px 14px;gap:10px;background:rgba(10,12,16,.78);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);border-bottom:1px solid var(--line)}
+  .status{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex:1;-webkit-overflow-scrolling:touch}
+  .status::-webkit-scrollbar{display:none}
+  header .spacer{display:none}
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:none;margin:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:0;display:grid;grid-template-columns:repeat(5,1fr);background:rgba(10,12,16,.82);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);border-top:1px solid var(--line)}
+  nav button{flex-direction:column;gap:4px;padding:6px 2px;border-radius:10px;font-size:11px;justify-content:center}
+  nav button svg{width:20px;height:20px}
+  nav button.active{box-shadow:none;background:rgba(10,132,255,.12)}
+  main{padding:12px 12px calc(84px + env(safe-area-inset-bottom))}
+  .card{padding:14px;border-radius:14px;margin-bottom:12px}
+  .grid{grid-template-columns:1fr}
+  textarea{min-height:300px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div class="top">
 <header>
-  <h1>Haltech Gauges</h1>
-  <span class="chip" id="chip-ws">connecting…</span>
-  <span class="chip" id="chip-ecu">ECU</span>
-  <span class="chip" id="chip-bus">gauge bus</span>
-  <span class="chip" id="chip-gauges">0 gauges</span>
-  <button class="chip" id="chip-sim" title="Generate Haltech data on the hub for testing">simulator off</button>
+  <h1 aria-label="oaGauge"><svg viewBox="58 193 350 77" role="img" aria-label="oaGauge"><path fill="#0a84ff" d="M105.1 240Q105.1 246 101.8 249.4Q98.4 252.8 92.4 252.8H74Q68 252.8 64.6 249.4Q61.2 246 61.2 240V221.6Q61.2 215.6 64.6 212.2Q68 208.8 74 208.8H92.4Q98.4 208.8 101.8 212.2Q105.1 215.6 105.1 221.6ZM91.2 222.8Q91.2 219.6 88 219.6H78.4Q75.2 219.6 75.2 222.8V238.8Q75.2 242 78.4 242H88Q91.2 242 91.2 238.8Z"/><path fill="#ff9f0a" d="M129.1 241.6Q133.4 241.6 138.7 240V235.2H127.1Q125.9 235.2 125.1 236Q124.3 236.8 124.3 238V238.8Q124.3 240 125.1 240.8Q125.9 241.6 127.1 241.6ZM114.3 210.4Q129 208.8 140.7 208.8Q146.1 208.8 149.4 212.1Q152.7 215.4 152.7 220.8V252H140.3L139.5 248Q135.8 250.5 131.8 251.6Q127.8 252.8 125.1 252.8H122.3Q116.9 252.8 113.6 249.5Q110.3 246.2 110.3 240.8V237.2Q110.3 231.8 113.6 228.5Q116.9 225.2 122.3 225.2H138.7V222Q138.7 220.8 137.9 220Q137.1 219.2 135.9 219.2Q130.7 219.2 124.4 219.7Q118.2 220.2 114.3 220.4Z"/><path fill="#f2f2f7" d="M208.6 250.8Q189.9 252.8 174.3 252.8Q166.4 252.8 162.8 249.1Q159.1 245.4 159.1 237.6V212Q159.1 203.7 162.9 199.9Q166.7 196.1 175.1 196.1H203.8V207.3H178.3Q173.5 207.3 173.5 212V237.6Q173.5 239.5 174.5 240.5Q175.6 241.6 177.5 241.6Q186.7 241.6 194.2 241.2V229.6H183.9V220H208.6Z"/><path fill="#f2f2f7" d="M232.6 241.6Q236.8 241.6 242.2 240V235.2H230.6Q229.4 235.2 228.6 236Q227.8 236.8 227.8 238V238.8Q227.8 240 228.6 240.8Q229.4 241.6 230.6 241.6ZM217.8 210.4Q232.4 208.8 244.2 208.8Q249.6 208.8 252.9 212.1Q256.2 215.4 256.2 220.8V252H243.8L243 248Q239.2 250.5 235.3 251.6Q231.3 252.8 228.6 252.8H225.8Q220.4 252.8 217.1 249.5Q213.8 246.2 213.8 240.8V237.2Q213.8 231.8 217.1 228.5Q220.4 225.2 225.8 225.2H242.2V222Q242.2 220.8 241.4 220Q240.6 219.2 239.4 219.2Q234.2 219.2 227.9 219.7Q221.7 220.2 217.8 220.4Z"/><path fill="#f2f2f7" d="M282.9 241.2Q287.2 241.2 292.5 239.6V209.6H306.5V252H294.1L293.3 248Q289.6 250.5 285.6 251.6Q281.7 252.8 278.9 252.8H275.4Q269.9 252.8 266.6 249.5Q263.4 246.2 263.4 240.8V209.6H277.3V238.4Q277.3 239.6 278.1 240.4Q278.9 241.2 280.1 241.2Z"/><path fill="#f2f2f7" d="M342.1 248.8Q334.3 250.4 328.5 250.4H325.7Q320.3 250.4 317 247.1Q313.7 243.8 313.7 238.4V222.4Q313.7 216.4 317.1 213Q320.5 209.6 326.5 209.6H356.1V254.4Q356.1 259.8 352.8 263.1Q349.5 266.4 344.1 266.4Q331.5 266.4 316.1 264.8V254.4Q331.4 255.6 339.3 255.6Q340.5 255.6 341.3 254.8Q342.1 254 342.1 252.8ZM332.5 239.6Q337.5 239.6 342.1 238.8V220.4H330.9Q327.7 220.4 327.7 223.6V236.8Q327.7 238 328.5 238.8Q329.3 239.6 330.5 239.6Z"/><path fill="#f2f2f7" d="M380.4 218.8Q377.2 218.8 377.2 222V226.4H390.8V222Q390.8 218.8 387.6 218.8ZM403.2 251.2Q387.8 252.8 375.2 252.8Q369.8 252.8 366.5 249.5Q363.3 246.2 363.3 240.8V221.6Q363.3 215.6 366.6 212.2Q370 208.8 376 208.8H392Q398 208.8 401.4 212.2Q404.8 215.6 404.8 221.6V236.4H377.2V239.6Q377.2 240.8 378 241.6Q378.8 242.4 380 242.4Q387.9 242.4 403.2 241.2Z"/></svg></h1>
+  <div class="status">
+    <span class="chip" id="chip-ws">connecting…</span>
+    <span class="chip" id="chip-ecu">ECU</span>
+    <span class="chip" id="chip-bus">gauge bus</span>
+    <span class="chip" id="chip-gauges">0 gauges</span>
+    <button class="chip" id="chip-sim" title="Generate Haltech data on the hub for testing">simulator off</button>
+  </div>
   <span class="spacer"></span>
   <span class="chip" id="auth" style="display:none"></span>
   <div id="gsi" style="display:none"></div>
 </header>
 <nav>
-  <button data-tab="gauges" class="active">Gauges</button>
-  <button data-tab="live">Live data</button>
-  <button data-tab="alerts">Alerts</button>
-  <button data-tab="configs">Configs</button>
-  <button data-tab="settings">Settings</button>
+  <button data-tab="gauges" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 17.5a9 9 0 1 1 17 0"/><path d="M12 13.5 15.8 9"/><circle cx="12" cy="13.5" r="1.3"/></svg><span>Gauges</span></button>
+  <button data-tab="live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Live data</span></button>
+  <button data-tab="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span>Alerts</span></button>
+  <button data-tab="configs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/></svg><span>Configs</span></button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
 </nav>
+</div>
 <main>
 <section id="tab-gauges" class="active">
   <div class="card row">
@@ -371,7 +469,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
   </div>
   <div class="card" id="update-card">
     <h3>Firmware</h3>
-    <p class="muted">When it is on your home network the hub looks at <a href="https://oagauge.online" target="_blank" rel="noopener" style="color:#6cb2ff">oagauge.online</a> once a day for a newer build and says so here; it installs one only when you press Install. Do that with the engine off: the hub restarts, and comes back to this build by itself if the new one fails to start. A <span class="mono">firmware.bin</span> built on a PC can be uploaded straight in.</p>
+    <p class="muted">When it is on your home network the hub looks at <a href="https://oagauge.online" target="_blank" rel="noopener">oagauge.online</a> once a day for a newer build and says so here; it installs one only when you press Install. Do that with the engine off: the hub restarts, and comes back to this build by itself if the new one fails to start. A <span class="mono">firmware.bin</span> built on a PC can be uploaded straight in.</p>
     <table><tbody id="update-info"></tbody></table>
     <div class="row" style="margin-top:8px"><button class="btn small" id="btn-update-check">Check now</button><button class="btn primary small" id="btn-update-install" style="display:none">Install</button><span class="spacer"></span><label class="btn small" for="update-file">Upload a .bin</label><input type="file" id="update-file" accept=".bin" style="display:none"></div>
     <div class="msg" id="update-msg"></div>
@@ -403,7 +501,7 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
   </div>
   <div class="card" id="cloud-card">
     <h3>Online account</h3>
-    <p class="muted">Link this hub to your account at <a href="https://oagauge.online/#settings" target="_blank" rel="noopener" style="color:#6cb2ff">oagauge.online</a>: sign in there, Settings, <b>Link a hub</b>, and type the code here. From then on the configs, images, theme colours and alerts you make on either side reach the other, over your home network.</p>
+    <p class="muted">Link this hub to your account at <a href="https://oagauge.online/#settings" target="_blank" rel="noopener">oagauge.online</a>: sign in there, Settings, <b>Link a hub</b>, and type the code here. From then on the configs, images, theme colours and alerts you make on either side reach the other, over your home network.</p>
     <div class="row" id="cloud-link-row"><input type="text" id="cloud-code" placeholder="6-character code" maxlength="6" size="10" class="mono" style="text-transform:uppercase"><button class="btn primary" id="btn-cloud-link">Link</button></div>
     <table><tbody id="cloud-info"></tbody></table>
     <div class="row" id="cloud-linked-row" style="margin-top:8px"><button class="btn small" id="btn-cloud-sync">Sync now</button><button class="btn small danger" id="btn-cloud-unlink">Unlink</button></div>

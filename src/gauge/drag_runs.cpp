@@ -24,6 +24,7 @@ Slot slots[kRunCount];
 uint32_t lastStampMs = 0;
 bool haveStamp = false;
 bool demoWas = false;
+bool wasActive = false;
 uint32_t demoSampleMs = 0;
 uint32_t demoStartMs = 0;
 
@@ -74,8 +75,21 @@ void setRuns(uint8_t mask, const bool rollout[kRunCount]) {
     }
 }
 
+bool active() {
+    for (const Slot& s : slots) {
+        if (s.used) return true;
+    }
+    return false;
+}
+
 void poll(uint32_t nowMs, bool demo) {
-    if (demo != demoWas) {
+    if (!active()) {
+        wasActive = false;
+        return;
+    }
+    // A fresh start when the timers come into use, or the demo comes or goes.
+    if (!wasActive || demo != demoWas) {
+        wasActive = true;
         demoWas = demo;
         haveStamp = false;
         for (Slot& s : slots) {

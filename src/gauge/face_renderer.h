@@ -36,6 +36,8 @@ void resetHold();
 void setIntro(hg::proto::IntroStyle style, float phase);
 void endIntro();
 
+// True while the face has a widget that reads the accelerometer (a G meter).
+bool usesImu();
 // True while the sweep is shown because no live data has ever arrived.
 bool demo();
 // True once live data has arrived and then stopped.

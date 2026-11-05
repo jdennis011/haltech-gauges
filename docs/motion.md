@@ -106,6 +106,24 @@ uses, so a swipe mid-run loses nothing. The state machine is
 `lib/hg_motion/drag_timer.h`, host-tested on made-up traces
 (`test/test_native_motion`); the gauge feeds it in `src/gauge/drag_runs.cpp`.
 
+### The overlay
+
+Every gauge has a drag timer without one in its config. Pull up from the
+bottom edge of the face and a built-in face takes its place: the timer with
+its state line and splits, the vehicle speed under it. Swipes left and right
+move between the run types (0-100, the strip with the 1 ft rollout, 80-120,
+100-200); the one shown is remembered across restarts. A swipe up puts the
+gauge's own face back. The pull-down menu still works over it, and Reset
+peaks clears its results too.
+
+Until it is pulled up nothing of it runs: the overlay's config is parsed on
+the first pull, its timer is started then and stopped when it closes, and
+the accelerometer is only read while a G meter or a drag timer is in use.
+While it is up the hub keeps sending the vehicle speed to this gauge
+(docs/frame-filter.md). Finished runs go to the hub like any other.
+`src/gauge/drag_overlay.cpp` holds the faces; `src/gauge/face_ui.cpp` draws
+them in place of the config's face.
+
 ## Runs on the hub
 
 A finished run (complete or abandoned) goes to the hub as `Cmd::RunResult`

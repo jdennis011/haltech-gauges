@@ -87,7 +87,7 @@ Workers Builds can run `npm run build` and deploy on every push to `main`.
 | `docs/startup-animation.md` | Key-on intro that runs across the gauges in order: the hub's trigger and settings, the order, the gauge's styles; the oaGauge boot splash shown while a gauge waits for it (`assets/splash/oagauge.svg`, made by `scripts/gen_splash.py`) |
 | `docs/gauge-quick-menu.md` | Pull-down menu on the gauge for brightness, screen off and reset peaks, this one or all; the link icon (CAN or Wi-Fi) |
 | `docs/frame-filter.md` | Each gauge tells the hub which Haltech frames its faces use; only those go on the gauge bus |
-| `docs/motion.md` | The G meter from the gauge's own accelerometer, its mounting calibration, and the drag timer (0-100, the strip's splits, rolling runs) with its runs on the hub's page and SD card |
+| `docs/motion.md` | The G meter from the gauge's own accelerometer, its mounting calibration, and the drag timer (0-100, the strip's splits, rolling runs), the built-in one every gauge shows on a pull up from the bottom edge, with its runs on the hub's page and SD card |
 | `docs/gauge-audio.md` | The gauge speaker: the chime on Identify, the console tone and volume commands |
 | `worker/`, `wrangler.jsonc`, `scripts/build_site.mjs` | The online copy on Cloudflare |
 | `hardware/` | Schematics (Eagle XML, importable into EasyEDA; `hub-carrier-p4-rev-b.sch` is the next hub board) and the JLCPCB BOMs |

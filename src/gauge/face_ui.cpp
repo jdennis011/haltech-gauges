@@ -8,6 +8,7 @@
 
 #include "can_task.h"
 #include "display.h"
+#include "drag_overlay.h"
 #include "drag_runs.h"
 #include "face_needs.h"
 #include "face_renderer.h"
@@ -96,10 +97,22 @@ uint16_t fontPx(int designPx) {
 void rebuild() {
     const hg::cfg::Config* cfg = face_store::current();
     if (!cfg || cfg->faces.empty()) return;
-    face_renderer::build(screen, *cfg, face_store::activeFace());
-    // The hub forwards only the frames these faces use (docs/frame-filter.md).
+    // The drag timer overlay stands in for the face while it is up.
+    const hg::cfg::Config* overlay = drag_overlay::active() ? drag_overlay::config() : nullptr;
+    if (overlay) {
+        face_renderer::build(screen, *overlay, drag_overlay::face());
+    } else {
+        face_renderer::build(screen, *cfg, face_store::activeFace());
+    }
+    // The hub forwards only the frames these faces use (docs/frame-filter.md),
+    // plus the overlay's speed while it is up.
     uint64_t needs[hg::proto::kNeedsParts];
     hg::cfg::framesUsed(*cfg, needs, hg::proto::kNeedsParts, hg::proto::kNeedsPartBits);
+    if (overlay) {
+        uint64_t more[hg::proto::kNeedsParts];
+        hg::cfg::framesUsed(*overlay, more, hg::proto::kNeedsParts, hg::proto::kNeedsPartBits);
+        for (size_t i = 0; i < hg::proto::kNeedsParts; i++) needs[i] |= more[i];
+    }
     can_task::setNeeds(needs);
     // The overlays stay above the face.
     lv_obj_move_foreground(note);
@@ -171,10 +184,33 @@ void onGesture(lv_event_t*) {
         lv_indev_wait_release(lv_indev_active());
         return;
     }
+    if (dir == LV_DIR_TOP) {
+        // A pull up from the bottom edge shows the drag timer; while it is
+        // up a swipe up from anywhere puts the face back. The finger is
+        // about the gesture limit past where it started when this fires.
+        lv_point_t p;
+        lv_indev_get_point(lv_indev_active(), &p);
+        if (drag_overlay::active() || p.y >= display::kSize * 2 / 5) {
+            drag_overlay::toggle();
+            rebuild();
+            lv_indev_wait_release(lv_indev_active());
+        }
+        return;
+    }
     if (dir == LV_DIR_LEFT) {
-        showFace(int(face_store::activeFace()) + 1);
+        if (drag_overlay::active()) {
+            drag_overlay::step(1);
+            rebuild();
+        } else {
+            showFace(int(face_store::activeFace()) + 1);
+        }
     } else if (dir == LV_DIR_RIGHT) {
-        showFace(int(face_store::activeFace()) - 1);
+        if (drag_overlay::active()) {
+            drag_overlay::step(-1);
+            rebuild();
+        } else {
+            showFace(int(face_store::activeFace()) - 1);
+        }
     } else {
         return;
     }
@@ -437,8 +473,10 @@ void update() {
         if (introDone() || splash::active()) display::setBrightness(lastBrightness);
     }
 
-    // The accelerometer and the drag timers run whatever is on the screen.
-    imu::poll(now);
+    // The accelerometer is read only while something wants it: a G meter on
+    // the face, or a drag timer (the config's, or the overlay's while it is
+    // up). The timers run whatever is on the screen, nothing when none is used.
+    if (face_renderer::usesImu() || drag_runs::active()) imu::poll(now);
     drag_runs::poll(now, face_renderer::demo());
 
     if (now - lastUpdateMs >= 33) {

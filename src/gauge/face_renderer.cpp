@@ -93,6 +93,7 @@ size_t introSlot = 0;
 size_t introSlots = 1;
 bool anyLive = false;
 bool anyChannel = false;  // some widget on the face reads the bus
+bool anyImu = false;      // some widget on the face reads the accelerometer
 uint32_t themeCols[kMaxThemeColours];
 uint32_t lastThemeCheckMs = 0;
 
@@ -1448,6 +1449,9 @@ void resetHold() {
 void update(uint32_t nowMs) {
     now = nowMs;
     if (!painter) return;
+    // Live data on either link ends the demo, even on a face with no channel
+    // widget (a G meter alone would otherwise play its figure of eight forever).
+    if (!everLive && can_task::liveLink(nowMs) != can_task::LiveLink::None) everLive = true;
 
     // Theme colours the hub changes recolour everything.
     if (now - lastThemeCheckMs >= 500) {
@@ -1468,6 +1472,7 @@ void update(uint32_t nowMs) {
     const bool wasLive = anyLive;
     anyLive = false;
     anyChannel = false;
+    anyImu = false;
     introSlots = items.size();
     introSlot = 0;
     for (Item& it : items) {
@@ -1476,6 +1481,7 @@ void update(uint32_t nowMs) {
         if (w.type == WidgetType::GMeter) {
             // The accelerometer; a figure of eight while no live data has ever
             // arrived; a sweep to the right and back in the intro.
+            anyImu = true;
             float lat = 0, lon = 0;
             if (introOn) {
                 lat = w.range * introSweep();
@@ -1699,6 +1705,7 @@ void setIntro(hg::proto::IntroStyle style, float phase) {
 
 void endIntro() { introOn = false; }
 
+bool usesImu() { return anyImu; }
 bool demo() { return !everLive; }
 bool stale() { return everLive && anyChannel && !anyLive; }
 

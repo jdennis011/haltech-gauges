@@ -21,6 +21,9 @@ void setRuns(uint8_t mask, const bool rollout[kRunCount]);
 // quarter mile is replayed instead of the bus, and nothing is remembered or sent.
 void poll(uint32_t nowMs, bool demo);
 
+// True while some run type is in use (poll() does nothing otherwise).
+bool active();
+
 // The timer for a run type, or null if no face uses it.
 const hg::motion::DragTimer* timer(hg::motion::Run run);
 

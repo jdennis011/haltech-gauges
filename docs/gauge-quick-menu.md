@@ -33,6 +33,9 @@ Swipe down from the top edge of any gauge and a small panel slides over the face
   changes, including the first data after power-on, so a gauge that silently falls
   back from the chain to Wi-Fi says so.
 - The panel closes with a swipe up, a tap outside it, or by itself after five seconds.
+- **Drag timer**: a pull up from the bottom edge of the face (with the panel closed)
+  shows the built-in drag timer over the face, swipes left and right pick the run type,
+  and a swipe up brings the face back (`docs/motion.md`, "The overlay").
 - Night dimming from the headlight signal still applies on top of the chosen brightness.
 
 ## What is already in place

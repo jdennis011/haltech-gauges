@@ -37,6 +37,10 @@ const ChannelStore* live = nullptr;
 std::atomic<bool> on{true};
 std::atomic<bool> mountWanted{false};
 std::atomic<bool> mounting{false};
+std::atomic<bool> formatWanted{false};
+std::atomic<bool> formatRunning{false};
+std::atomic<uint8_t> formatKind{0};
+std::atomic<bool> formatOk{false};
 std::atomic<bool> writing{false};
 std::atomic<bool> paused{false};  // the card stopped taking writes; off until the next Mount
 std::atomic<uint32_t> rows{0};
@@ -56,6 +60,7 @@ std::string row;
 SemaphoreHandle_t mtx = nullptr;
 char nameShown[48] = "";
 char errorText[96] = "";
+char formatResult[160] = "";  // how the last format went, for the page
 struct Entry {
     std::string name;
     uint32_t bytes;
@@ -260,6 +265,26 @@ void writePending() {
 }
 
 void step(uint32_t nowMs) {
+    if (formatWanted.exchange(false)) {
+        // The card is the task's: the file goes, then the format, then the
+        // card comes back as at start (sd_card::format mounts it again).
+        if (file) closeFile();
+        formatRunning = true;
+        char report[sizeof(formatResult)];
+        const bool ok = sd_card::format(hg::sd::FsKind(formatKind.load()), report, sizeof(report));
+        {
+            Guard guard;
+            snprintf(formatResult, sizeof(formatResult), "%s", report);
+        }
+        formatOk = ok;
+        formatRunning = false;
+        Serial.printf("datalog: %s\n", report);
+        openFailed = false;
+        openFailures = 0;
+        paused = false;
+        setError("");
+        refreshListing();
+    }
     if (mountWanted.exchange(false)) {
         mounting = true;
         sd_card::begin(true);
@@ -356,6 +381,13 @@ bool active() { return writing; }
 
 void requestMount() { mountWanted = true; }
 
+void requestFormat(hg::sd::FsKind kind) {
+    formatKind = uint8_t(kind);
+    formatWanted = true;
+}
+
+bool formatting() { return formatWanted.load() || formatRunning.load(); }
+
 void appendLine(const char* fileName, const std::string& line, const char* header) {
     if (!mtx || !sd_card::mounted()) return;
     Guard g;
@@ -386,11 +418,14 @@ void statusJson(JsonObject out) {
     out["enabled"] = on.load();
     out["active"] = writing.load();
     out["mounting"] = mounting.load();
+    out["formatting"] = formatting();
+    out["format_ok"] = formatOk.load();
     out["paused"] = paused.load();
     {
         Guard guard;
         out["file"] = nameShown;
         out["error"] = errorText;
+        out["format_result"] = formatResult;
     }
     out["rows"] = rows.load();
     out["bytes"] = bytes.load();

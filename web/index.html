@@ -453,6 +453,11 @@ canvas#up-preview{width:200px;height:200px;max-width:100%;border-radius:8px;flex
     <table><tbody id="sd-info"></tbody></table>
     <div class="row" style="margin-top:8px"><label><input type="checkbox" id="sd-logging"> Log every drive</label><button class="btn small" id="btn-sd-mount">Mount</button><span class="spacer"></span><button class="btn small" id="btn-sd-refresh">Refresh</button></div>
     <div id="sd-logs"></div>
+    <div class="row" id="sd-format-row" style="margin-top:10px;display:none">
+      <label>Format as <select id="sd-fs"><option value="FAT32">FAT32 (recommended)</option><option value="FAT16">FAT16 (cards up to 4 GB)</option><option disabled>exFAT: not readable by the hub</option></select></label>
+      <button class="btn small danger" id="btn-sd-format">Format card…</button>
+      <span class="muted" id="sd-format-note">erases everything on the card; the hub reads FAT only, so a big card that came as exFAT needs this once</span>
+    </div>
     <div class="msg" id="sd-msg"></div>
   </div>
   <div class="card" id="time-card">
@@ -2871,13 +2876,60 @@ $('#btn-guess-order').addEventListener('click', async () => {
 function renderSdStatus(card, log) {
   if (!card) return;
   const mb = n => n >= 1024 ? (n / 1024).toFixed(1) + ' GB' : n + ' MB';
+  const formatting = log && log.formatting;
   rows($('#sd-info'), [
-    ['Card', !card.slot ? 'this board has no slot' : card.mounted ? card.type + ', ' + mb(card.size_mb) + ', ' + mb(card.free_mb) + ' free' : 'no card' + (card.error ? ' (' + card.error + ')' : '')],
-    ['Logging', !log ? '' : log.paused ? 'paused: ' + log.error : log.active ? 'writing ' + log.file + ': ' + log.rows + ' rows, ' + kb(log.bytes) + ', ' + log.seconds + ' s' : log.enabled ? (card.mounted ? 'waiting for live data' : 'needs a card') : 'off'],
+    ['Card', !card.slot ? 'this board has no slot'
+      : formatting ? 'formatting, ' + mb(card.size_mb || 0) + '…'
+      : card.mounted ? card.type + ', ' + mb(card.size_mb) + ' ' + (card.fs || 'FAT') + ', ' + mb(card.free_mb) + ' free'
+      : card.present ? card.type + ', ' + mb(card.size_mb) + ', no filesystem the hub can read' + (card.error ? ' (' + card.error + ')' : '')
+      : 'no card' + (card.error ? ' (' + card.error + ')' : '')],
+    ['Logging', !log ? '' : formatting ? 'stopped for the format' : log.paused ? 'paused: ' + log.error : log.active ? 'writing ' + log.file + ': ' + log.rows + ' rows, ' + kb(log.bytes) + ', ' + log.seconds + ' s' : log.enabled ? (card.mounted ? 'waiting for live data' : 'needs a card') : 'off'],
   ]);
   if (log && document.activeElement !== $('#sd-logging')) $('#sd-logging').checked = log.enabled !== false;
-  $('#btn-sd-mount').style.display = card.slot && !card.mounted ? '' : 'none';
+  $('#btn-sd-mount').style.display = card.slot && !card.mounted && !formatting ? '' : 'none';
+  // Format is offered for any card that answered, mounted or not.
+  $('#sd-format-row').style.display = card.slot && card.present ? '' : 'none';
+  $('#btn-sd-format').disabled = !!formatting;
+  if (formatting) sdWatchFormat();
 }
+// While a format runs the status is read every second; the result goes to the
+// message line when it ends (the task writes it to datalog.format_result).
+let sdFormatTimer = null;
+function sdWatchFormat() {
+  if (sdFormatTimer) return;
+  sdFormatTimer = setInterval(async () => {
+    try {
+      const r = await api.get('/api/sd');
+      if (r.datalog && r.datalog.formatting) { renderSdStatus(r.card, r.datalog); return; }
+      clearInterval(sdFormatTimer); sdFormatTimer = null;
+      const m = $('#sd-msg'); m.textContent = r.datalog ? r.datalog.format_result : ''; m.className = 'msg ' + (r.datalog && r.datalog.format_ok ? 'ok' : 'bad');
+      loadSd();
+    } catch (e) { clearInterval(sdFormatTimer); sdFormatTimer = null; $('#sd-msg').textContent = e.message; }
+  }, 1000);
+}
+// Format: the hub says first what the filesystem makes of the card (the whole
+// card, or one partition of the most it can address), then the word FORMAT
+// has to be typed (docs/sd-card.md, "Formatting a card").
+$('#btn-sd-format').addEventListener('click', async () => {
+  const fs = $('#sd-fs').value;
+  const m = $('#sd-msg'); m.className = 'msg';
+  let plan;
+  try { plan = await api.get('/api/sd/format?fs=' + encodeURIComponent(fs)); } catch (e) { m.textContent = e.message; m.className = 'msg bad'; return; }
+  const mb = n => n >= 1024 ? (n / 1024).toFixed(1) + ' GB' : n + ' MB';
+  if (plan.too_small) { m.textContent = 'The card (' + mb(plan.card_mb) + ') is too small for ' + plan.fs + '.'; m.className = 'msg bad'; return; }
+  const what = plan.capped
+    ? plan.fs + ' cannot address the whole ' + mb(plan.card_mb) + ' card: it will get one ' + plan.fs + ' partition of ' + mb(plan.volume_mb) + ' and the remaining ' + mb(plan.card_mb - plan.volume_mb) + ' will be left unused.'
+    : 'The whole ' + mb(plan.card_mb) + ' card becomes one ' + plan.fs + ' partition.';
+  const typed = prompt(what + '\n\nEVERYTHING ON THE CARD WILL BE ERASED, logs included.\n\nType FORMAT to go ahead:', '');
+  if (typed === null) return;
+  if (typed.trim() !== 'FORMAT') { m.textContent = 'Not formatted: FORMAT was not typed.'; return; }
+  try {
+    await api.post('/api/sd/format', { fs, confirm: 'FORMAT' });
+    m.textContent = 'Formatting ' + plan.fs + '…';
+    sdWatchFormat();
+    loadSd();
+  } catch (e) { m.textContent = e.message; m.className = 'msg bad'; }
+});
 async function loadSd() {
   if (ONLINE) { $('#sd-card').style.display = 'none'; return; }
   const root = $('#sd-logs');
@@ -4829,7 +4881,8 @@ const mock = {
         { seq: 1, at_s: 300, time: '', node: 'D02424', run: '0-100', name: '0-100 km/h', aborted: true, complete: false, total_ms: 0, splits: [] }];
       return { runs: this.runs };
     }
-    if (path === '/api/sd' || path.startsWith('/api/sd/')) return { card: { slot: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, file: '', rows: 0, bytes: 0, seconds: 0 }, logs: [] };
+    if (path === '/api/sd/format') return { fs: 'FAT32', card_mb: 0, volume_mb: 0, capped: false, too_small: true, formatting: false };
+    if (path === '/api/sd' || path.startsWith('/api/sd/')) return { card: { slot: false, present: false, mounted: false, error: '' }, datalog: { enabled: true, active: false, formatting: false, format_ok: false, format_result: '', file: '', rows: 0, bytes: 0, seconds: 0 }, logs: [] };
     if (path === '/api/time') return { set: true, source: 'browser', unix: Math.floor(Date.now() / 1000), local: new Date().toLocaleString(), tz: 'AEST-10', tz_name: 'Australia/Brisbane', rtc: false, rtc_ok: false, synced_s: 0 };
     if (path === '/api/gauge-firmware' || path.startsWith('/api/gauge-firmware/')) return { boards: [], state: 'idle', progress: 0, error: '', checked_s: -1 };
     if (path === '/api/configs') return Object.entries(this.configs).map(([name, c]) => ({ name, size: JSON.stringify(c).length, crc: 'MOCK0001', title: c.name, faces: (c.faces || []).length, images: configImages(c) }));

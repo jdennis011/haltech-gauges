@@ -6,6 +6,7 @@
 #include <string>
 
 #include "channel_store.h"
+#include "format_plan.h"
 
 // The datalog (docs/sd-card.md): every channel's value, ten times a second,
 // as CSV on the SD card, a new file at each key-on, for as long as live data
@@ -28,6 +29,11 @@ void setEnabled(bool on);
 bool active();
 // Asks the task to try mounting the card now (the page's Mount).
 void requestMount();
+// Asks the task to erase and format the card (the page's Format, after the
+// typed confirmation): the log file is closed first, and the result is in
+// the status as format_result until the next format.
+void requestFormat(hg::sd::FsKind kind);
+bool formatting();
 
 // Appends one line to another file in the log directory (runs.csv), from any
 // task: queued for the card's task, which writes `header` first when the
@@ -39,7 +45,7 @@ bool validName(const char* name);
 std::string path(const char* name);
 bool remove(const char* name);
 
-// {enabled, active, mounting, paused, error, file, rows, bytes, seconds}
+// {enabled, active, mounting, formatting, format_ok, format_result, paused, error, file, rows, bytes, seconds}
 void statusJson(JsonObject out);
 // One {name, bytes, writing} per log on the card, newest first: the task's
 // last reading of the directory, so the web never waits on the card.

@@ -1451,7 +1451,36 @@ void handleSd(AsyncWebServerRequest* r) {
         r->send(*fs, path.c_str(), "text/csv", true);
         return;
     }
-    if (r->method() == HTTP_POST) {
+    if (sub == "format") {
+        // GET ?fs=FAT32: what the format would make of the card. POST
+        // {fs, confirm: "FORMAT"}: do it, on the log's task; the status says
+        // how it went (datalog.formatting, then format_result).
+        JsonDocument body;
+        if (r->method() == HTTP_POST && !parseBody(r, body)) return;
+        const String fsName = r->method() == HTTP_POST ? String(body["fs"] | "FAT32")
+                                                       : (r->hasParam("fs") ? r->getParam("fs")->value() : String("FAT32"));
+        hg::sd::FsKind kind;
+        if (!hg::sd::parseFsKind(fsName.c_str(), kind)) {
+            return sendError(r, 400, "the hub can make FAT32 or FAT16; exFAT is not in its filesystem build");
+        }
+        hg::sd::FormatPlan plan;
+        if (!sd_card::plan(kind, plan)) return sendError(r, 409, "no card has answered; put one in and press Mount");
+        if (r->method() == HTTP_POST) {
+            if (String(body["confirm"] | "") != "FORMAT") return sendError(r, 400, "type FORMAT to confirm: everything on the card is erased");
+            if (plan.tooSmall) return sendError(r, 400, "the card is too small for that filesystem");
+            if (datalog::formatting()) return sendError(r, 409, "a format is already running");
+            datalog::requestFormat(kind);
+        } else {
+            JsonDocument doc;
+            doc["fs"] = hg::sd::name(kind);
+            doc["card_mb"] = uint32_t(plan.cardBytes / (1024 * 1024));
+            doc["volume_mb"] = uint32_t(plan.volumeBytes / (1024 * 1024));
+            doc["capped"] = plan.capped;
+            doc["too_small"] = plan.tooSmall;
+            doc["formatting"] = datalog::formatting();
+            return sendJson(r, doc);
+        }
+    } else if (r->method() == HTTP_POST) {
         if (sub == "mount") {
             datalog::requestMount();  // on the log's task; the status says how it went
         } else if (sub == "logging") {
@@ -1587,6 +1616,7 @@ void begin() {
     server.on("/api/gauge-firmware", HTTP_GET, handleGaugeFirmware);
     server.on("/api/time", HTTP_GET | HTTP_PUT, handleTime, nullptr, collectBody);
     server.on("/api/sd/logs/*", HTTP_GET | HTTP_DELETE, handleSd);
+    server.on("/api/sd/format", HTTP_GET, handleSd);
     server.on("/api/sd/*", HTTP_POST, handleSd, nullptr, collectBody);
     server.on("/api/sd", HTTP_GET, handleSd);
     server.on("/api/intro/*", HTTP_POST, handleIntro);

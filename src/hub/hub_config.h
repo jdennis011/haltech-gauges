@@ -6,7 +6,7 @@
 #define HUB_AP_PASSWORD "haltech123"
 #define HUB_HOSTNAME "haltech-hub"
 
-#define HUB_FW_VERSION "0.3.22"
+#define HUB_FW_VERSION "0.3.23"
 
 // The online copy the hub syncs its library with once linked (docs/cloud-sync.md).
 #ifndef HUB_CLOUD_URL

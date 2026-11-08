@@ -10,9 +10,11 @@ spreadsheet or a log viewer.
 
 ## The card
 
-- Any microSD card, FAT32 or exFAT, formatted as it comes. A high-endurance card (the kind
-  sold for dash cameras) is the right one: the log writes a little every second for the
-  whole drive.
+- Any microSD card. The hub reads FAT (FAT32, FAT16, FAT12) and nothing else: its FatFs is
+  built without exFAT. Cards of 64 GB and up come formatted exFAT, and Windows will not put
+  FAT32 on anything over 32 GB, so the page can format the card itself (below). A
+  high-endurance card (the kind sold for dash cameras) is the right one: the log writes a
+  little every second for the whole drive.
 - The hub mounts it at start. A card put in later is mounted with **Mount** on the page.
   Taking it out while a log is being written loses the last second or so of that file.
 - Only the P4 hub has a slot. The C6 and C3 hubs report "no slot" and log nothing.
@@ -37,16 +39,44 @@ spreadsheet or a log viewer.
 
 ## On the page
 
-Settings, **SD card**: the card's size and free space (or "no card" and **Mount**), the
-logging switch, what is being written right now, and the logs on the card, each with
-**Download** and **Delete**.
+Settings, **SD card**: the card's size, filesystem and free space (or "no card" and
+**Mount**), the logging switch, what is being written right now, and the logs on the card,
+each with **Download** and **Delete**. A card that answered but holds nothing the hub can
+read is shown with its size and the reason, and the format row below it.
+
+## Formatting a card
+
+**Format as** FAT32 or FAT16, then **Format card…**. The hub first says what the card will
+get, then asks for the word `FORMAT` to be typed; anything else, or Cancel, does nothing.
+Everything on the card goes, logs included. The format runs on the log's task (the page
+polls until it is done, a few seconds to a minute on a big card), and the card comes back
+mounted, written to and read back as at start, with the volume label `OAGAUGE`.
+
+What the card gets is one partition, in a fresh partition table, of the most the chosen
+filesystem can address; when that is less than the card, the hub says so before asking for
+the confirmation, makes the partition that size, and leaves the rest of the card
+unpartitioned:
+
+| Filesystem | Largest volume the hub makes | Smallest | Cluster size |
+|---|---|---|---|
+| FAT32 | 2 TiB less a sector (32-bit sector numbers, in the partition table and in FatFs); every microSD sold fits, Windows's 32 GB limit does not apply | 64 MB | FatFs's choice: 32 KB from 2 GB up |
+| FAT16 | 4.0 GB (65 525 clusters of 64 KB) | 8 MB | up to 64 KB |
+| exFAT | not offered: the hub cannot read it | | |
+
+The planner behind this is `lib/hg_sd/format_plan.h` (host tests in `test/test_native_sd`);
+the card side is `sd_card::format()`: `f_fdisk` for the partition, `f_mkfs` on it with two
+FATs and the data area on a 4 MB boundary (the card's erase blocks), then the usual mount
+with its 32 KB write-and-read-back test. A format that ends in a restart is treated like
+any card attempt that did: the next start leaves the card alone until Mount.
 
 ## API
 
 | Method and path | |
 |---|---|
-| GET `/api/sd` | `{card: {slot, mounted, type, size_mb, free_mb, error}, datalog: {enabled, active, file, rows, bytes, seconds}, logs: [{name, bytes, writing}]}`; the card and datalog parts are also in `/api/status` as `sd` and `datalog` |
+| GET `/api/sd` | `{card: {slot, present, mounted, type, size_mb, fs, free_mb, bus, error}, datalog: {enabled, active, mounting, formatting, format_ok, format_result, paused, error, file, rows, bytes, seconds}, logs: [{name, bytes, writing}]}`; `present` is a card that answered, with or without a filesystem the hub can read (`fs` is `FAT12`/`FAT16`/`FAT32` or `none`); the card and datalog parts are also in `/api/status` as `sd` and `datalog` |
 | POST `/api/sd/mount` | Mount a card put in after start |
+| GET `/api/sd/format?fs=FAT32` | What formatting would make of the card: `{fs, card_mb, volume_mb, capped, too_small, formatting}`; `fs` is `FAT32` or `FAT16` (400 for anything else, exFAT included); 409 with no card |
+| POST `/api/sd/format` `{"fs": "FAT32", "confirm": "FORMAT"}` | Erase and format the card as planned; `confirm` must be exactly `FORMAT` (400 otherwise); 409 while a format runs. Progress: `datalog.formatting`, then `datalog.format_ok` and `format_result` |
 | POST `/api/sd/logging` `{"on": false}` | Logging on or off |
 | GET `/api/sd/logs/{name}` | The file, as a download |
 | DELETE `/api/sd/logs/{name}` | Delete it; refused while it is being written |
